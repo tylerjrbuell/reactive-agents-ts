@@ -1,0 +1,4 @@
+PREFLIGHT WARNING: host contention detected; continuing because --allow-contention was given. Cells below may be stalled, not failed.
+  - host load 7.54 on 6 CPUs (1.26/CPU > 0.75)
+[h3] qwen3:4b|h3-plan-only-calc|0 solved=true acc=1.00 pass cause=none it=0 19674tok 94s elapsed=97s
+[h3] ran=1 remaining=0

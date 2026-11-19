@@ -308,3 +308,61 @@ Addendum 5 filed B as "placeholder content" and a model-capability issue. The tr
 Instrument notes: `rax-diagnose cause` labels the refused re-reads `wrong-tool-arg`/`tool-failure` (runs 1, 3, 4, 6, 8) and run 2 `terminal-mislabel`; no grade changed. Per-iteration call counts came from `tool-call-start` `iter` (scratch readers, not committed).
 
 `bun run repo verify packages/benchmarks`: green (tests, typecheck, check-cross-cutting). Ledger: one entry appended to `improvement-ledger.json`. Power: k=10 SE ~13-15pp; nothing here is a KEEP.
+
+## Addendum 7 (2026-11-18): refusal refund (`57d8f073b`), write-after-paired-read refusal (`777abc4d2`), suite-v2 lever pilot
+
+Pre-registration: [PREDICTIONS-7.md](PREDICTIONS-7.md), written 21:40, before the first result file. Build: HEAD `41830f49a703`; tree clean apart from the benchmarks sim edit; reasoning dist sha256 `d75dbf0f…` contains `refusal_refund` (x1); bench/sim resolve reasoning from `src` (sim header: "kernel source: packages/reasoning/src last changed at 41830f49a (HEAD 41830f49a), clean"). One supervisor at a time. DEVIATION: `ollama ps` was not clean (`mimo-v2.6` loaded by an unrelated dev-stack process; 31 established client connections and host load 4.7 on 6 CPUs during the pilot), cells ran with `allowContention`. Pilot wall times are inflated (qwen3:4b rw-2 about 70-85 s). Specs `a7-*.spec.json`, results `a7-A/B/C/P1/P2`, scanner `a7-classify.ts` (per-run read/write order, final out-N values, refusals, `refusal_refund` events, `code-execute` before first write).
+
+### Zero-token shape 9 (updated)
+
+`shape-pending-write.test.ts` 4/4. `pending-write-stubborn-cap14` now completes all six exact at the live cap 14 (more think turns than the cap, only the refund buys them); the old "loses the last pair" expectation is gone. New `pending-write-endless-reread` (30 re-reads at cap 14): ends within cap + 3 refunds + final turn, out-6 unwritten, no hang. `bun run bench:sim` header carries the kernel SHA above.
+
+### Part 1: prediction vs observation
+
+| Cell | Baseline | Predicted | Observed |
+| --- | --- | --- | --- |
+| h3-todo-heavy cogito:8b k=10 solved | 1/10 | 2-5 (guess 3) | 2/10 (runs 7, 8; both ended by `dispatcher_early_stop` at iteration 15-16); 14828 tok/run |
+| cause E runs | 3 | 0-1 | 1 (run 2) |
+| cause B runs | 2 | 0-2 | 0 executed (see below) |
+| refunds granted | - | 4-8 runs | 5 runs, 10 refunds |
+| h3-exact-value k=5 | 5/5 | >= 4/5 | 5/5, 2985 tok/run (3 refunds, 2 runs) |
+| h3-todo-heavy gemma4:e4b k=5 | 5/5 | >= 4/5 | 5/5, 22194 tok/run (1 refund) |
+
+Verdict (pre-registered rule): REFUTED (solved 2 < 3). The rule's middle case applies: E+B = 1 of 10 (<= 2), so mechanically confirmed, not sufficient. No regression on either no-regression cell.
+
+Per-run causes (read from tool-call order, `tool-call-end` ok flag, final out-N values; expected 34, 84, 16, 126, 58, 108):
+
+| Cause | Runs | Evidence |
+| --- | --- | --- |
+| solved | 7, 8 | all six correct, 15-16 iterations (barely under the extended cap) |
+| B fixed in effect | 3, 4 | first round wrote placeholders (`2 * (value from notes-N.txt)`) in the same round as the reads; all 6 (run 4) and 18 (run 3) writes were REFUSED by `777abc4d2` ("depends on notes-N.txt, which you read in this same round"); the next round wrote correct values for out-1..5 |
+| F. arithmetic slip, new top cause | 0, 3, 4 | out-1..5 exact, out-6 = 118 / 114 / 114 (54 doubled wrong). Run 0 read all six in one round and wrote all six next, no refusals, 4 iterations. Each would have solved; with F fixed solved would be 5/10 |
+| A. lag | 1, 5 | out-2 = 16 (notes-3's double) after a refused re-read; both then ran to max_iterations (15, 17) |
+| E. cap | 2 | out-1..5 correct, out-6 missing at iteration 16 (14 + 2 refunds). Iterations 0-2 were three `tool_call_extracted: unresolved` turns with no tool call (not a refusal, so no refund); 2 refused re-reads were refunded |
+| G. never engaged / abstained | 6 | `abstained`, zero tool calls, acc 0 |
+| H. copy first value | 9 | read notes-1, wrote 34 into all six outputs (acc 0.17) |
+
+Mechanism check: refund works (run 2 reached 16 = 14 + 2; run 5 17 = 14 + 3, the bound; runs 1, 2, 5, 7, 8 each logged 1-3 `refusal_refund` events). The B refusal works but costs a round, and in run 3 the model re-issued the placeholder batch several times (18 refused writes) before correcting: the refusal reads as an error, not as "read first, then write". Rank of the remaining losses (zero-token shapes needed first): F (3 runs, arithmetic: the same class suite v2 targets, but the lever is not used, see Part 2), A (2), E-by-unresolved-calls (1), G (1), H (1).
+
+Stop-iterating call on todo-heavy: solved is 2/10 (SE ~13pp), up from 1/10 and 0/10, and the four named causes (A, B, E, now F) each moved a few runs and exposed the next. The remaining top cause F is arithmetic on a number the model has in front of it, not a harness wiring fault; it only moves if the model uses a calculator, which Part 2 shows it does not. Recommendation: stop iterating on todo-heavy for harness fixes. Keep it as a canary for the refund and refusal mechanisms and for gemma (5/5). If one more cycle is wanted, the cheapest is the lag A (2 runs): drop the trailing "Then read X" from the refusal when a write is pending, zero-token shape already exists (`pending-write`, lag path).
+
+### Part 2: suite-v2 lever pilot (cogito:8b, qwen3:4b; k=5, default arm, 300 s cells)
+
+| Task | cogito solved (mean acc) | qwen3:4b solved (mean acc) | `code-execute` before figure write |
+| --- | --- | --- | --- |
+| rw-2 (frozen control) | 0/5 (0.47) | 0/5 (0.50) | n/a (not offered) |
+| rw-2-calc | 0/5 (0.50) | 0/5 (0.43) | 0 of 10 runs; tool in `toolSchemaNames` on 100% of exchanges (42 of 42) |
+| rw-3-calc | 0/5 (0.80) | 1/5 (0.83) | 0 of 10 |
+| h3-plan-only-calc | 0/5 (0.63) | 4/5 (0.93) | 1 of 10 (cogito run 0) |
+
+Gate (pre-registered): lever engaged in >= 1/3 of runs on at least one calc task, and at least one task leaves the floor. Result: engagement 1 of 30 calc runs (best task 1/5 = 20%, cogito plan-only-calc). NOT MET. "Leaves the floor": qwen3:4b plan-only-calc 4/5 and rw-3-calc 1/5, but neither run called `code-execute`, so the lift is not the lever (no frozen plan-only baseline was run here; qwen3:4b plan-only is not in the v0.19 floor list, so 4/5 may simply be its normal rate). Decision: lever NOT ENGAGED; the three v2 tasks stay in the suite and are labelled floor-for-the-lever (plan section A3 wording: kept, "does not count toward discriminative power"); the rw-2-calc vs rw-2 A/B is 0/10 vs 0/10, no information.
+
+Approval: not a blocker. The one engaged run executed `code-execute` successfully once (`{"executed":true,"result":5.666…}`).
+
+Harm observed: cogito h3-plan-only-calc run 0 made 30 `code-execute` calls (1 ok): it fed raw CSV text to `JSON.parse`, got `SyntaxError: JSON Parse error: Unexpected identifier "sku"` and retried near-identical code until the 300 s cell timeout (82159 tokens, acc 0.00, `aborted`). Offering the tool without guidance cost a run; a repeat-failure guard on `code-execute` is a candidate (kernel-warden, ablation-gated, not built here).
+
+Visibility caveat: for the `plan-execute` tasks (rw-3-calc, h3-plan-only-calc) the traced exchanges carry an empty `toolSchemaNames` and no `tool-surface-resolved` event, so I cannot show from the trace that the tool was offered to the executing step on those two tasks; cogito run 0 did call it, so it is callable at least on that path. Only rw-2-calc (react) is shown offered. That makes the plan-execute half of the pilot weaker evidence than the rw-2-calc half. The "second step" the plan flagged (spotting the stock-out) is not tested, since the first step (calling the tool) never happens.
+
+Reading: top failure class 1 (arithmetic) is not fixed by offering a calculator; models do not reach for it. Per the plan the next lever is guidance ("should the harness nudge it? yes, as guidance, spike first"), with todo-heavy F (54 doubled wrong in 3 of 10) as a ready zero-cost trigger frequency datum, and the h3-plan-only-calc loop as the guard case. Both are kernel-warden work behind ablation-warden; not started.
+
+Instrument notes: `rax-diagnose` labels in this batch (not re-audited): `terminal-mislabel` on runs 1 and 5 (max_iterations with lag), `tool-failure` on run 2 (unresolved tool-call turns), `stall-after-work` on run 3 (placeholder re-issue). No attribution change made. Power: k=10 SE ~13-15pp, k=5 ~20pp, one model per family; nothing here is a KEEP. `bun run repo verify packages/benchmarks`: green (tests, typecheck, check-cross-cutting). Ledger: two entries appended to `improvement-ledger.json`.

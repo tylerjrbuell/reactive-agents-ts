@@ -1,0 +1,3 @@
+H3: provenance drift since this file started: reasoning dist hash changed (rebuild between chunks)
+[h3] qwen3:4b|rw-2-calc|4 solved=false acc=0.50 pass cause=wrong-answer it=3 14661tok 60s elapsed=62s
+[h3] ran=1 remaining=0

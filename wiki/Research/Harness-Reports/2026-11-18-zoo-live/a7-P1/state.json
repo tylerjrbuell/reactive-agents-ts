@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "spec": {
+    "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a7-P1",
+    "tiers": [
+      "cogito:8b"
+    ],
+    "arms": [
+      {
+        "id": "default"
+      }
+    ],
+    "k": 5,
+    "tasks": [
+      "rw-2-calc",
+      "rw-3-calc",
+      "h3-plan-only-calc",
+      "rw-2"
+    ],
+    "suite": "h3",
+    "cellTimeoutSec": 300,
+    "env": {
+      "RA_ACT_OR_ANSWER": "0",
+      "RA_LEAN_FINAL_TURN": "0",
+      "RA_PARALLEL_TOOL_HINT": "0"
+    },
+    "allowContention": true,
+    "runnerCmd": [
+      "bun",
+      "run",
+      "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"
+    ]
+  },
+  "order": [
+    "0|cogito:8b|rw-2-calc|default",
+    "0|cogito:8b|rw-3-calc|default",
+    "0|cogito:8b|h3-plan-only-calc|default",
+    "0|cogito:8b|rw-2|default",
+    "1|cogito:8b|rw-2-calc|default",
+    "1|cogito:8b|rw-3-calc|default",
+    "1|cogito:8b|h3-plan-only-calc|default",
+    "1|cogito:8b|rw-2|default",
+    "2|cogito:8b|rw-2-calc|default",
+    "2|cogito:8b|rw-3-calc|default",
+    "2|cogito:8b|h3-plan-only-calc|default",
+    "2|cogito:8b|rw-2|default",
+    "3|cogito:8b|rw-2-calc|default",
+    "3|cogito:8b|rw-3-calc|default",
+    "3|cogito:8b|h3-plan-only-calc|default",
+    "3|cogito:8b|rw-2|default",
+    "4|cogito:8b|rw-2-calc|default",
+    "4|cogito:8b|rw-3-calc|default",
+    "4|cogito:8b|h3-plan-only-calc|default",
+    "4|cogito:8b|rw-2|default"
+  ],
+  "status": "completed",
+  "pid": null,
+  "startedAt": "2026-11-19T02:50:50.829Z",
+  "updatedAt": "2026-11-19T03:03:07.203Z",
+  "units": {
+    "0|cogito:8b|rw-2-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 99
+    },
+    "0|cogito:8b|rw-3-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 35
+    },
+    "0|cogito:8b|h3-plan-only-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 304
+    },
+    "0|cogito:8b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 19
+    },
+    "1|cogito:8b|rw-2-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "1|cogito:8b|rw-3-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 21
+    },
+    "1|cogito:8b|h3-plan-only-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 15
+    },
+    "1|cogito:8b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 18
+    },
+    "2|cogito:8b|rw-2-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 14
+    },
+    "2|cogito:8b|rw-3-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 20
+    },
+    "2|cogito:8b|h3-plan-only-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 14
+    },
+    "2|cogito:8b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 17
+    },
+    "3|cogito:8b|rw-2-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 22
+    },
+    "3|cogito:8b|rw-3-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 18
+    },
+    "3|cogito:8b|h3-plan-only-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 14
+    },
+    "3|cogito:8b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 17
+    },
+    "4|cogito:8b|rw-2-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 17
+    },
+    "4|cogito:8b|rw-3-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 18
+    },
+    "4|cogito:8b|h3-plan-only-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 16
+    },
+    "4|cogito:8b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 23
+    }
+  },
+  "current": null,
+  "chunks": 20,
+  "pauses": [],
+  "pausedSec": 0,
+  "lastError": null,
+  "driftWarnings": [
+    "H3: provenance drift since this file started: reasoning dist hash changed (rebuild between chunks)"
+  ]
+}

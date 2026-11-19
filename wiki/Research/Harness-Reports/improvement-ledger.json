@@ -1490,6 +1490,32 @@
       "liftPp": 10,
       "tokenOverheadPct": null,
       "rationale": "REFUTED on pre-registered rule (solved 1/10 < 2) but MECHANICALLY CONFIRMED: cause A 6 -> 2 of 10, all 8 refusals lead with Write, 6 of 8 then wrote the correct out-2. Remaining loss: iteration budget (3 runs correct but out of the 14-iteration cap after 1-2 extra refused re-reads), placeholder content x2, write-before-read x2. No regression: exact-value 5/5, gemma todo-heavy 5/5. k=10, one model. Evidence: README addendum 6, a6-B/B2/C"
+    },
+    {
+      "createdAt": "2026-11-19T03:30:00.000Z",
+      "baselineVariantId": "132ae5515",
+      "candidateVariantId": "41830f49a",
+      "decision": "inconclusive",
+      "status": "inconclusive",
+      "id": "b7a3e9c2-5d14-4f6b-8a21-7c0e3d9f1a54",
+      "weakness": "h3-todo-heavy 1/10 on cogito:8b; cause E (refused re-reads burn the 14-iteration cap) 3 runs, cause B (dependent write batched with its read) 2 runs",
+      "hypothesis": "57d8f073b (all-refused duplicate round refunded, bound 3) + 777abc4d2 (refuse a write whose paired input is read in the same round). cogito:8b default arm k=10, HEAD 41830f49a; gemma4:e4b todo-heavy k=5 and cogito exact-value k=5 as no-regression",
+      "liftPp": 10,
+      "tokenOverheadPct": null,
+      "rationale": "REFUTED on pre-registered rule (solved 2/10 < 3) but MECHANICALLY CONFIRMED: cause B executed 0 (12 placeholder writes refused in 2 runs, both recovered with correct values), cause E 3 -> 1 (run 2: 3 unresolved-call turns before any tool call, 2 refunds granted). Refunds granted in 5 of 10 runs (10 total). New dominant cause F: arithmetic slip on out-6 (54*2 written as 114/118) in 3 runs that were otherwise fully correct. No regression: exact-value 5/5, gemma todo-heavy 5/5. k=10, one model; ollama was contended by an unrelated client. Evidence: README addendum 7, a7-A/B/C"
+    },
+    {
+      "createdAt": "2026-11-19T03:35:00.000Z",
+      "baselineVariantId": "frozen rw-2/rw-3/h3-plan-only",
+      "candidateVariantId": "a2d29f198 suite v2 (code-execute available)",
+      "decision": "inconclusive",
+      "status": "inconclusive",
+      "id": "c8d4f0a3-6e25-4a7c-9b32-8d1f4e0a2b65",
+      "weakness": "top failure class 1: arithmetic on the floor tasks",
+      "hypothesis": "offering code-execute on rw-2/rw-3/h3-plan-only lifts the figure step. cogito:8b and qwen3:4b, default arm, k=5, HEAD 41830f49a",
+      "liftPp": 0,
+      "tokenOverheadPct": null,
+      "rationale": "Lever pilot gate NOT met: code-execute before the figure write in 1 of 30 calc runs (cogito h3-plan-only-calc run 0, 30 calls, 1 ok, timeout 300 s, 82k tokens: a harm). rw-2-calc: tool visible in 100% of exchanges, called in 0 of 10 runs. Approval did not block (the one ok call executed). rw-2 control vs rw-2-calc: 0/10 vs 0/10 solved. Tasks kept, labelled floor for the lever. qwen3:4b plan-only-calc 4/5 not attributable to the lever (0 calls). Evidence: README addendum 7, a7-P1/P2"
     }
   ]
 }

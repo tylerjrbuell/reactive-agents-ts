@@ -1,0 +1,10 @@
+{
+  "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a7-A",
+  "status": "completed",
+  "finishedAt": "2026-11-19T02:45:27.371Z",
+  "results": {
+    "default": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a7-A/default.json"
+  },
+  "state": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a7-A/state.json",
+  "failedUnits": 0
+}

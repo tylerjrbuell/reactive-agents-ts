@@ -1,0 +1,170 @@
+{
+  "version": 1,
+  "spec": {
+    "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/a7-P2",
+    "tiers": [
+      "qwen3:4b"
+    ],
+    "arms": [
+      {
+        "id": "default"
+      }
+    ],
+    "k": 5,
+    "tasks": [
+      "rw-2-calc",
+      "rw-3-calc",
+      "h3-plan-only-calc",
+      "rw-2"
+    ],
+    "suite": "h3",
+    "cellTimeoutSec": 300,
+    "env": {
+      "RA_ACT_OR_ANSWER": "0",
+      "RA_LEAN_FINAL_TURN": "0",
+      "RA_PARALLEL_TOOL_HINT": "0"
+    },
+    "allowContention": true,
+    "runnerCmd": [
+      "bun",
+      "run",
+      "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"
+    ]
+  },
+  "order": [
+    "0|qwen3:4b|rw-2-calc|default",
+    "0|qwen3:4b|rw-3-calc|default",
+    "0|qwen3:4b|h3-plan-only-calc|default",
+    "0|qwen3:4b|rw-2|default",
+    "1|qwen3:4b|rw-2-calc|default",
+    "1|qwen3:4b|rw-3-calc|default",
+    "1|qwen3:4b|h3-plan-only-calc|default",
+    "1|qwen3:4b|rw-2|default",
+    "2|qwen3:4b|rw-2-calc|default",
+    "2|qwen3:4b|rw-3-calc|default",
+    "2|qwen3:4b|h3-plan-only-calc|default",
+    "2|qwen3:4b|rw-2|default",
+    "3|qwen3:4b|rw-2-calc|default",
+    "3|qwen3:4b|rw-3-calc|default",
+    "3|qwen3:4b|h3-plan-only-calc|default",
+    "3|qwen3:4b|rw-2|default",
+    "4|qwen3:4b|rw-2-calc|default",
+    "4|qwen3:4b|rw-3-calc|default",
+    "4|qwen3:4b|h3-plan-only-calc|default",
+    "4|qwen3:4b|rw-2|default"
+  ],
+  "status": "completed",
+  "pid": null,
+  "startedAt": "2026-11-19T03:03:21.957Z",
+  "updatedAt": "2026-11-19T03:29:57.644Z",
+  "units": {
+    "0|qwen3:4b|rw-2-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 74
+    },
+    "0|qwen3:4b|rw-3-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 67
+    },
+    "0|qwen3:4b|h3-plan-only-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 98
+    },
+    "0|qwen3:4b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 70
+    },
+    "1|qwen3:4b|rw-2-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 60
+    },
+    "1|qwen3:4b|rw-3-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 49
+    },
+    "1|qwen3:4b|h3-plan-only-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 98
+    },
+    "1|qwen3:4b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 87
+    },
+    "2|qwen3:4b|rw-2-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 85
+    },
+    "2|qwen3:4b|rw-3-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 40
+    },
+    "2|qwen3:4b|h3-plan-only-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 108
+    },
+    "2|qwen3:4b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 80
+    },
+    "3|qwen3:4b|rw-2-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 64
+    },
+    "3|qwen3:4b|rw-3-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 49
+    },
+    "3|qwen3:4b|h3-plan-only-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 65
+    },
+    "3|qwen3:4b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 86
+    },
+    "4|qwen3:4b|rw-2-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 63
+    },
+    "4|qwen3:4b|rw-3-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 102
+    },
+    "4|qwen3:4b|h3-plan-only-calc|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 162
+    },
+    "4|qwen3:4b|rw-2|default": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 88
+    }
+  },
+  "current": null,
+  "chunks": 20,
+  "pauses": [],
+  "pausedSec": 0,
+  "lastError": null,
+  "driftWarnings": [
+    "H3: provenance drift since this file started: reasoning dist hash changed (rebuild between chunks)"
+  ]
+}

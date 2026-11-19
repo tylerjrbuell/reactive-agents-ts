@@ -1,0 +1,5 @@
+PREFLIGHT WARNING: host contention detected; continuing because --allow-contention was given. Cells below may be stalled, not failed.
+  - host load 4.55 on 6 CPUs (0.76/CPU > 0.75)
+H3: provenance drift since this file started: reasoning dist hash changed (rebuild between chunks)
+[h3] qwen3:4b|h3-plan-only-calc|4 solved=true acc=1.00 pass cause=none it=0 29376tok 159s elapsed=162s
+[h3] ran=1 remaining=0

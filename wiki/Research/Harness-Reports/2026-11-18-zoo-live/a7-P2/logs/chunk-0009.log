@@ -1,0 +1,6 @@
+PREFLIGHT WARNING: host contention detected; continuing because --allow-contention was given. Cells below may be stalled, not failed.
+  - 2 established client connection(s) on :11434 (another Ollama client is active)
+  - host load 7.56 on 6 CPUs (1.26/CPU > 0.75)
+H3: provenance drift since this file started: reasoning dist hash changed (rebuild between chunks)
+[h3] qwen3:4b|rw-2-calc|2 solved=false acc=0.50 pass cause=wrong-answer it=3 14197tok 60s elapsed=84s
+[h3] ran=1 remaining=0
