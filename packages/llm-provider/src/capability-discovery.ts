@@ -25,13 +25,16 @@
 // The runner adds what every provider needs: a timeout, defect absorption, the
 // write-through, and the one-time fallback warning when nothing was learned.
 //
-// Shipped discoverers: ollama (/api/show probe), gemini (models.get).
-// Not yet: anthropic (GET /v1/models/{id}: max_input_tokens, max_tokens,
-// capabilities.thinking), openai (its /v1/models reports no limits), litellm
-// (/model/info, unverified). Each is one `CapabilityDiscoverer` returning
-// `Reported` metadata, registered in DEFAULT_DISCOVERERS.
+// Shipped discoverers: ollama (/api/show probe), gemini (models.get),
+// anthropic (GET /v1/models/{id}), litellm (/model/info). Not possible:
+// openai (no endpoint states limits); an unknown OpenAI model runs on the
+// provisional hosted window (capability-provisional.ts) until a context-length
+// error states the real one (capability-learned.ts).
+//
+// Concurrent discoveries of one (provider, model, endpoint) share one request:
+// the first caller runs the discoverer, later callers await its answer.
 
-import { Duration, Effect, Option } from "effect";
+import { Deferred, Duration, Effect, Exit, FiberId, Option } from "effect";
 import type { Capability } from "./capability.js";
 import { registerReportedModelMetadata, type ReportedModelMetadata } from "./capability-reported.js";
 import {
@@ -42,6 +45,8 @@ import {
 import { probeOllamaCapability } from "./providers/local-probe.js";
 import { resolveOllamaTarget } from "./ollama-endpoint.js";
 import { makeGeminiCapabilityDiscoverer } from "./providers/gemini-discovery.js";
+import { makeAnthropicCapabilityDiscoverer } from "./providers/anthropic-discovery.js";
+import { makeLiteLLMCapabilityDiscoverer } from "./providers/litellm-discovery.js";
 
 /** What a discoverer learned about one model. */
 export type DiscoveredCapability =
@@ -91,9 +96,14 @@ const defaultDiscoverers = (): Map<string, CapabilityDiscoverer> =>
   new Map<string, CapabilityDiscoverer>([
     ["ollama", ollamaDiscoverer],
     ["gemini", makeGeminiCapabilityDiscoverer()],
+    ["anthropic", makeAnthropicCapabilityDiscoverer()],
+    ["litellm", makeLiteLLMCapabilityDiscoverer()],
   ]);
 
 let discoverers = defaultDiscoverers();
+
+/** Discoveries running now, keyed provider + model + endpoint (see discoverCapability). */
+const inFlight = new Map<string, Deferred.Deferred<Option.Option<DiscoveredCapability>>>();
 
 /**
  * Install (or replace) the discoverer for a provider. Use it to add discovery
@@ -142,21 +152,45 @@ export function discoverCapability(
     if (discoverer === undefined || model.length === 0) {
       return Effect.succeed(Option.none<DiscoveredCapability>());
     }
-    return discoverer(model, { endpoint: opts.endpoint, apiKey: opts.apiKey }).pipe(
-      Effect.timeoutTo({
-        duration: Duration.millis(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
-        onSuccess: (found) => found,
-        onTimeout: () => Option.none<DiscoveredCapability>(),
-      }),
-      Effect.catchAllCause(() => Effect.succeed(Option.none<DiscoveredCapability>())),
-      Effect.tap((found) =>
-        Effect.sync(() => {
-          if (Option.isSome(found)) writeThrough(provider, model, found.value);
-          else if (resolveCapability(provider, model).source === "fallback") {
-            warnCapabilityFallback(provider, model);
-          }
-        }),
+    // One request per (provider, model, endpoint) at a time: later callers
+    // await the first caller's answer. Set synchronously (no yield between the
+    // lookup and the set), cleared when the first run ends for any reason.
+    const key = `${provider}\u0000${model}\u0000${opts.endpoint ?? ""}`;
+    const pending = inFlight.get(key);
+    if (pending !== undefined) return Deferred.await(pending);
+    const done = Deferred.unsafeMake<Option.Option<DiscoveredCapability>>(FiberId.none);
+    inFlight.set(key, done);
+    return runDiscovery(provider, model, discoverer, opts).pipe(
+      Effect.onExit((exit) =>
+        Effect.sync(() => inFlight.delete(key)).pipe(
+          Effect.zipRight(Deferred.succeed(done, Exit.isSuccess(exit) ? exit.value : Option.none())),
+        ),
       ),
     );
   });
+}
+
+/** One discovery run: timeout, defect absorption, write-through, fallback warning. */
+function runDiscovery(
+  provider: string,
+  model: string,
+  discoverer: CapabilityDiscoverer,
+  opts: DiscoverCapabilityOptions,
+): Effect.Effect<Option.Option<DiscoveredCapability>> {
+  return discoverer(model, { endpoint: opts.endpoint, apiKey: opts.apiKey }).pipe(
+    Effect.timeoutTo({
+      duration: Duration.millis(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
+      onSuccess: (found) => found,
+      onTimeout: () => Option.none<DiscoveredCapability>(),
+    }),
+    Effect.catchAllCause(() => Effect.succeed(Option.none<DiscoveredCapability>())),
+    Effect.tap((found) =>
+      Effect.sync(() => {
+        if (Option.isSome(found)) writeThrough(provider, model, found.value);
+        else if (resolveCapability(provider, model).source === "fallback") {
+          warnCapabilityFallback(provider, model);
+        }
+      }),
+    ),
+  );
 }

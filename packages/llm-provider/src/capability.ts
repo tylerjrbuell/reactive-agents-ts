@@ -16,6 +16,7 @@ import { Schema } from "effect";
 import { ANTHROPIC_STATIC_CAPABILITIES } from "./capability-anthropic.js";
 import { HOSTED_STATIC_CAPABILITIES } from "./capability-hosted.js";
 import { OLLAMA_LOCAL_STATIC_CAPABILITIES } from "./capability-ollama-local.js";
+import { hostedProvisionalCapability } from "./capability-provisional.js";
 
 // ─── Literal unions ──────────────────────────────────────────────────────────
 
@@ -231,6 +232,14 @@ export const CapabilitySchema = Schema.Struct({
    * `registerProbedCapability` / the store round-trip.
    */
   nominal: Schema.optional(Schema.Boolean),
+
+  /**
+   * `true` on the provisional row an unknown HOSTED model gets (see
+   * capability-provisional.ts): a hosted lower-bound window with native tool
+   * calling, kept until discovery or a provider error states the real limit.
+   * Absent on every other row. Traces and UIs show it as "provisional".
+   */
+  provisional: Schema.optional(Schema.Boolean),
 
   /** Where this capability came from (probe / static-table / fallback). */
   source: CapabilitySourceSchema,
@@ -848,23 +857,6 @@ export const STATIC_CAPABILITIES: Readonly<Record<string, Capability>> = Object.
 // ─── Conservative fallback ───────────────────────────────────────────────────
 
 /**
- * Returned by the resolver when both probing and the static table miss.
- * Picks safe lower-bound values that won't crash on any modern provider.
- *
- * `recommendedNumCtx: 2048` matches Ollama's silent default — explicitly
- * setting it preserves prior behavior while making the conservatism visible
- * in telemetry via `source: "fallback"`.
- */
-/**
- * Hosted OpenAI-compatible providers (Groq, xAI) whose model lists drift fast.
- * An unlisted model here MUST still get `native-fc` — these providers always
- * accept the OpenAI tools schema, so the conservative `toolCallDialect:"none"`
- * local fallback would silently strip tool-calling. A generous 128k window is a
- * safe lower bound across their current lineups.
- */
-const OPENAI_COMPAT_FALLBACK_PROVIDERS = new Set(["groq", "xai"]);
-
-/**
  * OpenAI reasoning-era families (gpt-5*, o-series incl. dated/suffixed ids)
  * reject `max_tokens` and non-default `temperature`; they require
  * `max_completion_tokens`. Single family rule so new/live-discovered ids
@@ -873,24 +865,20 @@ const OPENAI_COMPAT_FALLBACK_PROVIDERS = new Set(["groq", "xai"]);
 export const isOpenAIMaxCompletionFamily = (model: string): boolean =>
   /^(gpt-5|o\d)/.test(model);
 
+/**
+ * Returned by the resolver when both probing and the static table miss.
+ * Picks safe lower-bound values that won't crash on any modern provider.
+ *
+ * A hosted provider (anthropic, openai, gemini, groq, xai; not litellm) gets the
+ * provisional hosted row (capability-provisional.ts): a hosted lower-bound
+ * window with native tool calling, marked `provisional: true`. Every other
+ * provider gets the local row below: `recommendedNumCtx: 2048` matches
+ * Ollama's silent default, and `source: "fallback"` keeps the conservatism
+ * visible in telemetry.
+ */
 export function fallbackCapability(provider: string, model: string): Capability {
-  if (OPENAI_COMPAT_FALLBACK_PROVIDERS.has(provider)) {
-    return {
-      provider,
-      model,
-      tier: "large",
-      maxContextTokens: 131_072,
-      recommendedNumCtx: 131_072,
-      maxOutputTokens: 8_192,
-      tokenizerFamily: provider === "xai" ? "tiktoken-cl100k" : "llama",
-      supportsPromptCaching: false,
-      supportsVision: false,
-      supportsThinkingMode: false,
-      supportsStreamingToolCalls: true,
-      toolCallDialect: "native-fc",
-      source: "fallback",
-    };
-  }
+  const hosted = hostedProvisionalCapability(provider, model);
+  if (hosted !== undefined) return hosted;
 
   return {
     provider,

@@ -200,6 +200,31 @@ function parseOpenAIStyle(provider: string, body: unknown): Page | ModelDiscover
   return { models };
 }
 
+/**
+ * The limits one Anthropic ModelInfo object states. Shared by the listing
+ * (GET /v1/models) and per-model discovery (GET /v1/models/{id}), which return
+ * the same object shape. Fields (platform.claude.com/docs/en/api/models/list,
+ * verified 2026-10-29): max_input_tokens, max_tokens,
+ * capabilities.{image_input,thinking}.supported.
+ *
+ * @param m - one ModelInfo object (any shape; unknown fields are ignored)
+ * @returns only the fields the object stated
+ */
+export function anthropicReportedMetadata(m: unknown): ReportedModelMetadata {
+  if (!isRec(m)) return {};
+  const caps = isRec(m.capabilities) ? m.capabilities : undefined;
+  const supported = (k: string): boolean | undefined => {
+    const c = caps?.[k];
+    return isRec(c) ? bool(c.supported) : undefined;
+  };
+  return reportedOf({
+    maxContextTokens: num(m.max_input_tokens),
+    maxOutputTokens: num(m.max_tokens),
+    supportsVision: supported("image_input"),
+    supportsThinkingMode: supported("thinking"),
+  });
+}
+
 function parseAnthropic(provider: string, body: unknown, urlOf: (after: string) => string): Page | ModelDiscoveryError {
   if (!isRec(body) || !Array.isArray(body.data)) return parseErr(provider);
   const models: RawModel[] = [];
@@ -207,19 +232,7 @@ function parseAnthropic(provider: string, body: unknown, urlOf: (after: string) 
     if (!isRec(m)) continue;
     const id = str(m.id);
     if (!id) continue;
-    // platform.claude.com/docs/en/api/models/list (verified 2026-10-29):
-    // max_input_tokens, max_tokens, capabilities.{image_input,thinking}.supported.
-    const caps = isRec(m.capabilities) ? m.capabilities : undefined;
-    const supported = (k: string): boolean | undefined => {
-      const c = caps?.[k];
-      return isRec(c) ? bool(c.supported) : undefined;
-    };
-    const reported = reportedOf({
-      maxContextTokens: num(m.max_input_tokens),
-      maxOutputTokens: num(m.max_tokens),
-      supportsVision: supported("image_input"),
-      supportsThinkingMode: supported("thinking"),
-    });
+    const reported = anthropicReportedMetadata(m);
     models.push({
       id,
       ...(str(m.display_name) ? { label: str(m.display_name)! } : {}),

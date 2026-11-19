@@ -145,11 +145,14 @@ describe("Gemini discovery (models.get)", () => {
 });
 
 describe("discovery hook registry", () => {
-  it("ships discoverers for ollama and gemini; providers without one are a no-op", async () => {
+  it("ships discoverers for ollama, gemini, anthropic and litellm; providers without one are a no-op", async () => {
     expect(capabilityDiscovererFor("gemini")).toBeDefined();
     expect(capabilityDiscovererFor("ollama")).toBeDefined();
-    expect(capabilityDiscovererFor("anthropic")).toBeUndefined();
-    const out = await Effect.runPromise(discoverCapability("anthropic", "claude-x"));
+    expect(capabilityDiscovererFor("anthropic")).toBeDefined();
+    expect(capabilityDiscovererFor("litellm")).toBeDefined();
+    // OpenAI states no limits anywhere: no discoverer.
+    expect(capabilityDiscovererFor("openai")).toBeUndefined();
+    const out = await Effect.runPromise(discoverCapability("openai", "gpt-x"));
     expect(Option.isNone(out)).toBe(true);
   });
 

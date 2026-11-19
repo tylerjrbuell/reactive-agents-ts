@@ -12,9 +12,9 @@
 // Tier is not reported; capabilityFromReported assigns its "mid" placeholder.
 
 import { Effect, Option } from "effect";
-import { STATIC_CAPABILITIES } from "../capability.js";
-import { reportedModelMetadataFor } from "../capability-reported.js";
-import type { CapabilityDiscoverer, DiscoveredCapability } from "../capability-discovery.js";
+import type { ReportedModelMetadata } from "../capability-reported.js";
+import type { CapabilityDiscoverer } from "../capability-discovery.js";
+import { discoverReported, positiveInt } from "./discovery-common.js";
 
 /** The models.get fields discovery reads. */
 export interface GeminiModelInfo {
@@ -44,9 +44,6 @@ const sdkModelGet: GeminiModelGet = async ({ apiKey, model, signal }) => {
   return new GoogleGenAI({ apiKey }).models.get({ model, config: { abortSignal: signal } });
 };
 
-const positive = (n: number | undefined): number | undefined =>
-  typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.floor(n) : undefined;
-
 /**
  * Build the Gemini discoverer.
  *
@@ -60,33 +57,25 @@ const positive = (n: number | undefined): number | undefined =>
 export const makeGeminiCapabilityDiscoverer =
   (get: GeminiModelGet = sdkModelGet): CapabilityDiscoverer =>
   (model, ctx) =>
-    Effect.suspend(() => {
-      const none = Effect.succeed(Option.none<DiscoveredCapability>());
-      if (STATIC_CAPABILITIES[`gemini/${model}`] !== undefined) return none;
-      const known = reportedModelMetadataFor("gemini", model);
-      if (known !== undefined) {
-        return Effect.succeed(Option.some<DiscoveredCapability>({ _tag: "Reported", metadata: known }));
-      }
+    discoverReported("gemini", model, () => {
       const apiKey = ctx.apiKey ?? process.env.GOOGLE_API_KEY;
-      if (apiKey === undefined || apiKey.length === 0) return none;
+      if (apiKey === undefined || apiKey.length === 0) {
+        return Effect.succeed(Option.none<ReportedModelMetadata>());
+      }
       const id = model.replace(/^models\//, "");
       return Effect.tryPromise({
         try: (signal) => get({ apiKey, model: id, signal }),
         catch: (cause) => cause,
       }).pipe(
-        Effect.map((info): Option.Option<DiscoveredCapability> => {
-          const maxContextTokens = positive(info.inputTokenLimit);
+        Effect.map((info): Option.Option<ReportedModelMetadata> => {
+          const maxContextTokens = positiveInt(info.inputTokenLimit);
           if (maxContextTokens === undefined) return Option.none();
-          const maxOutputTokens = positive(info.outputTokenLimit);
+          const maxOutputTokens = positiveInt(info.outputTokenLimit);
           return Option.some({
-            _tag: "Reported",
-            metadata: {
-              maxContextTokens,
-              ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
-              ...(typeof info.thinking === "boolean" ? { supportsThinkingMode: info.thinking } : {}),
-            },
+            maxContextTokens,
+            ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+            ...(typeof info.thinking === "boolean" ? { supportsThinkingMode: info.thinking } : {}),
           });
         }),
-        Effect.orElseSucceed(() => Option.none<DiscoveredCapability>()),
       );
     });

@@ -1,6 +1,7 @@
 import { LLMContextOverflowError, LLMError, LLMMalformedOutputError, LLMRateLimitError } from "./errors.js";
 import { NETWORK_FAULT, OUTPUT_TOKEN_RATE, classifyProviderError, parseOverflowTokens } from "./error-class.js";
 import type { LLMErrors } from "./errors.js";
+import { learnLimitFromProviderError } from "./capability-learned.js";
 import type { LLMProvider } from "./types.js";
 
 /**
@@ -157,6 +158,12 @@ export function mapProviderError(
     code: typeof codeStr === "string" ? codeStr : undefined,
   });
   const meta = { errorClass: cls.errorClass, retryable: cls.retryable, status } as const;
+  // A limit the provider stated (window on overflow, output on invalid_param)
+  // is written to the model's capability here, the one funnel every adapter's
+  // failure passes through, and carried on the error (capability-learned.ts).
+  const learned = learnLimitFromProviderError(provider, model, cls.errorClass, reason);
+  const learnedLimit = learned !== undefined ? { kind: learned.kind, tokens: learned.tokens } : undefined;
+  const withLearned = learnedLimit !== undefined ? { learnedLimit } : {};
 
   // Output-side per-minute budget (OTPM): the prompt is not the problem, so it
   // must not reach the kernel's compact-the-prompt path. Permanent as sent.
@@ -177,6 +184,7 @@ export function mapProviderError(
       errorClass: cls.errorClass,
       retryable: false,
       status,
+      ...withLearned,
     });
   }
 
@@ -257,5 +265,6 @@ export function mapProviderError(
     provider,
     cause: reason,
     ...meta,
+    ...withLearned,
   });
 }

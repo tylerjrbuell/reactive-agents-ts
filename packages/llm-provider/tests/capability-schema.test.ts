@@ -54,6 +54,9 @@ describe("Capability struct (Phase 1 S1.1)", () => {
       // Optional (2026-11-13): content digest of the probed model weights;
       // a changed live digest marks the persisted row stale (model-digest.ts).
       "digest",
+      // Optional (2026-11-19): marks the provisional hosted row an unknown
+      // hosted model gets (capability-provisional.ts).
+      "provisional",
     ]);
     // 13 entries with `source` — see comment in capability.ts: spec called for 12
     // user-facing fields; `source` is a 13th provenance field that doesn't count

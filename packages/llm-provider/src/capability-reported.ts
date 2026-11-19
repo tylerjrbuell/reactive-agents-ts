@@ -19,21 +19,26 @@
 //   - Groq GET /openai/v1/models  https://console.groq.com/docs/api-reference
 //       context_window, max_completion_tokens
 // NOT reported (so nothing is parsed): OpenAI /v1/models (id/created/owned_by
-// only). Unverified, therefore not parsed: xAI /v1/models, LiteLLM /model/info.
+// only). Unverified, therefore not parsed: xAI /v1/models.
+// Also written here: per-model discovery (capability-discovery.ts: Gemini
+// models.get, Anthropic GET /v1/models/{id}, LiteLLM /model/info) and limits a
+// provider stated in an error (capability-learned.ts).
 //
 // Honesty rules:
 //   - a row is built ONLY when the provider reported a context window; no
 //     reported window -> the loud fallback still fires
 //   - tier, tokenizer family, caching, and every unreported flag are NOT
 //     guessed from the model id: tier is the conservative "mid" placeholder,
-//     the rest are the fallback's values
+//     the rest are the fallback's values (the provisional hosted row, minus its
+//     `provisional` marker)
 //   - the single non-reported fact is `toolCallDialect: "native-fc"`, which holds
-//     for every chat model on these five hosted providers (their adapters always
-//     send tools natively)
+//     for every chat model on the hosted providers (HOSTED_PROVIDERS; their
+//     adapters always send tools natively)
 //   - source is "inferred": ceilings are advisory and never clamp a request
 //     (params/output-budget.ts)
 
 import { fallbackCapability, type Capability } from "./capability.js";
+import { HOSTED_PROVIDERS, withoutProvisional } from "./capability-provisional.js";
 
 /** Fields a provider reported for one model. Every field is optional. */
 export interface ReportedModelMetadata {
@@ -46,15 +51,6 @@ export interface ReportedModelMetadata {
   /** Reported thinking/reasoning support. */
   readonly supportsThinkingMode?: boolean;
 }
-
-/** Hosted providers whose chat models are always driven with native tool calling. */
-const HOSTED_NATIVE_FC_PROVIDERS: ReadonlySet<string> = new Set([
-  "anthropic",
-  "openai",
-  "gemini",
-  "groq",
-  "xai",
-]);
 
 const registry = new Map<string, ReportedModelMetadata>();
 
@@ -103,10 +99,11 @@ export function capabilityFromReported(
   model: string,
   meta: ReportedModelMetadata,
 ): Capability | null {
-  if (!HOSTED_NATIVE_FC_PROVIDERS.has(provider)) return null;
+  if (!HOSTED_PROVIDERS.has(provider)) return null;
   if (meta.maxContextTokens === undefined) return null;
 
-  const base = fallbackCapability(provider, model);
+  // A reported window replaces the provisional hosted guess, so the marker goes.
+  const base = withoutProvisional(fallbackCapability(provider, model));
   return {
     ...base,
     tier: "mid",

@@ -113,12 +113,20 @@ function warnFallbackOnce(provider: string, model: string): void {
         `not serve this model — check the endpoint: OLLAMA_ENDPOINT / OLLAMA_HOST ` +
         `(currently "${resolveOllamaEndpoint()}"), and that \`${model}\` is pulled there.`
       : "";
+  const fb = fallbackCapability(provider, model);
+  const what =
+    fb.provisional === true
+      ? `using a provisional hosted window (recommendedNumCtx=${fb.recommendedNumCtx}, ` +
+        `toolCallDialect="${fb.toolCallDialect}") until the provider states the real limit ` +
+        `(discovery or a context-length error).`
+      : `using conservative defaults (recommendedNumCtx=${fb.recommendedNumCtx}, ` +
+        `toolCallDialect="${fb.toolCallDialect}"). Local models with 2048 num_ctx ` +
+        `commonly fail to call tools because the system prompt + tool schema ` +
+        `overflows the context window.`;
   // eslint-disable-next-line no-console
   console.warn(
     `[reactive-agents] Capability fallback fired for ${provider}/${model}: ` +
-      `using conservative defaults (recommendedNumCtx=2048, toolCallDialect="none"). ` +
-      `Local models with 2048 num_ctx commonly fail to call tools because the ` +
-      `system prompt + tool schema overflows the context window.${endpointHint} ` +
+      `${what}${endpointHint} ` +
       `Otherwise: register the capability yourself at startup via ` +
       `registerProbedCapability({...}), pass { numCtx } on .withModel(), or add ` +
       `${model} to STATIC_CAPABILITIES in @reactive-agents/llm-provider/capability.ts.`,
@@ -313,6 +321,13 @@ export interface CapabilityResolution {
   readonly tier: Capability["tier"];
   readonly recommendedNumCtx: number;
   readonly supportsThinkingMode: boolean;
+  /**
+   * Present and `true` only when the numbers are the provisional hosted guess
+   * for an unknown hosted model (see capability-provisional.ts), not a stated
+   * limit. Omitted otherwise, so the summary's key set is unchanged for every
+   * other row.
+   */
+  readonly provisional?: true;
 }
 
 /**
@@ -328,5 +343,6 @@ export function describeCapabilityResolution(cap: Capability): CapabilityResolut
     tier: cap.tier,
     recommendedNumCtx: cap.recommendedNumCtx,
     supportsThinkingMode: cap.supportsThinkingMode,
+    ...(cap.provisional === true ? { provisional: true as const } : {}),
   };
 }

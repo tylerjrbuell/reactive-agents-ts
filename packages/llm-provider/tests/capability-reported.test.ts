@@ -15,7 +15,8 @@ import {
 beforeEach(() => _resetReportedMetadataForTesting());
 
 describe("capabilityFromReported", () => {
-  it.each(["anthropic", "openai", "gemini", "groq", "xai"])("%s: window reported -> inferred row", (p) => {
+  // litellm joined 2026-11-19: its /model/info states windows (litellm-discovery.ts).
+  it.each(["anthropic", "openai", "gemini", "groq", "xai", "litellm"])("%s: window reported -> inferred row", (p) => {
     const cap = capabilityFromReported(p, "m", { maxContextTokens: 100_000 });
     expect(cap?.source).toBe("inferred");
     expect(cap?.maxContextTokens).toBe(100_000);
@@ -23,7 +24,7 @@ describe("capabilityFromReported", () => {
     expect(cap?.toolCallDialect).toBe("native-fc");
   });
 
-  it.each(["ollama", "litellm", "test", "custom"])("%s: never inferred", (p) => {
+  it.each(["ollama", "test", "custom"])("%s: never inferred", (p) => {
     expect(capabilityFromReported(p, "m", { maxContextTokens: 100_000 })).toBeNull();
   });
 

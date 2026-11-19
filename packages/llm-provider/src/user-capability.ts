@@ -27,6 +27,7 @@
 // `registerUserSuppliedCapability` (capability-resolver.ts) is deprecated.
 
 import { fallbackCapability, type Capability } from "./capability.js";
+import { withoutProvisional } from "./capability-provisional.js";
 
 /**
  * Apply a caller-declared context window to an already-resolved capability.
@@ -48,8 +49,11 @@ import { fallbackCapability, type Capability } from "./capability.js";
 export function applyUserNumCtx(current: Capability, numCtx: number | undefined): Capability {
   if (numCtx === undefined || !Number.isFinite(numCtx) || numCtx <= 0) return current;
   if (current.source !== "fallback" && current.source !== "inferred") return current;
+  // A declared window is not the provisional hosted guess: drop the marker.
   const base =
-    current.source === "inferred" ? current : fallbackCapability(current.provider, current.model);
+    current.source === "inferred"
+      ? current
+      : withoutProvisional(fallbackCapability(current.provider, current.model));
   return {
     ...base,
     maxContextTokens: numCtx,

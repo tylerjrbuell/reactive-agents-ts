@@ -1,6 +1,7 @@
 import { Data } from "effect";
 import type { LLMProvider } from "./types.js";
 import type { LLMErrorClass } from "./error-class.js";
+import type { StatedLimit } from "./capability-learned.js";
 
 /**
  * Structural classification fields shared by every provider error.
@@ -22,6 +23,12 @@ export class LLMError extends Data.TaggedError("LLMError")<{
   readonly message: string;
   readonly provider: LLMProvider;
   readonly cause?: unknown;
+  /**
+   * An output limit the provider stated in this error (e.g. "supports at most
+   * 16384 completion tokens"), already written to the model's capability
+   * (capability-learned.ts). Absent when none was stated.
+   */
+  readonly learnedLimit?: StatedLimit;
 } & LLMErrorClassification> {}
 
 /**
@@ -96,6 +103,12 @@ export class LLMContextOverflowError extends Data.TaggedError(
   /** Always false: re-sending the identical request cannot succeed. */
   readonly retryable?: boolean;
   readonly status?: number;
+  /**
+   * The context window the provider stated in this error, already written to
+   * the model's capability so the next resolve uses it (capability-learned.ts).
+   * Absent when the message stated no window.
+   */
+  readonly learnedLimit?: StatedLimit;
 }> {}
 
 /**

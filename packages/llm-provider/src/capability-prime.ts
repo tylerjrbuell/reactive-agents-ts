@@ -43,8 +43,9 @@ export interface PrimeCapabilityOptions {
  * - **Never throws.** Discovery is timeout-bounded and any failure (offline
  *   endpoint, model not pulled, unknown id, missing key) leaves the existing
  *   fallback in place, with its one-time warning.
- * - **No-op for providers without a discoverer** (anthropic / openai / …),
- *   which keep resolving from the static table.
+ * - **No-op for providers without a discoverer** (openai, groq, xai, …),
+ *   which keep resolving from the static table, then the provisional hosted
+ *   window (capability-provisional.ts).
  * - Ollama endpoint resolution mirrors `validateProviderConnection`:
  *   explicit `opts.endpoint` → `OLLAMA_ENDPOINT` → `OLLAMA_HOST` → `OLLAMA_BASE`
  *   → localhost (see `resolveOllamaEndpoint`).

@@ -101,8 +101,9 @@ export { resolveCanonical, warnCapabilityFallback } from "./canonical-resolver.j
 export { primeCapability } from "./capability-prime.js";
 
 // Per-provider capability discovery hook: how an unknown model id gets its real
-// limits from the provider (Ollama /api/show, Gemini models.get). Register a
-// discoverer to cover another provider; static rows still override it.
+// limits from the provider (Ollama /api/show, Gemini models.get, Anthropic
+// GET /v1/models/{id}, LiteLLM /model/info). Register a discoverer to cover
+// another provider; static rows still override it.
 export {
   discoverCapability,
   registerCapabilityDiscoverer,
@@ -114,6 +115,22 @@ export type {
   DiscoverCapabilityOptions,
   DiscoveredCapability,
 } from "./capability-discovery.js";
+export { makeAnthropicCapabilityDiscoverer } from "./providers/anthropic-discovery.js";
+export { makeLiteLLMCapabilityDiscoverer } from "./providers/litellm-discovery.js";
+export type { DiscoveryFetch } from "./providers/discovery-common.js";
+
+// Unknown hosted model: provisional hosted window (native tool calling,
+// `provisional: true`) instead of the 2048-token local fallback.
+export {
+  HOSTED_PROVIDERS,
+  HOSTED_PROVISIONAL_CONTEXT_TOKENS,
+  hostedProvisionalCapability,
+} from "./capability-provisional.js";
+
+// Limits a provider stated in an error ("maximum context length is N tokens")
+// are written to the model's capability by mapProviderError.
+export { parseStatedLimit, learnedCapabilityLimitFor } from "./capability-learned.js";
+export type { StatedLimit, LearnedCapabilityLimit } from "./capability-learned.js";
 
 // Caller-declared capability — `.withModel({ numCtx })` fills the hole a failed
 // probe leaves, instead of the build dying on a `source: "fallback"` window the
