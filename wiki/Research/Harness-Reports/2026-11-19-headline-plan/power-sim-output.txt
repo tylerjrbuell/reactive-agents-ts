@@ -1,0 +1,29 @@
+qwen k 5 mean half-width pp 12.6 coverage 1.0
+qwen k 8 mean half-width pp 9.7 coverage 1.0
+qwen k 10 mean half-width pp 8.4 coverage 1.0
+qwen k 15 mean half-width pp 6.4 coverage 1.0
+qwen k 20 mean half-width pp 5.3 coverage 0.9975
+cogito k 5 mean half-width pp 12.7 coverage 0.99875
+cogito k 8 mean half-width pp 9.8 coverage 0.9975
+cogito k 10 mean half-width pp 8.6 coverage 0.99125
+cogito k 15 mean half-width pp 6.7 coverage 0.995
+cogito k 20 mean half-width pp 5.6 coverage 0.98625
+qwen k 5 harness gain 15pp on mid tasks only: P(lower bound>0) 0.0016666666666666668 hw 12.6
+qwen k 10 harness gain 15pp on mid tasks only: P(lower bound>0) 0.015 hw 8.4
+qwen k 15 harness gain 15pp on mid tasks only: P(lower bound>0) 0.08 hw 6.5
+cogito k 5 harness gain 15pp on mid tasks only: P(lower bound>0) 0.015 hw 12.7
+cogito k 10 harness gain 15pp on mid tasks only: P(lower bound>0) 0.11666666666666667 hw 8.6
+cogito k 15 harness gain 15pp on mid tasks only: P(lower bound>0) 0.20666666666666667 hw 6.7
+--- power: harness gains on 4 tasks, rest equal; C-set 10 tasks
+gain 0.4 on 4 tasks trueRD 16pp k=5 power 0.57 hw 14.0
+gain 0.4 on 4 tasks trueRD 16pp k=10 power 0.88 hw 9.9
+gain 0.4 on 4 tasks trueRD 16pp k=15 power 0.99 hw 7.9
+gain 0.3 on 4 tasks trueRD 12pp k=5 power 0.34 hw 14.1
+gain 0.3 on 4 tasks trueRD 12pp k=10 power 0.64 hw 10.0
+gain 0.3 on 4 tasks trueRD 12pp k=15 power 0.81 hw 8.1
+gain 0.2 on 5 tasks trueRD 10pp k=5 power 0.24 hw 14.1
+gain 0.2 on 5 tasks trueRD 10pp k=10 power 0.47 hw 10.2
+gain 0.2 on 5 tasks trueRD 10pp k=15 power 0.59 hw 8.3
+gain 0.2 on 3 tasks trueRD 6pp k=5 power 0.10 hw 14.1
+gain 0.2 on 3 tasks trueRD 6pp k=10 power 0.19 hw 10.2
+gain 0.2 on 3 tasks trueRD 6pp k=15 power 0.23 hw 8.3
