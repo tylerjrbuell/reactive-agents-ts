@@ -145,14 +145,28 @@ describe("the harness skill teaches only what is callable", () => {
   });
 });
 
-describe("the recall schema is the slim four-mode surface", () => {
-  test("advertised parameters are key/content/query/full only", async () => {
+describe("the recall schema is the four-mode surface plus segmented-read params", () => {
+  // b670bf0ca reversed the 2026-07-10 removal: the segmented-read params are
+  // advertised again so argument validation stops dropping them (the handler
+  // honors all of them). Strict equality: any added or dropped param fails.
+  test("advertised parameters are the four modes plus the six section-read params", async () => {
     const { recallTool } = await import("@reactive-agents/tools");
     const names = recallTool.parameters.map((p) => p.name);
-    expect(names.sort()).toEqual(["content", "full", "key", "query"]);
+    expect(names.sort()).toEqual([
+      "arrayCount",
+      "arrayStart",
+      "content",
+      "full",
+      "key",
+      "lineCount",
+      "lineStart",
+      "maxChars",
+      "query",
+      "start",
+    ]);
   });
 
-  test("the handler still honors a segmented read at runtime (back-compat)", async () => {
+  test("the handler honors a segmented read at runtime", async () => {
     const { makeRecallHandler } = await import("@reactive-agents/tools");
     const { Ref, Effect } = await import("effect");
     const store = await Effect.runPromise(Ref.make(new Map([["big", "x".repeat(1_000)]])));
