@@ -817,13 +817,14 @@ export const makeExecuteStream =
         // A durable run aborted before it ended on its own is left continuable
         // (`user-stopped`, final checkpoint from its last finished iteration).
         const interruptProducer = (): void => {
+          const asked = options.runController instanceof RunController ? options.runController.requestedStop() : undefined;
           Effect.runFork(
             Fiber.poll(producerFiber).pipe(
               Effect.flatMap((ended) =>
                 Fiber.interrupt(producerFiber).pipe(
                   Effect.zipRight(
                     Option.isNone(ended) && durableInstalled !== undefined
-                      ? Effect.promise(() => durableInstalled!.interrupt("user-stopped", "terminated").catch(() => undefined))
+                      ? Effect.promise(() => durableInstalled!.interrupt(asked ?? "user-stopped", asked ?? "terminated").catch(() => undefined))
                       : Effect.void,
                   ),
                   Effect.zipRight(Effect.sync(() => releaseActive())),

@@ -104,7 +104,7 @@ describe("stored stop kind of a streamed durable run", () => {
   // `requestedStop()` ("user-paused"). Cortex hits it when interruptLiveRun's grace times out
   // ("pending") and the turn is aborted while pauseRun is still waiting for the iteration boundary.
   // Remove `.failing` when the listener uses `requestedStop() ?? "user-stopped"`.
-  it.failing("2b. pauseRun, then abort the signal before the pause is persisted (Cortex grace-timeout order): paused / user-paused", async () => {
+  it("2b. pauseRun, then abort the signal before the pause is persisted (Cortex grace-timeout order): paused / user-paused", async () => {
     const { row } = await drive((agent, id, abort) => { void agent.pauseRun(id); abort(); });
     expect(row?.status).toBe("paused");
     expect(row?.stop?.kind).toBe("user-paused");
