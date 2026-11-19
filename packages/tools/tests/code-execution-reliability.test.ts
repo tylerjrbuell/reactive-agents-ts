@@ -95,23 +95,23 @@ describe("code-execute seam: error shaping", () => {
 });
 
 describe("code-execute model-facing contract (compute-offload spike 2026-11-15)", () => {
-  it("description states JS/TS only, no shell/Python, absolute-path data, and a compute example", async () => {
+  it("description states JS/TS and Python, no shell, absolute-path data, and a compute example", async () => {
     const { codeExecuteToolFor } = await import("../src/skills/code-execution.js");
     const d = codeExecuteToolFor({ sandbox: "host" }).description;
-    expect(d).toContain("JavaScript/TypeScript only");
+    expect(d).toContain("Python 3");
     expect(d).toMatch(/no shell/i);
-    expect(d).toMatch(/Python/);
+    expect(d).toContain("language: 'python'");
     expect(d).toMatch(/absolute path/i);
     expect(d).toContain("Example:");
   });
 
-  it("rejects a non-JS language with an explicit JavaScript/TypeScript-only message", async () => {
-    for (const language of ["python", "bash", "sh"]) {
+  it("rejects an unsupported language with an explicit message", async () => {
+    for (const language of ["ruby", "bash", "sh"]) {
       const r = (await Effect.runPromise(
         codeExecuteHandler({ sandbox: "host" })({ code: "return 1", language }),
       )) as CodeResult;
       expect(r.executed).toBe(false);
-      expect(r.error).toContain("JavaScript/TypeScript only");
+      expect(r.error).toContain("Python 3 only");
       expect(r.error).toContain(language);
     }
   });

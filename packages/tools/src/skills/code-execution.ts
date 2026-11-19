@@ -1,6 +1,6 @@
-import { writeFileSync, unlinkSync } from "node:fs";
+import { accessSync, constants as fsConstants, writeFileSync, unlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 
 import { Effect } from "effect";
 import { errorMessage } from "@reactive-agents/core";
@@ -47,8 +47,41 @@ __fn()
 `;
 }
 
-/** `language` labels code-execute accepts; all run as JavaScript/TypeScript under Bun. */
+/** `language` labels that run as JavaScript/TypeScript under Bun. */
 const JS_TS_LANGUAGES: ReadonlySet<string> = new Set(["javascript", "typescript", "js", "ts"]);
+/** `language` labels that run as Python 3 under the host `python3`. */
+const PYTHON_LANGUAGES: ReadonlySet<string> = new Set(["python", "python3", "py"]);
+
+/** Language a code-execute call runs in. */
+type CodeLanguage = "js" | "python";
+
+/** Resolve the `language` arg; `undefined` for an unsupported label. Empty means JavaScript. */
+const resolveLanguage = (raw: unknown): CodeLanguage | undefined => {
+  const label = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  if (label === "" || JS_TS_LANGUAGES.has(label)) return "js";
+  return PYTHON_LANGUAGES.has(label) ? "python" : undefined;
+};
+
+/** Python traceback lines kept on failure: the cause is at the end. */
+const PYTHON_ERROR_TAIL_LINES = 20;
+
+/** Python parse failures; the code never ran. */
+const PYTHON_SYNTAX_ERROR_RE = /^\s*(?:SyntaxError|IndentationError|TabError)\b/m;
+
+/** First `python3` executable on `pathEnv`, or `undefined` when the host has none. */
+function findPython3(pathEnv: string): string | undefined {
+  for (const dir of pathEnv.split(delimiter)) {
+    if (dir === "") continue;
+    const candidate = join(dir, "python3");
+    try {
+      accessSync(candidate, fsConstants.X_OK);
+      return candidate;
+    } catch {
+      /* not in this directory */
+    }
+  }
+  return undefined;
+}
 
 /** Bun's trailing version banner adds nothing the model can act on. */
 const BUN_BANNER_RE = /\n*Bun v\d[^\n]*\s*$/;
@@ -67,16 +100,54 @@ const SYNTAX_ERROR_RE =
  * accepted language, one runnable example, and where data has to come from.
  */
 export const CODE_RETRY_GUIDE =
-  " Retry with JavaScript/TypeScript only, for example: " +
+  " Retry with JavaScript/TypeScript, for example: " +
   "`const xs = [3, 5, 9]; return xs.reduce((a, b) => a + b, 0) / xs.length;`. " +
   "Data must be inlined in the code: each call starts clean in /tmp and keeps no variables. " +
   "To use a file's data, read it with the file-read tool first, then paste the numbers into the code.";
 
+/** Retry guide for a never-executed Python failure (language: 'python'). */
+export const PYTHON_RETRY_GUIDE =
+  " Retry with Python 3, for example: " +
+  "`xs = [3, 5, 9]; print(sum(xs) / len(xs))`. " +
+  "Print the answer: stdout arrives in `result`. " +
+  "Data must be inlined in the code: each call starts clean in /tmp and keeps no variables. " +
+  "To use a file's data, read it with the file-read tool first, then paste the numbers into the code.";
+
+/** Retry guide matching the language the model used. */
+const retryGuideFor = (language: CodeLanguage): string =>
+  language === "python" ? PYTHON_RETRY_GUIDE : CODE_RETRY_GUIDE;
+
 /** Add the retry guide when the failure is a never-executed syntax error. */
 const withSyntaxGuide = (message: string): string =>
   SYNTAX_ERROR_RE.test(message)
-    ? `${message}\nThe code is not valid JavaScript/TypeScript (Python syntax, pasted data or stray text cause this).${CODE_RETRY_GUIDE}`
+    ? `${message}\nThe code is not valid JavaScript/TypeScript (Python syntax, pasted data or stray text cause this). ` +
+      `For Python code set language to "python".${CODE_RETRY_GUIDE}`
     : message;
+
+/** Keep the last lines of a Python traceback and scrub the temp-file path. */
+function explainPythonError(raw: string, fallback: string): string {
+  const cleaned = raw.replace(/\S*code-exec-[^\s]*/g, "<code>").trim();
+  const tail = cleaned.split("\n").slice(-PYTHON_ERROR_TAIL_LINES).join("\n");
+  const message = tail.length > 0 ? tail : fallback;
+  const withHint = /FileNotFoundError|No such file or directory/i.test(message) ? message + ENOENT_HINT : message;
+  return PYTHON_SYNTAX_ERROR_RE.test(withHint)
+    ? `${withHint}\nThe code is not valid Python 3.${PYTHON_RETRY_GUIDE}`
+    : withHint;
+}
+
+/** Result for a finished Python run: stdout is the answer, there is no `return`. */
+function parsePythonResult(stdout: string, stderr: string, exitCode: number): unknown {
+  const out = stdout.trim();
+  if (exitCode !== 0) {
+    return {
+      executed: false,
+      error: explainPythonError(stderr, `Process exited with code ${exitCode} and wrote nothing to stderr.`),
+      output: out || "(no output)",
+      exitCode,
+    };
+  }
+  return { executed: true, result: out === "" ? null : out, output: out || "(no output)", exitCode };
+}
 
 /**
  * Make a failure message non-empty and model-actionable: strip the temp-file
@@ -220,12 +291,14 @@ export function isShellInput(code: string): boolean {
  * does not run here; it never names a shell tool, because whether one is
  * offered this run is known to the caller (`exposedToolNames`), not here.
  */
-const shellInputRefusal = (code: string): string => {
+const shellInputRefusal = (code: string, language: CodeLanguage = "js"): string => {
   const first = code.trim().split("\n")[0] ?? "";
   const shown = first.length > 80 ? `${first.slice(0, 80)}…` : first;
   return (
-    `${JSON.stringify(shown)} is a shell command, not JavaScript/TypeScript. ` +
-    `code-execute runs JavaScript/TypeScript code with Bun; it does not run shell commands. Nothing was executed.${CODE_RETRY_GUIDE}`
+    `${JSON.stringify(shown)} is a shell command, not ${language === "python" ? "Python" : "JavaScript/TypeScript"}. ` +
+    `code-execute runs JavaScript/TypeScript (Bun) or Python 3 source code; it does not run shell commands ` +
+    `(a line like \`python3 script.py\` is a shell command: write the Python source itself). ` +
+    `Nothing was executed.${retryGuideFor(language)}`
   );
 };
 
@@ -246,7 +319,8 @@ const resolveCodeSandbox =(config?: CodeExecuteConfig): "docker" | "host" =>
  */
 const ENVIRONMENT_TEXT: Record<"docker" | "host", string> = {
   host:
-    "ENVIRONMENT: runs as a Bun subprocess on the host machine. It is NOT isolated: it runs as the same OS user " +
+    "ENVIRONMENT: runs as a Bun subprocess (JavaScript/TypeScript) or a host python3 subprocess (Python) on the host machine. " +
+    "It is NOT isolated: it runs as the same OS user " +
     "and can read host files. Environment variables are cleared except PATH and HOME. " +
     "The working directory is /tmp, not the agent's working root: relative paths in fs calls resolve under /tmp. " +
     "To read or write workspace files, use the file tools instead. " +
@@ -254,7 +328,7 @@ const ENVIRONMENT_TEXT: Record<"docker" | "host", string> = {
     "require() for built-in Node.js modules and dynamic import() work. Bun accepts TypeScript syntax, including type annotations. " +
     "No DOM APIs (DOMParser, document). ",
   docker:
-    "ENVIRONMENT: runs in an isolated, throwaway Docker container with no network access " +
+    "ENVIRONMENT: runs (JavaScript/TypeScript with Bun, or Python 3) in an isolated, throwaway Docker container with no network access " +
     "(fetch() calls fail), a read-only filesystem except /tmp, and no access to host files. " +
     "require() for built-in Node.js modules and dynamic import() work. " +
     "No DOM APIs (DOMParser, document). ",
@@ -270,7 +344,7 @@ export const codeExecuteToolFor = (config?: CodeExecuteConfig): ToolDefinition =
   return {
   name: "code-execute",
   description:
-    "Execute JavaScript/TypeScript only (Bun). No shell commands, no Python: other languages fail. " +
+    "Execute JavaScript/TypeScript (Bun, the default) or Python 3 (set language: 'python'). No shell commands: other languages fail. " +
     "STATELESS: each call is a fresh process in /tmp; no variables or files carry over, so inline all data in the code " +
     "(or read a file by absolute path on the host sandbox; otherwise read it with the file tools first, then paste the values). " +
     "Best for: math, aggregation, string transforms, JSON parsing, sorting, regex extraction. " +
@@ -280,26 +354,29 @@ export const codeExecuteToolFor = (config?: CodeExecuteConfig): ToolDefinition =
     storedDataText(config) +
     ENVIRONMENT_TEXT[sandbox] +
     "For HTML text: use regex or string methods, NOT DOMParser. " +
-    "RESULT CONTRACT: you MUST end with `return <value>` — the returned value arrives in the `result` field. " +
+    "RESULT CONTRACT (JavaScript/TypeScript): you MUST end with `return <value>` — the returned value arrives in the `result` field. " +
     "A bare final expression (no return) yields result:null; console.log() text arrives ONLY in the `output` string. " +
+    "RESULT CONTRACT (Python): there is no `return`; print() the answer: its stdout arrives in `result` (and `output`). " +
     "Returns { executed: true, result, output, exitCode } on success.",
   parameters: [
     {
       name: "code",
       type: "string",
       description:
-        "JavaScript code to execute in a subprocess. " +
-        "End with `return <value>` — that value becomes the `result` field (a bare expression yields result:null). " +
+        "JavaScript (default) or Python source to execute in a subprocess. " +
+        "JavaScript: end with `return <value>` — that value becomes the `result` field (a bare expression yields result:null). " +
+        "Python: print() the answer; stdout becomes the `result` field. " +
         "Examples: 'return 2 + 2' → result: 4, " +
-        "'return [3,1,2].sort()' → result: [1,2,3].",
+        "'return [3,1,2].sort()' → result: [1,2,3]; " +
+        "(language python) 'print(sum([3,1,2]))' → result: \"6\".",
       required: true,
     },
     {
       name: "language",
       type: "string",
       description:
-        "Optional label: 'javascript' (default) or 'typescript'. JavaScript/TypeScript only: " +
-        "other languages are rejected. Both run the same way, executed by Bun.",
+        "Optional label: 'javascript' (default), 'typescript' (both run under Bun) or 'python' (Python 3, host python3). " +
+        "Other languages are rejected.",
       required: false,
       default: "javascript",
     },
@@ -364,27 +441,29 @@ export const codeExecuteHandler = (
       }
 
       // Guard: non-JS language label (was an opaque enum rejection upstream).
-      const language = typeof args.language === "string" ? args.language.trim().toLowerCase() : "";
-      if (language !== "" && !JS_TS_LANGUAGES.has(language)) {
+      const language = resolveLanguage(args.language);
+      if (language === undefined) {
         return {
           executed: false,
           error:
-            `language "${String(args.language)}" is not supported: code-execute runs JavaScript/TypeScript only ` +
-            `(no shell, no Python). Nothing was executed.${CODE_RETRY_GUIDE}`,
+            `language "${String(args.language)}" is not supported: code-execute runs JavaScript/TypeScript (Bun) ` +
+            `or Python 3 only (no shell). Nothing was executed.${CODE_RETRY_GUIDE}`,
         };
       }
 
-      // Guard: shell input. Run as JS it fails with a syntax or reference
+      // Guard: shell input. Run as code it fails with a syntax or reference
       // error, which reads as "fix the code". `shellCommand: true` lets the
       // caller name a shell tool when one is offered.
       if (typeof rawCode === "string" && isShellInput(rawCode)) {
-        return { executed: false, shellCommand: true, error: shellInputRefusal(rawCode) };
+        return { executed: false, shellCommand: true, error: shellInputRefusal(rawCode, language) };
       }
 
-      // Wrap user code in an async IIFE so `return` works, and inject
+      // JavaScript: wrap user code in an async IIFE so `return` works, and inject
       // `createRequire` so CJS `require()` calls succeed in ESM context.
       // The wrapper always prints a JSON sentinel as the last stdout line.
-      const wrapped = wrapCode(rawCode);
+      // Python: the source runs as written; stdout is the answer.
+      const wrapped = language === "python" ? rawCode : wrapCode(rawCode);
+      const parse = language === "python" ? parsePythonResult : parseCodeResult;
 
       // ── Opt-in Docker sandbox (F1b) ──
       // config.sandbox > RA_SANDBOX env > "host" default. Runs the code inside
@@ -396,7 +475,7 @@ export const codeExecuteHandler = (
         // effect, whose release step removes the container.
         const dockerResult = await runSandboxEffect(
           signal,
-          dockerSandbox.execute(wrapped, "bun").pipe(
+          dockerSandbox.execute(wrapped, language === "python" ? "python" : "bun").pipe(
             Effect.catchAll((err) =>
               Effect.succeed({
                 output: "",
@@ -411,10 +490,25 @@ export const codeExecuteHandler = (
             ),
           ),
         );
-        return parseCodeResult(dockerResult.output, dockerResult.stderr, dockerResult.exitCode);
+        return parse(dockerResult.output, dockerResult.stderr, dockerResult.exitCode);
       }
 
-      const tmpFile = join(tmpdir(), `code-exec-${Date.now()}-${Math.random().toString(36).slice(2)}.ts`);
+      const hostPath = process.env.PATH ?? "/usr/bin:/bin";
+      let python3: string | undefined;
+      if (language === "python") {
+        python3 = findPython3(hostPath);
+        if (python3 === undefined) {
+          return {
+            executed: false,
+            error:
+              "python3 not found on the host (not on PATH). Nothing was executed. " +
+              "Retry with JavaScript/TypeScript (language: 'javascript'), which does not need python3.",
+          };
+        }
+      }
+
+      const ext = language === "python" ? "py" : "ts";
+      const tmpFile = join(tmpdir(), `code-exec-${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
       try {
         writeFileSync(tmpFile, wrapped);
       } catch (e) {
@@ -427,14 +521,17 @@ export const codeExecuteHandler = (
       // The code runs in its own process group; the timeout kills the group,
       // so a child it spawned cannot hold stdout open past the kill.
       const run = await runProcessGroup({
-        argv: ["bun", "run", tmpFile],
+        // Python: -B no .pyc files, -s no user site-packages, -u unbuffered stdout
+        // (output printed before a timeout kill is kept).
+        argv: python3 !== undefined ? [python3, "-B", "-s", "-u", tmpFile] : ["bun", "run", tmpFile],
         // Run in /tmp to prevent Bun from auto-loading .env files from the project.
         cwd: "/tmp",
         // Minimal env: only PATH for executable resolution, HOME for bun internals.
         // No API keys, secrets, or application env vars are passed.
         env: {
-          PATH: process.env.PATH ?? "/usr/bin:/bin",
+          PATH: hostPath,
           HOME: process.env.HOME ?? "/tmp",
+          ...(language === "python" ? { PYTHONDONTWRITEBYTECODE: "1", PYTHONNOUSERSITE: "1", PYTHONUNBUFFERED: "1" } : {}),
         },
         timeoutMs,
       }).finally(() => {
@@ -442,7 +539,7 @@ export const codeExecuteHandler = (
       });
 
       if (run.timedOut) return timedOutCodeResult(run.stdout, run.exitCode, timeoutMs);
-      return parseCodeResult(run.stdout, run.stderr, run.exitCode);
+      return parse(run.stdout, run.stderr, run.exitCode);
     },
     catch: (e) =>
       new ToolExecutionError({

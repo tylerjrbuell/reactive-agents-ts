@@ -142,7 +142,8 @@ describe("code-execute shell input", () => {
       expect(r.executed).toBe(false);
       expect(r.shellCommand).toBe(true);
       expect(r.error).toContain("is a shell command, not JavaScript/TypeScript.");
-      expect(r.error).toContain("it does not run shell commands. Nothing was executed.");
+      expect(r.error).toContain("it does not run shell commands");
+      expect(r.error).toContain("Nothing was executed.");
       expect(r.error?.toLowerCase()).not.toContain("fix the code");
       expect(r.error).not.toContain("shell-execute");
     },
@@ -171,7 +172,7 @@ describe("code-execute shell input", () => {
 // matching case below loses the example/data hint.
 describe("code-execute retry guidance (never-executed failures)", () => {
   const guide = (error: string | undefined): void => {
-    expect(error).toContain("JavaScript/TypeScript only");
+    expect(error).toContain("Retry with JavaScript/TypeScript");
     expect(error).toContain("return xs.reduce((a, b) => a + b, 0) / xs.length;");
     expect(error).toContain("inlined in the code");
     expect(error).toContain("file-read tool");
@@ -179,7 +180,7 @@ describe("code-execute retry guidance (never-executed failures)", () => {
 
   it("wrong language carries the guide", async () => {
     const r = (await Effect.runPromise(
-      codeExecuteHandler()({ code: "print(1)", language: "python" }) as Effect.Effect<CodeExecResult, never, never>,
+      codeExecuteHandler()({ code: "puts 1", language: "ruby" }) as Effect.Effect<CodeExecResult, never, never>,
     )) as { executed: boolean; error?: string };
     expect(r.executed).toBe(false);
     guide(r.error);
@@ -209,10 +210,10 @@ describe("code-execute retry guidance (never-executed failures)", () => {
     expect(r.error).not.toContain("inlined in the code");
   });
 
-  it("description states JS/TS-only, stateless and cwd up front", () => {
+  it("description states JS/TS and Python, stateless and cwd up front", () => {
     const d = codeExecuteToolFor().description;
     expect(d.indexOf("STATELESS")).toBeLessThan(d.indexOf("Best for"));
     expect(d.slice(0, 400)).toContain("/tmp");
-    expect(d.slice(0, 120)).toContain("JavaScript/TypeScript only");
+    expect(d.slice(0, 160)).toContain("Python 3");
   });
 });
