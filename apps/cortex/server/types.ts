@@ -85,7 +85,10 @@ export interface RunSummary {
   readonly status: "live" | "completed" | "failed" | "stopped" | "blocked";
   readonly iterationCount: number;
   readonly tokensUsed: number;
+  /** USD spend; a lower bound when `costComplete` is false. */
   readonly cost: number;
+  /** Present and false when a model call had no known price, so `cost` understates the spend. */
+  readonly costComplete?: false;
   readonly hasDebrief: boolean;
   readonly provider?: string;
   readonly model?: string;

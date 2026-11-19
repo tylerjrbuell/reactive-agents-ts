@@ -5,7 +5,7 @@
  * so the UI can navigate immediately without polling for the first EventBus event.
  */
 import { Effect, Context, Layer, Ref } from "effect";
-import { generateTaskId, type InteractionQuestion } from "@reactive-agents/core";
+import { emitErrorSwallowed, errorTag, generateTaskId, type InteractionQuestion } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import type { RunId } from "../types.js";
 import { CortexError } from "../errors.js";
@@ -21,11 +21,10 @@ import type {
 } from "./cortex-agent-config.js";
 import { buildCortexAgent, type BuildCortexAgentParams, type MCPServerConfig } from "./build-cortex-agent.js";
 import type { CortexJudgmentConfig } from "./cortex-judgment.js";
-import { resolveLaunchPayload } from "./resolve-template.js";
+import { resolveLaunchPayload, type VariableDef } from "./resolve-template.js";
 import type { CortexApprovalPolicy } from "./approval-policy.js";
-import type { VariableDef } from "./resolve-template.js";
 import type { ReactiveAgent, ResumeRunOptions } from "@reactive-agents/runtime";
-import { emitErrorSwallowed, errorTag } from "@reactive-agents/core";
+import { runCostSettled } from "./run-cost-settled.js";
 import type { CrashedRun } from "./crashed-runs.js";
 import { decideApproval, interruptLiveRun, settledWithin, type InterruptOutcome } from "./run-interrupt.js";
 import { structuredOutputExtractedEvent } from "./structured-output-event.js";
@@ -523,10 +522,10 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
             params,
           });
 
-          // Durable HITL: when a durable run pauses for approval, run() resolves
-          // with status "awaiting-approval". Retain the agent so approveRun/denyRun
-          // can drive it later; the `.finally` dispose is skipped while paused.
+          // Durable HITL: a run paused for approval resolves "awaiting-approval"; the agent is kept for
+          // approveRun/denyRun (no dispose). Teardown waits for RunCostFinalized (`run-cost-settled.ts`).
           let paused = false;
+          let costSettled: Promise<void> = Promise.resolve();
           // A `detach` gate without durable runs waits live while this run runs:
           // list and answer its waits through the shared registry until it ends.
           const unwatchLive = waitsLive(buildParams) ? durableApprovals.watchLive({ agentId, agent }) : undefined;
@@ -534,6 +533,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
           void agent
             .run(params.prompt, { taskId: runId })
             .then((result) => {
+              costSettled = runCostSettled(result);
               const r = result as {
                 status?: string;
                 pendingApproval?: { runId: string };
@@ -613,7 +613,7 @@ export const makeCortexRunnerServiceLive = (options: CortexRunnerOptions = {}) =
               }
               // Shared teardown: unsubscribe + dispose + drop from active. Idempotent
               // with a concurrent terminate() on the same run (atomic claim).
-              void Effect.runPromise(finalizeRun(runId, unsubscribe, agent));
+              void costSettled.then(() => Effect.runPromise(finalizeRun(runId, unsubscribe, agent)));
             });
 
           return { agentId, runId };

@@ -82,6 +82,24 @@ describe("summarizeUsage", () => {
     expect(u.cacheReadTokensIn).toBe(1200);
     expect(u.cacheCreationTokensIn).toBe(100);
   });
+
+  test("an unknown price adds nothing and marks the cost partial, never NaN", () => {
+    const priced = summarizeUsage(undefined, usage({ callId: "a", costUsd: 0.01 }));
+    expect(priced.costUsd).toBe(0.01);
+    expect(priced.costComplete).toBe(true);
+
+    const u = summarizeUsage(priced, usage({ callId: "b", costUsd: undefined, priceSource: "unknown" }));
+    expect(Number.isNaN(u.costUsd)).toBe(false);
+    expect(u.costUsd).toBe(0.01);
+    expect(u.costComplete).toBe(false);
+    expect(u.calls[1]?.costUsd).toBeUndefined();
+  });
+
+  test("priceSource unknown wins over a stray costUsd", () => {
+    const u = summarizeUsage(undefined, usage({ costUsd: 0, priceSource: "unknown" }));
+    expect(u.costUsd).toBe(0);
+    expect(u.costComplete).toBe(false);
+  });
 });
 
 describe("estimateTokens", () => {

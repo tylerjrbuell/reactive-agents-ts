@@ -4,7 +4,7 @@
  * the source of a run and how a live event updates a row. Status goes through
  * ui-core's one vocabulary (`statusOfRun`).
  */
-import { statusOfRun, turnOutcomeOf, type StatusTone, type StatusView } from "@reactive-agents/ui-core";
+import { foldRunCost, statusOfRun, turnOutcomeOf, type StatusTone, type StatusView } from "@reactive-agents/ui-core";
 import { runStatusAfter } from "./run-live-status.js";
 import { isIdLike, runHeaderStatus, shortRunId } from "./run-view.js";
 
@@ -19,7 +19,10 @@ export interface RunRow {
   readonly ending?: string;
   readonly iterationCount: number;
   readonly tokensUsed: number;
+  /** USD spend; a lower bound when `costComplete` is false. */
   readonly cost: number;
+  /** Present and false when a model call had no known price (server `cortex_runs.cost_complete`). */
+  readonly costComplete?: false;
   readonly hasDebrief: boolean;
   readonly provider?: string;
   readonly model?: string;
@@ -150,15 +153,17 @@ export function statusCounts(rows: readonly RunRow[], resumable: ReadonlySet<str
   return counts;
 }
 
-/** Token and cost totals over `rows`. */
-export function runTotals(rows: readonly RunRow[]): { readonly tokens: number; readonly cost: number } {
+/** Token and cost totals over `rows`; `costComplete` is false when any row's cost is a lower bound. */
+export function runTotals(rows: readonly RunRow[]): { readonly tokens: number; readonly cost: number; readonly costComplete: boolean } {
   let tokens = 0;
   let cost = 0;
+  let costComplete = true;
   for (const r of rows) {
     tokens += r.tokensUsed;
     cost += r.cost ?? 0;
+    if (r.costComplete === false) costComplete = false;
   }
-  return { tokens, cost };
+  return { tokens, cost, costComplete };
 }
 
 /** How long the run took (or has run so far, when it is live); `undefined` when unknown. */
@@ -224,8 +229,10 @@ export function applyRunLiveMessage(rows: readonly RunRow[], msg: RunLiveMessage
     }
     case "LLMRequestCompleted": {
       const tokens = tokensOf(p);
-      const cost = num(p.estimatedCost) ?? 0;
-      if (tokens > 0 || cost > 0) patch = { tokensUsed: base.tokensUsed + tokens, cost: base.cost + cost };
+      const cost = foldRunCost({ usd: base.cost, complete: base.costComplete !== false }, msg.type, p);
+      if (tokens > 0 || cost.usd !== base.cost || !cost.complete) {
+        patch = { tokensUsed: base.tokensUsed + tokens, cost: cost.usd, ...(cost.complete ? {} : { costComplete: false as const }) };
+      }
       break;
     }
     case "AgentCompleted":
@@ -236,7 +243,11 @@ export function applyRunLiveMessage(rows: readonly RunRow[], msg: RunLiveMessage
       const status = runStatusAfter(base.status, msg.type, p);
       const total = msg.type === "AgentCompleted" ? num(p.totalTokens) : undefined;
       const duration = msg.type === "AgentCompleted" ? num(p.durationMs) : undefined;
+      // Run-level completeness (ui-core `foldRunCost`); the total comes from RunCostFinalized.
+      const cost = msg.type === "AgentCompleted" ? foldRunCost({ usd: base.cost, complete: base.costComplete !== false }, msg.type, p) : undefined;
       patch = {
+        ...(cost !== undefined && cost.usd !== base.cost ? { cost: cost.usd } : {}),
+        ...(cost !== undefined && !cost.complete ? { costComplete: false as const } : {}),
         ...(status !== undefined ? { status, completedAt: duration !== undefined ? base.startedAt + duration : now } : {}),
         // The same classifier the server stores on `cortex_runs.ending`.
         ...(msg.type === "AgentCompleted" ? { ending: turnOutcomeOf(p).ending } : {}),
@@ -247,6 +258,14 @@ export function applyRunLiveMessage(rows: readonly RunRow[], msg: RunLiveMessage
     case "DebriefCompleted":
       if (!base.hasDebrief) patch = { hasDebrief: true };
       break;
+    case "RunCostFinalized": {
+      // The run's billed total (debrief call included) replaces the provisional per-call sum.
+      const cost = foldRunCost({ usd: base.cost, complete: base.costComplete !== false }, msg.type, p);
+      if (cost.usd !== base.cost || cost.complete !== (base.costComplete !== false)) {
+        patch = { cost: cost.usd, costComplete: cost.complete ? undefined : false };
+      }
+      break;
+    }
   }
   if (idx >= 0 && Object.keys(patch).length === 0) return rows;
   const next: RunRow = { ...base, ...patch };

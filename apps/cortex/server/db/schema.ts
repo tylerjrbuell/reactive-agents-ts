@@ -391,6 +391,9 @@ export function applySchema(db: Database): void {
   // The run a Continue's new run continues (`AgentStarted.config.continuedFrom`); NULL on every older or ordinary run.
   if (!runCols.includes("continued_from")) db.exec("ALTER TABLE cortex_runs ADD COLUMN continued_from TEXT");
   if (!runCols.includes("launch_params_json")) db.exec("ALTER TABLE cortex_runs ADD COLUMN launch_params_json TEXT");
+  // 0 when any model call had no known price (or the framework said the run total is incomplete):
+  // `cost_usd` is then a lower bound. Older rows stay 1 (their calls always carried a number).
+  if (!runCols.includes("cost_complete")) db.exec("ALTER TABLE cortex_runs ADD COLUMN cost_complete INTEGER NOT NULL DEFAULT 1");
   // How a finished run ended (abstained / partial / failed / succeeded): an abstention
   // shares the `failed` status. Filled from each stored run's last AgentCompleted once.
   if (!runCols.includes("ending")) {

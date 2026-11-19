@@ -4,7 +4,7 @@
 import { writable } from "svelte/store";
 import { createWsClient } from "./ws-client.js";
 import { CORTEX_SERVER_URL } from "../constants.js";
-import { foldRunStrategy, initialRunStrategy, isUserStopResult, runStrategyOf, type RunStrategyState, type StructuredOutputReportWire, type ThroughputSample } from "@reactive-agents/ui-core";
+import { foldRunCost, foldRunStrategy, initialRunStrategy, isUserStopResult, runStrategyOf, type RunStrategyState, type StructuredOutputReportWire, type ThroughputSample } from "@reactive-agents/ui-core";
 import { throughputSampleOf } from "../llm-throughput.js";
 import { effectiveBound, planBudgetEffective } from "../plan-budget.js";
 import { abortStatusOf } from "../run-live-status.js";
@@ -56,7 +56,10 @@ export interface RunVitals {
   readonly billedTokens?: number;
   /** Hidden-reasoning tokens, accumulated; absent when never reported. */
   readonly reasoningTokens?: number;
+  /** USD spend (ui-core `foldRunCost`); a lower bound when `costComplete` is false. */
   readonly cost: number;
+  /** False when a model call had no known price; absent = complete. */
+  readonly costComplete?: boolean;
   readonly durationMs: number;
   /**
    * Every LLM call's throughput fields (`LLMRequestCompleted` durationMs / tokensOut /
@@ -195,6 +198,12 @@ function readTokensUsed(p: Record<string, unknown>): number {
   return 0;
 }
 
+/** Run cost after one event (ui-core `foldRunCost`, the rule the server stores). */
+function costOf(v: RunVitals, type: string, p: Record<string, unknown>): Pick<RunVitals, "cost" | "costComplete"> {
+  const next = foldRunCost({ usd: v.cost, complete: v.costComplete !== false }, type, p);
+  return { cost: next.usd, ...(next.complete ? {} : { costComplete: false }) };
+}
+
 /** Fold one live message into the run vitals. Exported for tests. */
 export function updateVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): RunVitals {
   const prior = v.strategyFold ?? initialRunStrategy;
@@ -250,7 +259,7 @@ function foldVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): RunVi
         ...(outHalf !== undefined ? { tokensOut: (v.tokensOut ?? 0) + outHalf } : {}),
         ...(billed !== undefined ? { billedTokens: (v.billedTokens ?? 0) + billed } : {}),
         ...(reasoning !== undefined ? { reasoningTokens: (v.reasoningTokens ?? 0) + reasoning } : {}),
-        cost: v.cost + (typeof p.estimatedCost === "number" ? p.estimatedCost : 0),
+        ...costOf(v, msg.type, p),
         durationMs: Math.max(0, msg.ts - runStartMs),
         // LLMRequestCompleted.model may be the "actual" model used (e.g. after routing)
         // Override AgentStarted values with the real model from the first LLM call
@@ -305,8 +314,14 @@ function foldVitals(v: RunVitals, msg: CortexLiveMsg, runStartMs: number): RunVi
           typeof p.totalIterations === "number" ? p.totalIterations : v.loopIteration,
         tokensUsed: typeof p.totalTokens === "number" ? p.totalTokens : v.tokensUsed,
         durationMs: typeof p.durationMs === "number" ? p.durationMs : v.durationMs,
+        ...costOf(v, msg.type, p),
         ...readTolerance(p),
       };
+    // The run's billed total (debrief call included) replaces the provisional per-call sum.
+    case "RunCostFinalized": {
+      const { costComplete: _provisional, ...rest } = v;
+      return { ...rest, ...costOf(v, msg.type, p) };
+    }
     case "ProviderFallbackActivated":
       return {
         ...v,
@@ -465,6 +480,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         iterationCount?: number;
         tokensUsed?: number;
         cost?: number;
+        costComplete?: false;
         debrief?: string | null;
         errorMessage?: string | null;
         launchParams?: Record<string, unknown>;
@@ -500,6 +516,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
           reasoningSteps: run.iterationCount ?? s.vitals.reasoningSteps,
           tokensUsed: run.tokensUsed ?? s.vitals.tokensUsed,
           cost: run.cost ?? s.vitals.cost,
+          ...(run.costComplete === false ? { costComplete: false } : {}),
           durationMs: Date.now() - runStartMs,
         },
       }));

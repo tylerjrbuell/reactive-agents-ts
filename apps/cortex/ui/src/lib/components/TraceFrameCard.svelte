@@ -18,7 +18,7 @@
   import { groupToolNames } from "$lib/tool-groups.js";
   import { throughputView } from "$lib/llm-throughput.js";
   import { tooltip } from "$lib/actions/tooltip.js";
-  import { formatClockTime, formatCost, formatTurnDuration, type SafetyLoopMark } from "@reactive-agents/ui-core";
+  import { formatClockTime, formatCostTotal, formatTurnDuration, partialCostNote, type SafetyLoopMark } from "@reactive-agents/ui-core";
   import { safetyBadgeTone, safetyMarkLabel } from "$lib/run-safety.js";
 
   interface Props {
@@ -129,7 +129,7 @@
         {#if f.model}<span>{f.model}</span>{/if}
         {#if f.provider}<span>{f.provider}</span>{/if}
         {#if f.tokensUsed > 0}<span>{f.tokensUsed.toLocaleString()} tokens</span>{/if}
-        {#if f.estimatedCost}<span>{formatCost(f.estimatedCost)}</span>{/if}
+        {#if f.estimatedCost || f.costComplete === false}<span use:tooltip={partialCostNote(f.costComplete !== false) || undefined}>{formatCostTotal(f.estimatedCost ?? 0, f.costComplete !== false)}</span>{/if}
         {#if speed}<span use:tooltip={speed.title}>{speed.text}</span>{#if speed.ttft}<span>{speed.ttft}</span>{/if}{/if}
         {#if f.entropy !== undefined}<span>η {f.entropy.toFixed(3)}</span>{/if}
         <span>{formatClockTime(f.ts)}</span>

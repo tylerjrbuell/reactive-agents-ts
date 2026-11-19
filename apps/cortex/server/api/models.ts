@@ -5,14 +5,17 @@
  */
 import {
   getProviderDefaultModel,
+  priceFor,
   resolveProviderModels,
   resolveCapability,
   LLMProviderType,
   type DiscoveredModel,
   type ListProviderModelsOptions,
+  type PriceEntry,
   type ResolvedProviderModels,
 } from "@reactive-agents/llm-provider";
-import { Effect } from "effect";
+import type { ModelPrice } from "@reactive-agents/ui-core";
+import { Effect, Option } from "effect";
 import { Elysia } from "elysia";
 import {
   bearerFetch,
@@ -35,6 +38,38 @@ export interface ModelEntry {
   readonly source: "live" | "preset";
   /** true/false from the framework (or Ollama api/show); null = unknown. */
   readonly supportsThinking: boolean | null;
+  /** $/1M token rates from the framework PriceBook; absent = price unknown. Ollama is `source: "local"`, $0. */
+  readonly price?: ModelPrice;
+}
+
+/**
+ * The display price of one model: the framework PriceBook (`priceFor`), which is
+ * the price the agent's calls are billed at. Cortex sets no user pricing
+ * registry on agents (no `pricingRegistry` in its config path), so none is passed
+ * here either; when it gains one, pass the same registry so the shown price is
+ * the billed price.
+ */
+export function modelPriceOf(provider: string, model: string): ModelPrice | undefined {
+  const entry: PriceEntry | undefined = Option.getOrUndefined(priceFor(provider, model));
+  if (entry === undefined) return undefined;
+  return {
+    input: entry.input,
+    output: entry.output,
+    ...(entry.cacheRead !== undefined ? { cacheRead: entry.cacheRead } : {}),
+    ...(entry.tiers !== undefined && entry.tiers.length > 0
+      ? {
+          tiers: entry.tiers.map((t) => ({
+            minPromptTokens: t.minPromptTokens,
+            ...(t.input !== undefined ? { input: t.input } : {}),
+            ...(t.output !== undefined ? { output: t.output } : {}),
+            ...(t.cacheRead !== undefined ? { cacheRead: t.cacheRead } : {}),
+          })),
+        }
+      : {}),
+    source: entry.source,
+    ...(entry.asOf !== undefined ? { asOf: entry.asOf } : {}),
+    ...(entry.origin !== undefined ? { origin: entry.origin } : {}),
+  };
 }
 
 /** Response of `GET /api/models/:provider`. */
@@ -104,6 +139,8 @@ export interface ModelCapabilityResponse {
   readonly source: string;
   /** true/false for hosted providers; null when the provider needs no key. */
   readonly keyConfigured: boolean | null;
+  /** $/1M token rates (framework PriceBook); absent = price unknown. */
+  readonly price?: ModelPrice;
 }
 
 /** Framework capability for one (provider, model) plus whether the provider's key is set. */
@@ -128,8 +165,14 @@ export function buildCapabilityResponse(
     tier: cap.tier,
     source: cap.source,
     keyConfigured: keys ? keys.some((k) => Boolean(env[k])) || hasStoredKey(provider) : null,
+    ...withPrice(provider, model),
   };
 }
+
+const withPrice = (provider: string, model: string): { price?: ModelPrice } => {
+  const price = modelPriceOf(provider, model);
+  return price ? { price } : {};
+};
 
 /** One selectable LLM provider in Cortex pickers. */
 export interface ProviderInfo {
@@ -238,6 +281,7 @@ export async function buildModelsResponse(
       provider === "ollama" && m.source === "live" && baseUrl
         ? await ollamaSupportsThinking(listFetch, baseUrl, m.id)
         : m.supportsThinking,
+    ...withPrice(provider, m.id),
   });
   const models = await Promise.all(resolved.models.map(toEntry));
   return {

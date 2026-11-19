@@ -4,7 +4,7 @@ import { ChatSessionPlans, persistSessionPlan, planSeedOf } from "./chat-session
 import { chatMetaTools } from "./chat-meta-tools.js";
 import { SessionDocumentCache, type DocumentFetcher, type DocumentIngestFailure } from "./chat-document-cache.js";
 import type { Database } from "bun:sqlite";
-import { generateTaskId, type RunPosture } from "@reactive-agents/core";
+import { EMPTY_COST_SUM, generateTaskId, type RunPosture } from "@reactive-agents/core";
 import type { TestTurn } from "@reactive-agents/llm-provider";
 import { AgentSession, getCapabilityManifest, type AgentResult, type ChatMessage, type ChatOptions, type AgentStreamEvent, type GoalRunEventSlice, type TaskInput } from "@reactive-agents/runtime";
 import {
@@ -71,7 +71,7 @@ import { withDerivedContext } from "./chat-context-fallback.js";
 import { getEnabledMcpConfigsByIds } from "../db/mcp-queries.js";
 import { chatToolParams, resolveEnableTools } from "./chat-tool-params.js";
 import { DEFAULT_CHAT_NAME, cleanChatTitle, fallbackChatTitle } from "./chat-title.js";
-import { turnCostOf, type TurnCost } from "./chat-turn-cost.js";
+import { addUsageCost, completedTurnCostOf, directReplyMetadata, reportedTurnCostOf, type TurnCost } from "./chat-turn-cost.js";
 import {
   TurnTraceRecorder,
   failedCompletion,
@@ -279,7 +279,7 @@ export class ChatSessionService {
       const row = getChatSession(this.db, id);
       const by = row ? producedBy(normalizeCortexAgentConfig(row.agentConfig)) : undefined;
       const split = result ? { inputTokens: result.metadata.inputTokens, outputTokens: result.metadata.outputTokens } : undefined;
-      this.persistTurn(id, userMessage, reply, result?.metadata.tokensUsed ?? 0, toolsUsed, trace, by, result ? turnCostOf(result.metadata.cost, undefined) : undefined, result?.taskId, undefined, split);
+      this.persistTurn(id, userMessage, reply, result?.metadata.tokensUsed ?? 0, toolsUsed, trace, by, result ? completedTurnCostOf(result.metadata, undefined) : undefined, result?.taskId, undefined, split);
     };
     // What every durable rail takes the same way: the turn guard, the session's agent, the exchange writer, eviction.
     const rail = { acquireTurn: (id: string) => this.acquireTurn(id), agentFor: (id: string) => this.approvableAgentFor(id), persistExchange, evict: (id: string) => this.evictSession(id), strategyStepsOf: (id: string) => this.sessions.get(id)?.strategySteps };
@@ -690,7 +690,7 @@ export class ChatSessionService {
           toolsUsed,
           undefined,
           producedBy(cfg),
-          turnCostOf(chatReply.cost, undefined),
+          completedTurnCostOf(chatReply, undefined),
           undefined,
           undefined,
           { inputTokens: chatReply.inputTokens, outputTokens: chatReply.outputTokens },
@@ -767,7 +767,7 @@ export class ChatSessionService {
           const tokensUsed = chatReply.tokens ?? 0;
           const toolsUsed = chatReply.toolsUsed ?? [];
 
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, undefined, producedBy(cfg), turnCostOf(chatReply.cost, undefined), undefined, undefined, {
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, undefined, producedBy(cfg), completedTurnCostOf(chatReply, undefined), undefined, undefined, {
             inputTokens: chatReply.inputTokens,
             outputTokens: chatReply.outputTokens,
           });
@@ -778,12 +778,7 @@ export class ChatSessionService {
           yield {
             _tag: "StreamCompleted",
             output: replyText,
-            metadata: {
-              tokensUsed,
-              cost: chatReply.cost ?? 0,
-              stepsCount: chatReply.steps ?? 0,
-              duration: 0,
-            },
+            metadata: directReplyMetadata(chatReply),
             ...(toolsUsed.length > 0
               ? { toolSummary: toolsUsed.map((name) => ({ name, calls: 1, avgMs: 0 })) }
               : {}),
@@ -797,7 +792,6 @@ export class ChatSessionService {
       // Tools / reasoning-steps path: stream through the cached engine session so
       // the same agent (and its history) backs non-stream chat and SSE chat.
 let tokensUsed = 0;
-      let streamCost: number | undefined;
       let streamRunId: string | undefined;
       let toolsUsed: string[] = [];
       let replyText = "";
@@ -814,7 +808,7 @@ let tokensUsed = 0;
       let reportedTokens = 0;
       let reportedIn = 0;
       let reportedOut = 0;
-      let reportedCost = 0;
+      let reportedCost = EMPTY_COST_SUM;
       let reportedInSeen = false;
       let reportedOutSeen = false;
       let done: Extract<AgentStreamEvent, { _tag: "StreamCompleted" }> | undefined;
@@ -846,12 +840,11 @@ let tokensUsed = 0;
               reportedOut += event.tokensOut;
               reportedOutSeen = true;
             }
-            reportedCost += event.costUsd;
+            reportedCost = addUsageCost(reportedCost, event);
           } else if (event._tag === "StreamCompleted") {
             completed = true;
             done = event;
             tokensUsed = event.metadata?.tokensUsed ?? 0;
-            streamCost = event.metadata?.cost;
             streamInputTokens = event.metadata?.inputTokens;
             streamOutputTokens = event.metadata?.outputTokens;
             streamRunId = event.taskId;
@@ -890,7 +883,7 @@ let tokensUsed = 0;
             withTurnSkills(withTurnOutcome(recorder.finish(), outcome), entry.skillActivity?.skillsOf(streamRunId)),
             entry.recallActivity?.recalledOf(streamRunId),
           );
-          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), turnCostOf(streamCost, trace), streamRunId, context, {
+          this.persistTurn(sessionId, message, replyText, tokensUsed, toolsUsed, trace, producedBy(cfg), completedTurnCostOf(done?.metadata, trace), streamRunId, context, {
             inputTokens: streamInputTokens,
             outputTokens: streamOutputTokens,
           });
@@ -918,7 +911,7 @@ let tokensUsed = 0;
             toolsUsed,
             trace,
             producedBy(cfg),
-            turnCostOf(reportedCost > 0 ? reportedCost : undefined, trace),
+            reportedTurnCostOf(reportedCost, trace),
             streamRunId,
             context,
             {

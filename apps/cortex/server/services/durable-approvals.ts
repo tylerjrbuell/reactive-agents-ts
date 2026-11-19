@@ -29,6 +29,7 @@
 import type { ReactiveAgent } from "@reactive-agents/runtime";
 import type { InteractionQuestion } from "@reactive-agents/core";
 import { cortexLog } from "../cortex-log.js";
+import { runCostSettled } from "./run-cost-settled.js";
 
 /** The paused gate as the framework reports it (`AgentResult.pendingApproval`). */
 export interface PendingGate {
@@ -328,6 +329,8 @@ export const durableApprovals = {
       return entry.owner.decide(decision, reason);
     }
     const agent = entry.agent;
+    // The resumed run's RunCostFinalized fires after its debrief: it is forwarded before the dispose.
+    let costSettled: Promise<void> = Promise.resolve();
     try {
       if (decision === "approved") {
         const result = await agent.approveRun(durableRunId, {
@@ -335,12 +338,16 @@ export const durableApprovals = {
           ...(gateId !== undefined ? { gateId } : {}),
         });
         if (result.status === "awaiting-approval") return { ok: true };
+        costSettled = runCostSettled(result);
       } else {
-        await agent.denyRun(durableRunId, reason ?? "Denied in Cortex", gateId !== undefined ? { gateId } : undefined);
+        costSettled = runCostSettled(
+          await agent.denyRun(durableRunId, reason ?? "Denied in Cortex", gateId !== undefined ? { gateId } : undefined),
+        );
       }
     } catch (e) {
       return { ok: false, code: "failed", message: e instanceof Error ? e.message : String(e) };
     }
+    await costSettled;
     await durableApprovals.finalize(durableRunId);
     return { ok: true };
   },

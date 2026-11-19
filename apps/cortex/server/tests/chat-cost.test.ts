@@ -10,7 +10,8 @@ import {
   rewindChatTurns,
 } from "../db/chat-queries.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
-import { turnCostOf } from "../services/chat-turn-cost.js";
+import { addUsageCost, completedTurnCostOf, reportedTurnCostOf, turnCostOf } from "../services/chat-turn-cost.js";
+import { EMPTY_COST_SUM } from "@reactive-agents/core";
 
 function setup() {
   const path = tmpDbPath("chat-cost");
@@ -87,9 +88,39 @@ describe("chat turn cost persistence", () => {
       await svc.chat(id, "priced");
       internal.sessions.get(id)!.session.chat = async () => ({ message: "b", tokens: 5, toolsUsed: [] });
       await svc.chat(id, "unpriced");
+      // ChatReply.costComplete:false (a call had no known price): the dollars are a lower bound.
+      internal.sessions.get(id)!.session.chat = async () => ({ message: "c", tokens: 5, cost: 0.003, costComplete: false, toolsUsed: [] });
+      await svc.chat(id, "partly priced");
       const assistants = getChatTurns(db, id).filter((t) => t.role === "assistant");
-      expect(assistants.at(-2)).toMatchObject({ costUsd: 0.002, costKnown: true });
-      expect(assistants.at(-1)).toMatchObject({ costUsd: 0, costKnown: false });
+      expect(assistants.at(-3)).toMatchObject({ costUsd: 0.002, costKnown: true });
+      expect(assistants.at(-2)).toMatchObject({ costUsd: 0, costKnown: false });
+      expect(assistants.at(-1)).toMatchObject({ costUsd: 0.003, costKnown: false });
+      await svc.disposeAll();
+    } finally {
+      cleanup();
+    }
+  });
+
+  it("the streamed direct path's StreamCompleted carries costComplete:false for an unpriced or partial reply", async () => {
+    const { svc, cleanup } = setup();
+    try {
+      const id = await svc.createSession({ agentConfig: cfg });
+      await svc.chat(id, "warm");
+      const internal = svc as unknown as Internal;
+      const completedOf = async (): Promise<Record<string, unknown> | undefined> => {
+        for await (const ev of svc.chatStream(id, "go")) {
+          const e = ev as { _tag?: string; metadata?: Record<string, unknown> };
+          if (e._tag === "StreamCompleted") return e.metadata;
+        }
+        return undefined;
+      };
+      internal.sessions.get(id)!.session.chat = async () => ({ message: "a", tokens: 5, cost: 0.002, toolsUsed: [] });
+      expect(await completedOf()).toMatchObject({ cost: 0.002 });
+      expect((await completedOf())?.costComplete).toBeUndefined();
+      internal.sessions.get(id)!.session.chat = async () => ({ message: "b", tokens: 5, toolsUsed: [] });
+      expect(await completedOf()).toMatchObject({ cost: 0, costComplete: false });
+      internal.sessions.get(id)!.session.chat = async () => ({ message: "c", tokens: 5, cost: 0.003, costComplete: false, toolsUsed: [] });
+      expect(await completedOf()).toMatchObject({ cost: 0.003, costComplete: false });
       await svc.disposeAll();
     } finally {
       cleanup();
@@ -102,11 +133,32 @@ describe("turnCostOf", () => {
     expect(turnCostOf(0.5, undefined)).toEqual({ usd: 0.5, known: true });
     expect(turnCostOf(undefined, undefined)).toEqual({ usd: 0, known: false });
   });
+  it("an incomplete total (an unpriced call) keeps the dollars as a lower bound", () => {
+    expect(turnCostOf(0.5, undefined, false)).toEqual({ usd: 0.5, known: false });
+  });
   it("a failed spawn-agent(s) call marks the cost a lower bound", () => {
     const failed = { reasoningSteps: [], toolCalls: [{ id: "1", name: "spawn-agents", status: "failed" as const, iteration: 1 }] };
     const okTrace = { reasoningSteps: [], toolCalls: [{ id: "1", name: "spawn-agent", status: "done" as const, iteration: 1 }] };
     expect(turnCostOf(0.1, failed)).toEqual({ usd: 0.1, known: false });
     expect(turnCostOf(0.1, okTrace)).toEqual({ usd: 0.1, known: true });
+  });
+});
+
+describe("streamed turn cost helpers", () => {
+  it("an unpriced TokenUsage adds nothing and marks the sum incomplete, never NaN", () => {
+    const sum = addUsageCost(addUsageCost(EMPTY_COST_SUM, { costUsd: 0.02 }), {});
+    expect(sum).toEqual({ usd: 0.02, complete: false });
+    expect(addUsageCost(EMPTY_COST_SUM, { costUsd: 0.5, priceSource: "unknown" })).toEqual({ usd: 0, complete: false });
+  });
+  it("reported cost: nothing reported is unknown, an incomplete sum is a lower bound", () => {
+    expect(reportedTurnCostOf(EMPTY_COST_SUM, undefined)).toEqual({ usd: 0, known: false });
+    expect(reportedTurnCostOf({ usd: 0.3, complete: true }, undefined)).toEqual({ usd: 0.3, known: true });
+    expect(reportedTurnCostOf({ usd: 0, complete: false }, undefined)).toEqual({ usd: 0, known: false });
+  });
+  it("completed cost honours metadata costComplete", () => {
+    expect(completedTurnCostOf({ cost: 0.4 }, undefined)).toEqual({ usd: 0.4, known: true });
+    expect(completedTurnCostOf({ cost: 0.4, costComplete: false }, undefined)).toEqual({ usd: 0.4, known: false });
+    expect(completedTurnCostOf(undefined, undefined)).toEqual({ usd: 0, known: false });
   });
 });
 

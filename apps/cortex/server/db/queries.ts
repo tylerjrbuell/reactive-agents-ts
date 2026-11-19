@@ -2,6 +2,8 @@ import type { Database, SQLQueryBindings } from "bun:sqlite";
 import type { CortexIngestMessage, RunSummary } from "../types.js";
 import { deleteChatSessionsForRun } from "./chat-queries.js";
 import { completedStatusOf, runEndingOf } from "../services/run-ending.js";
+import { EMPTY_COST_TOTAL, foldRunCost } from "@reactive-agents/ui-core";
+import { foldLegacyRunCost } from "../services/run-cost.js";
 
 export function insertEvent(
   db: Database,
@@ -76,7 +78,15 @@ export function updateRunStats(
     tokensUsed?: number;
     /** Override: sets tokens_used to MAX(existing, this) — for AgentCompleted.totalTokens */
     tokensUsedTotal?: number;
+    /** Additive: a priced call's USD cost, added to the accumulated (provisional) total. */
     cost?: number;
+    /**
+     * The run's final billed total (`RunCostFinalized`, debrief call included): sets
+     * cost_usd and cost_complete outright (`services/run-cost.ts`).
+     */
+    costFinal?: { readonly usd: number; readonly complete: boolean };
+    /** A call had no known price, or the framework said the run total is incomplete: cost_usd is a lower bound. */
+    costIncomplete?: true;
     status?: string;
     /** How the run ended (`runEndingOf` over AgentCompleted): `abstained`, `partial`, `failed`, `succeeded`. */
     ending?: string;
@@ -120,6 +130,11 @@ export function updateRunStats(
     sets.push("cost_usd = cost_usd + ?");
     values.push(patch.cost);
   }
+  if (patch.costFinal !== undefined) {
+    sets.push("cost_usd = ?", "cost_complete = ?");
+    values.push(patch.costFinal.usd, patch.costFinal.complete ? 1 : 0);
+  }
+  if (patch.costIncomplete) sets.push("cost_complete = 0");
   if (patch.status !== undefined) {
     // A stopped (or guardrail-blocked) run that then reports a failure failed because of
     // that: it keeps its status. A run that reports success after all is `completed`.
@@ -204,6 +219,8 @@ type RunRow = {
   iteration_count: number;
   tokens_used: number;
   cost_usd: number;
+  /** 0 = cost_usd is a lower bound (an unpriced call). Absent on selects that predate the column. */
+  cost_complete?: number;
   has_debrief: number;
   provider: string | null;
   model: string | null;
@@ -267,6 +284,7 @@ function rowToRunSummary(row: RunRow): RunSummary {
     iterationCount: row.iteration_count,
     tokensUsed: row.tokens_used,
     cost: row.cost_usd,
+    ...(row.cost_complete === 0 ? { costComplete: false as const } : {}),
     hasDebrief: row.has_debrief === 1,
     ...(displayName ? { displayName } : {}),
     ...(agentRecordName ? { agentRecordName } : {}),
@@ -293,7 +311,7 @@ function rowToRunSummary(row: RunRow): RunSummary {
 
 const runSelectBase = `
     r.run_id, r.agent_id, r.started_at, r.completed_at, r.status,
-    r.iteration_count, r.tokens_used, r.cost_usd,
+    r.iteration_count, r.tokens_used, r.cost_usd, r.cost_complete,
     (r.debrief IS NOT NULL) AS has_debrief,
     r.provider, r.model, r.strategy, r.error_message, r.ending,
     r.display_name, r.launch_params_json,
@@ -523,18 +541,20 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
 
   let iterationCount = 0;
   let tokensUsed = 0;
-  let cost = 0;
+  let cost = EMPTY_COST_TOTAL;
   let status = "live" as DerivedRunStatus;
   let completedAt: number | null = null;
   let debrief: string | null = null;
   let ending: string | null = null;
+  // A run stored before `RunCostFinalized` existed keeps the rule it was stored under.
+  const foldCost = events.some((e) => e.type === "RunCostFinalized") ? foldRunCost : foldLegacyRunCost;
 
   for (const row of events) {
     const p = toObjectPayload(row.payload);
+    cost = foldCost(cost, row.type, p);
     switch (row.type) {
       case "LLMRequestCompleted":
         tokensUsed += typeof p.tokensUsed === "number" ? p.tokensUsed : 0;
-        cost += typeof p.estimatedCost === "number" ? p.estimatedCost : 0;
         break;
       case "ReasoningStepCompleted":
         iterationCount = Math.max(
@@ -592,13 +612,14 @@ export function recomputeRunStats(db: Database, runId: string): boolean {
       SET iteration_count = ?,
           tokens_used = ?,
           cost_usd = ?,
+          cost_complete = ?,
           status = ?,
           completed_at = ?,
           debrief = ?,
           ending = ?
       WHERE run_id = ?
     `,
-  ).run(iterationCount, tokensUsed, cost, status, completedAt, debrief, ending, runId);
+  ).run(iterationCount, tokensUsed, cost.usd, cost.complete ? 1 : 0, status, completedAt, debrief, ending, runId);
 
   return true;
 }

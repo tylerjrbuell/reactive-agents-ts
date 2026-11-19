@@ -18,6 +18,7 @@ import type { Database } from "bun:sqlite";
 import { getGatewayAgents, getGatewayAgent, updateGatewayAgent, upsertRun, updateRunStats } from "../db/queries.js";
 import { getEnabledMcpConfigsByIds } from "../db/mcp-queries.js";
 import { structuredOutputExtractedEvent } from "./structured-output-event.js";
+import { runCostSettled } from "./run-cost-settled.js";
 import {
   coerceTaskContextRecord,
   normalizeCortexAgentConfig,
@@ -432,11 +433,14 @@ export class GatewayProcessManager {
       // Durable HITL: retain a paused agent so approve/deny work from the shared
       // /api/runs/pending-approvals endpoints (same as the runner path).
       let paused = false;
+      // Teardown waits for the run's RunCostFinalized (published after the debrief; `run-cost-settled.ts`).
+      let costSettled: Promise<void> = Promise.resolve();
       // A `detach` gate without durable runs waits live: listed and answered via the registry while it runs.
       const unwatchLive = waitsLive(buildParams) ? durableApprovals.watchLive({ agentId: agentId_, agent }) : undefined;
 
       void agent.run(prompt, { taskId: runId })
         .then((result) => {
+          costSettled = runCostSettled(result);
           const r = result as { status?: string; pendingApproval?: { runId: string }; object?: unknown; objectError?: string };
           if (r.status === "awaiting-approval" && r.pendingApproval) {
             paused = true;
@@ -470,13 +474,16 @@ export class GatewayProcessManager {
             if (proc) proc.running = false;
             return;
           }
-          try { unsubscribe(); } catch { /* ok */ }
           if (proc) proc.running = false;
           // Release the agent's resources — MCP transports and their docker
           // containers — now that the run is done. Without this the container
           // leaks and a later run with the same name hits
-          // "container name already in use".
-          void agent.dispose().catch((err) => {
+          // "container name already in use". Unsubscribe only after the run's
+          // final cost event was forwarded.
+          void costSettled.then(() => {
+            try { unsubscribe(); } catch { /* ok */ }
+            return agent.dispose();
+          }).catch((err) => {
             cortexLog("warn", "gateway", `agent.dispose() failed for "${name}"`, {
               agentId,
               runId,

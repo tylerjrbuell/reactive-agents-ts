@@ -60,6 +60,16 @@ describe("model cost", () => {
     expect(cost.costPerSuccessfulRun).toBeCloseTo(0.03, 10);
   });
 
+  it("priceSource unknown makes costKnown false even when a number rides along", () => {
+    const calls = [
+      { runId: "p", payload: JSON.stringify({ provider: "x", model: "y", estimatedCost: 0.5, priceSource: "price-book" }) },
+      { runId: "p", payload: JSON.stringify({ provider: "x", model: "y", estimatedCost: 0, priceSource: "unknown" }) },
+    ];
+    const cost = modelCostOf("x", "y", calls, []);
+    expect(cost.costUsd).toBe(0.5);
+    expect(cost.costKnown).toBe(false);
+  });
+
   it("gives no per-success figure without a successful run", () => {
     const cost = modelCostOf("x", "y", [], [{ runId: "r", status: "failed", ending: "failed" }]);
     expect(cost.costPerSuccessfulRun).toBeUndefined();

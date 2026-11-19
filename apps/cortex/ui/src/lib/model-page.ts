@@ -3,7 +3,16 @@
  * the capability stat grid, the remaining capability rows, and the note on
  * what runs on this model actually used. Rendering lives in the route.
  */
-import { formatFirstToken, formatTokens, formatTokensPerSecond } from "@reactive-agents/ui-core";
+import {
+  compareByPrice,
+  formatFirstToken,
+  formatPerMillion,
+  formatTokens,
+  formatTokensPerSecond,
+  isLocalPrice,
+  priceSourceLabel,
+  type ModelPrice,
+} from "@reactive-agents/ui-core";
 import type { RunRow } from "./runs-table.js";
 
 /** `GET /api/models/capability` for one provider/model. */
@@ -20,6 +29,50 @@ export interface ModelCapability {
   readonly source: string;
   /** `null` for providers that need no key. */
   readonly keyConfigured: boolean | null;
+  /** $/1M rates from the framework PriceBook; absent = price unknown. */
+  readonly price?: ModelPrice;
+}
+
+/** One price stat for the model page price card. */
+export interface PriceItem {
+  readonly label: string;
+  readonly value: string;
+  readonly title?: string;
+}
+
+/**
+ * The price card's stats: input, output, cache read and long-context tiers in
+ * $/1M. Empty when the price is unknown or the model is local (the card says
+ * so in words instead).
+ */
+export function priceStats(price: ModelPrice | undefined): PriceItem[] {
+  if (price === undefined || isLocalPrice(price)) return [];
+  const source = priceSourceLabel(price);
+  const items: PriceItem[] = [
+    { label: "Input", value: `${formatPerMillion(price.input)} / 1M`, title: `Uncached input tokens. Source: ${source}.` },
+    { label: "Output", value: `${formatPerMillion(price.output)} / 1M`, title: `Output tokens, hidden reasoning included. Source: ${source}.` },
+  ];
+  if (price.cacheRead !== undefined) {
+    items.push({ label: "Cache read", value: `${formatPerMillion(price.cacheRead)} / 1M`, title: `Input tokens served from the prompt cache. Source: ${source}.` });
+  }
+  for (const t of price.tiers ?? []) {
+    const inRate = formatPerMillion(t.input ?? price.input);
+    const outRate = formatPerMillion(t.output ?? price.output);
+    items.push({
+      label: `Prompt over ${formatTokens(Math.max(0, t.minPromptTokens - 1))}`,
+      value: `${inRate} / ${outRate}`,
+      title: `Input / output $/1M when the prompt is at least ${t.minPromptTokens.toLocaleString("en-US")} tokens. Source: ${source}.`,
+    });
+  }
+  return items;
+}
+
+/** Model list order on the provider page: the provider's own order, or cheapest first (unknown prices last). */
+export type ModelListSort = "default" | "price";
+
+/** `models` in `sort` order; `default` keeps the server's order. Does not mutate. */
+export function sortModelList<T extends { readonly price?: ModelPrice }>(models: readonly T[], sort: ModelListSort): T[] {
+  return sort === "price" ? [...models].sort((a, b) => compareByPrice(a.price, b.price)) : [...models];
 }
 
 /** One labelled capability value (values are machine values: set in mono). */

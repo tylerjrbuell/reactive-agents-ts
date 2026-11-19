@@ -21,3 +21,29 @@ describe("durableApprovals.supersedeForAgent", () => {
     await durableApprovals.finalize("r4");
   });
 });
+
+describe("durableApprovals.decide waits for the resumed run's final cost", () => {
+  for (const decision of ["approved", "denied"] as const) {
+    it(`${decision}: the agent is disposed only after result.totalCost() settles (RunCostFinalized forwarded)`, async () => {
+      const log: string[] = [];
+      let release: () => void = () => undefined;
+      const gate = new Promise<void>((r) => (release = r));
+      const result = {
+        status: "completed",
+        totalCost: () => gate.then(() => (log.push("cost-final"), { usd: 1, complete: true })),
+      };
+      const agent = {
+        approveRun: async () => result,
+        denyRun: async () => result,
+        dispose: async () => void log.push("dispose"),
+      } as unknown as ReactiveAgent;
+      durableApprovals.register({ agentId: "a", durableRunId: `rc-${decision}`, agent, startedAt: 0 });
+      const decided = durableApprovals.decide(`rc-${decision}`, decision);
+      await new Promise((r) => setTimeout(r, 20));
+      expect(log).toEqual([]);
+      release();
+      expect(await decided).toEqual({ ok: true });
+      expect(log).toEqual(["cost-final", "dispose"]);
+    });
+  }
+});

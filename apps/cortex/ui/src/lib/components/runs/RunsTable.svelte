@@ -10,7 +10,7 @@
   import { tooltip } from "$lib/actions/tooltip.js";
   import Status from "$lib/components/kit/Status.svelte";
   import IconButton from "$lib/components/kit/IconButton.svelte";
-  import { formatCost, formatRelativeTime, formatTurnDuration } from "@reactive-agents/ui-core";
+  import { formatCostTotal, formatRelativeTime, formatTurnDuration, partialCostNote } from "@reactive-agents/ui-core";
   import { RUN_SOURCE_LABEL, runDurationMs, runNameOf, runRowStatus, runSourceOf, type RunRow } from "$lib/runs-table.js";
   import { shortRunId } from "$lib/run-view.js";
   import RunContinuation from "$lib/components/run/RunContinuation.svelte";
@@ -69,7 +69,7 @@
     <td class="c-strat">{run.strategy ? strategyLabel(run.strategy) : "—"}</td>
     <td class="num data">{run.iterationCount}</td>
     <td class="num data">{run.tokensUsed.toLocaleString()}</td>
-    <td class="num data">{formatCost(run.cost ?? 0)}</td>
+    <td class="num data" use:tooltip={partialCostNote(run.costComplete !== false) || undefined}>{formatCostTotal(run.cost ?? 0, run.costComplete !== false)}</td>
     <td class="num data">{ms !== undefined ? formatTurnDuration(ms) : "—"}</td>
     <td class="faint" use:tooltip={new Date(run.startedAt).toLocaleString()}>{formatRelativeTime(run.startedAt, now)}</td>
     <td class="c-pin">

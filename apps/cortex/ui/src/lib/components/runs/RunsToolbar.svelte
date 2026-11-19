@@ -5,7 +5,7 @@
    */
   import Icon from "$lib/components/kit/Icon.svelte";
   import Select from "$lib/components/kit/Select.svelte";
-  import { formatCost, formatTokens } from "@reactive-agents/ui-core";
+  import { formatCostTotal, formatTokens, partialCostNote } from "@reactive-agents/ui-core";
   import { RUN_SORTS, RUN_STATUS_FILTERS, type RunSort, type RunStatusFilter } from "$lib/runs-table.js";
 
   interface Props {
@@ -13,7 +13,7 @@
     status: RunStatusFilter;
     sort: RunSort;
     counts: Record<RunStatusFilter, number>;
-    totals: { readonly tokens: number; readonly cost: number };
+    totals: { readonly tokens: number; readonly cost: number; readonly costComplete: boolean };
   }
   let { search = $bindable(), status = $bindable(), sort = $bindable(), counts, totals }: Props = $props();
 
@@ -34,7 +34,7 @@
   <Select id="runs-sort" bind:value={sort} options={RUN_SORTS} aria-label="Sort runs" class="sort" />
   <div class="totals">
     <span>tokens <b>{formatTokens(totals.tokens)}</b></span>
-    <span>cost <b>{formatCost(totals.cost)}</b></span>
+    <span title={partialCostNote(totals.costComplete) || undefined}>cost <b>{formatCostTotal(totals.cost, totals.costComplete)}</b></span>
   </div>
 </div>
 

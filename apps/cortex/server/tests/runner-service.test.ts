@@ -192,6 +192,48 @@ describe("CortexRunnerService — one debrief per desk run", () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 20_000);
+
+  // RunCostFinalized fires after the background debrief call settles, after run()
+  // resolved: the runner must keep forwarding until it lands, then tear down.
+  it("a run with a debrief ingests its RunCostFinalized (the run's final total) exactly once, after AgentCompleted", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "cortex-runner-cost-"));
+    const db = new Database(":memory:");
+    applySchema(db);
+    const tags: { runId: string; tag: string }[] = [];
+    const ingestLayer = Layer.succeed(CortexIngestService, {
+      handleEvent: (_agentId, runId, msg) => Effect.sync(() => void tags.push({ runId, tag: msg.event._tag })),
+      getSubscriberCount: () => Effect.succeed(0),
+    });
+    const layer = CortexRunnerServiceLive.pipe(Layer.provide(Layer.merge(CortexStoreServiceLive(db), ingestLayer)));
+    const program = Effect.gen(function* () {
+      const svc = yield* CortexRunnerService;
+      const { runId } = yield* svc.start({
+        provider: "test",
+        prompt: "What is six times seven?",
+        strategy: "reactive",
+        maxIterations: 3,
+        memory: { working: true, episodic: false, semantic: false },
+        rawConfig: { memory: { dbPath: join(dir, "memory.db") } },
+        // A non-trivial answer (>= 100 chars) schedules the LLM debrief; it answers slowly,
+        // so RunCostFinalized is published well after run() resolves.
+        testScenario: [
+          { text: "The answer is 42. Six times seven is forty-two, which I computed by adding six to itself seven times over." },
+          { text: '{"summary":"Computed 6 x 7 = 42.","keyFindings":[],"errorsEncountered":[],"lessonsLearned":[],"caveats":""}', delayMs: 1_500 },
+        ],
+      });
+      const mine = () => tags.filter((t) => t.runId === runId).map((t) => t.tag);
+      const end = Date.now() + 8_000;
+      while (!mine().includes("RunCostFinalized") && Date.now() < end) yield* Effect.sleep("50 millis");
+      yield* Effect.sleep("500 millis");
+      expect(mine().filter((t) => t === "RunCostFinalized").length).toBe(1);
+      expect(mine().indexOf("RunCostFinalized")).toBeGreaterThan(mine().indexOf("AgentCompleted"));
+    });
+    try {
+      await Effect.runPromise(program.pipe(Effect.provide(layer)));
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 20_000);
 });
 
 describe("buildCortexAgent — agentId passthrough", () => {

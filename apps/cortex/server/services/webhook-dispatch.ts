@@ -16,6 +16,8 @@ export const LIFECYCLE_WEBHOOK_EVENTS = [
   "AgentCompleted",
   "TaskFailed",
   "DebriefCompleted",
+  // The run's billed total (debrief call included); fires once per run, last.
+  "RunCostFinalized",
 ] as const;
 
 export type LifecycleWebhookEvent = (typeof LIFECYCLE_WEBHOOK_EVENTS)[number];

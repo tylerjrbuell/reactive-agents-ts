@@ -10,9 +10,18 @@ import {
   modelsFallbackNote,
 } from "$lib/framework-model-options-local.js";
 import { settings } from "$lib/stores/settings.js";
+import { formatModelPrice, type ModelPrice } from "@reactive-agents/ui-core";
 
-/** `thinking`: true = the model has a thinking mode, false = it does not, null/absent = not known. */
-export type UiModelOption = { value: string; label: string; thinking?: boolean | null };
+/**
+ * `thinking`: true = the model has a thinking mode, false = it does not, null/absent = not known.
+ * `price`: $/1M rates from the framework PriceBook (server `GET /api/models/:provider`); absent = price unknown.
+ */
+export type UiModelOption = { value: string; label: string; thinking?: boolean | null; price?: ModelPrice };
+
+/** Dropdown text for a model: its label, a thinking note, and its $/1M price (ui-core `formatModelPrice`). */
+export function modelOptionLabel(m: UiModelOption): string {
+  return `${m.label}${m.thinking ? " (thinking)" : ""} · ${formatModelPrice(m.price)}`;
+}
 
 /** `default` is the framework's current provider-default model id (when known). */
 export type FetchModelsResult = {
@@ -23,15 +32,23 @@ export type FetchModelsResult = {
   note?: string;
 };
 
+type ModelRow = { name: string; label: string; supportsThinking?: boolean | null; price?: ModelPrice };
+
 type ModelsBody = {
-  models?: { name: string; label: string; supportsThinking?: boolean | null }[];
+  models?: ModelRow[];
   live?: boolean;
   error?: { reason: string; message: string };
   default?: string | null;
 };
 
-function mapFrameworkBody(data: { models?: { name: string; label: string; supportsThinking?: boolean | null }[] }): UiModelOption[] {
-  return (data.models ?? []).map((m) => ({ value: m.name, label: m.label, ...(m.supportsThinking !== undefined ? { thinking: m.supportsThinking } : {}) }));
+/** Map `/api/models/:provider` rows to dropdown options. Exported for tests. */
+export function mapFrameworkBody(data: { models?: ModelRow[] }): UiModelOption[] {
+  return (data.models ?? []).map((m) => ({
+    value: m.name,
+    label: m.label,
+    ...(m.supportsThinking !== undefined ? { thinking: m.supportsThinking } : {}),
+    ...(m.price ? { price: m.price } : {}),
+  }));
 }
 
 /**

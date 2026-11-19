@@ -94,6 +94,24 @@ describe("runTotals / runDurationMs", () => {
     const t = runTotals(rows);
     expect(t.tokens).toBe(75);
     expect(t.cost).toBeCloseTo(0.013);
+    expect(t.costComplete).toBe(true);
+    expect(runTotals([...rows, row({ runId: "p", cost: 0.5, costComplete: false })]).costComplete).toBe(false);
+  });
+  it("a live unpriced call marks the row partial without adding dollars", () => {
+    const start = [row({ runId: "r9", status: "live", cost: 0.1 })];
+    const next = applyRunLiveMessage(start, { agentId: "a", runId: "r9", type: "LLMRequestCompleted", payload: { tokensUsed: 5, priceSource: "unknown" } }, 1);
+    expect(next[0]?.cost).toBe(0.1);
+    expect(next[0]?.costComplete).toBe(false);
+    // AgentCompleted.totalCostUsd excludes the debrief call: the row keeps the provisional sum.
+    const done = applyRunLiveMessage(next, { agentId: "a", runId: "r9", type: "AgentCompleted", payload: { success: true, totalCostUsd: 0.3 } }, 2);
+    expect(done[0]?.cost).toBe(0.1);
+    expect(done[0]?.costComplete).toBe(false);
+    // RunCostFinalized (after the debrief) sets the run's total and completeness.
+    const billed = applyRunLiveMessage(done, { agentId: "a", runId: "r9", type: "RunCostFinalized", payload: { totalCostUsd: 0.35, costComplete: false } }, 3);
+    expect(billed[0]?.cost).toBe(0.35);
+    expect(billed[0]?.costComplete).toBe(false);
+    const priced = applyRunLiveMessage(done, { agentId: "a", runId: "r9", type: "RunCostFinalized", payload: { totalCostUsd: 0.35, costComplete: true } }, 3);
+    expect(priced[0]?.costComplete).toBeUndefined();
   });
   it("times finished runs and live runs so far", () => {
     expect(runDurationMs(row({ runId: "x", startedAt: 1000, completedAt: 3500 }), 9999)).toBe(2500);

@@ -22,7 +22,8 @@
 
 
   // ── Lifecycle webhooks ────────────────────────────────────────────────
-  const LIFECYCLE_EVENTS = ["AgentStarted", "AgentCompleted", "TaskFailed", "DebriefCompleted"] as const;
+  // Same list as the server's `LIFECYCLE_WEBHOOK_EVENTS` (`server/services/webhook-dispatch.ts`).
+  const LIFECYCLE_EVENTS = ["AgentStarted", "AgentCompleted", "TaskFailed", "DebriefCompleted", "RunCostFinalized"] as const;
 
   function addWebhook() {
     config = { ...config, lifecycleWebhooks: [...(config.lifecycleWebhooks ?? []), { url: "", events: [] }] };

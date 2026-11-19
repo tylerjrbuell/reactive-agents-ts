@@ -102,6 +102,25 @@ describe("updateVitals", () => {
     expect(updateVitals(v, msg("GuardFiredEmitted", { guard: "exit_gate", metadata: { effective: 99 } }), 0).maxIterations).toBe(23);
   });
 
+  it("an unpriced call adds no dollars and marks the cost partial; RunCostFinalized sets the run total", () => {
+    let v = updateVitals(base, msg("LLMRequestCompleted", { tokensUsed: 10, estimatedCost: 0.25, priceSource: "price-book" }), 0);
+    expect(v.cost).toBe(0.25);
+    expect(v.costComplete).toBeUndefined();
+    v = updateVitals(v, msg("LLMRequestCompleted", { tokensUsed: 10, priceSource: "unknown" }), 0);
+    expect(v.cost).toBe(0.25);
+    expect(v.costComplete).toBe(false);
+    // AgentCompleted.totalCostUsd excludes the debrief call: the provisional sum stays.
+    v = updateVitals(v, msg("AgentCompleted", { totalCostUsd: 0.4 }), 0);
+    expect(v.cost).toBe(0.25);
+    expect(v.costComplete).toBe(false);
+    const partial = updateVitals(v, msg("RunCostFinalized", { totalCostUsd: 0.45, costComplete: false }), 0);
+    expect(partial.cost).toBe(0.45);
+    expect(partial.costComplete).toBe(false);
+    const full = updateVitals(v, msg("RunCostFinalized", { totalCostUsd: 0.45, costComplete: true }), 0);
+    expect(full.cost).toBe(0.45);
+    expect(full.costComplete).toBeUndefined();
+  });
+
   it("keeps unreported halves absent rather than fabricating them", () => {
     const v = updateVitals(base, msg("LLMRequestCompleted", { tokensUsed: 1500, estimatedCost: 0.01 }), 0);
     expect(v.tokensIn).toBeUndefined();

@@ -4,7 +4,7 @@
    * duration and output speed of both runs side by side, with B minus A where
    * a number moved. Every run Cortex stored has this, trace or not.
    */
-  import { formatCost, formatFirstToken, formatTokens, formatTurnDuration } from "@reactive-agents/ui-core";
+  import { formatCost, formatCostTotal, formatFirstToken, formatTokens, formatTurnDuration } from "@reactive-agents/ui-core";
   import Status from "$lib/components/kit/Status.svelte";
   import { runRowStatus } from "$lib/runs-table.js";
   import { signedDelta, speedLabel, type CompareSide } from "$lib/run-compare.js";
@@ -39,7 +39,14 @@
       text("Strategy", a.run.strategy ? strategyLabel(a.run.strategy) : "—", b.run.strategy ? strategyLabel(b.run.strategy) : "—"),
       { label: "Loops", a: String(a.run.iterationCount), b: String(b.run.iterationCount), delta: num(a.run.iterationCount, b.run.iterationCount, String), differs: a.run.iterationCount !== b.run.iterationCount },
       { label: "Tokens", a: formatTokens(a.run.tokensUsed), b: formatTokens(b.run.tokensUsed), delta: num(a.run.tokensUsed, b.run.tokensUsed, formatTokens), differs: a.run.tokensUsed !== b.run.tokensUsed },
-      { label: "Cost", a: formatCost(a.run.cost), b: formatCost(b.run.cost), delta: num(a.run.cost, b.run.cost, formatCost), differs: a.run.cost !== b.run.cost },
+      // A partial cost (an unpriced call) reads as a lower bound; the delta between lower bounds is not shown.
+      {
+        label: "Cost",
+        a: formatCostTotal(a.run.cost, a.run.costComplete !== false),
+        b: formatCostTotal(b.run.cost, b.run.costComplete !== false),
+        delta: a.run.costComplete === false || b.run.costComplete === false ? undefined : num(a.run.cost, b.run.cost, formatCost),
+        differs: a.run.cost !== b.run.cost,
+      },
       {
         label: "Duration",
         a: a.durationMs !== undefined ? formatTurnDuration(a.durationMs) : "—",

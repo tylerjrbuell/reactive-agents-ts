@@ -1,5 +1,13 @@
 import { derived, type Readable } from "svelte/store";
-import { throughputOfCalls, type Throughput, type ThroughputSample } from "@reactive-agents/ui-core";
+import {
+  addCallCost,
+  EMPTY_COST_TOTAL,
+  llmCallCostOf,
+  throughputOfCalls,
+  type CostTotal,
+  type Throughput,
+  type ThroughputSample,
+} from "@reactive-agents/ui-core";
 import type { RunState } from "./run-store.js";
 import { throughputSampleOf } from "../llm-throughput.js";
 
@@ -8,6 +16,11 @@ function speedOf(calls: readonly ThroughputSample[]): Pick<CortexTraceFrame, "ll
   if (calls.length === 0) return {};
   const throughput = throughputOfCalls(calls);
   return { llmCalls: calls, ...(throughput ? { throughput } : {}) };
+}
+
+/** A frame's cost fields: `estimatedCost` when above $0, `costComplete: false` when a call was unpriced. */
+function frameCost(c: CostTotal): Pick<CortexTraceFrame, "estimatedCost" | "costComplete"> {
+  return { estimatedCost: c.usd > 0 ? c.usd : undefined, ...(c.complete ? {} : { costComplete: false as const }) };
 }
 
 export interface ConvMessage {
@@ -46,6 +59,8 @@ export interface CortexTraceFrame {
   readonly model?: string;
   readonly provider?: string;
   readonly estimatedCost?: number;
+  /** Present and false when one of this loop's model calls had no known price (`estimatedCost` is then a lower bound). */
+  readonly costComplete?: false;
   /** This loop's LLM calls' throughput fields (`LLMRequestCompleted` durationMs / tokensOut / firstTokenMs). */
   readonly llmCalls?: readonly ThroughputSample[];
   /** Output speed and time to first token over `llmCalls` (ui-core `throughputOfCalls`); absent when no call gives a rate. */
@@ -120,7 +135,7 @@ export function createTraceStore(runState: Readable<RunState>) {
     let carryTs = 0;
     let carryModel: string | undefined;
     let carryProvider: string | undefined;
-    let carryCost = 0;
+    let carryCost: CostTotal = EMPTY_COST_TOTAL;
     let carryCalls: ThroughputSample[] = [];
 
     // Rich content from ReasoningStepCompleted
@@ -150,7 +165,8 @@ export function createTraceStore(runState: Readable<RunState>) {
           if (dur > carryDurationMs) carryDurationMs = dur;
           if (typeof p.model === "string" && p.model) carryModel = p.model;
           if (typeof p.provider === "string" && p.provider) carryProvider = p.provider;
-          if (typeof p.estimatedCost === "number") carryCost += p.estimatedCost;
+          // An unpriced call adds no dollars and marks the frame's cost partial.
+          carryCost = addCallCost(carryCost, llmCallCostOf(p));
           const sample = throughputSampleOf(p);
           if (sample) carryCalls.push(sample);
           carryTs = msg.ts;
@@ -234,7 +250,7 @@ export function createTraceStore(runState: Readable<RunState>) {
               toolsThisStep: tools,
               model: carryModel ?? prev.model,
               provider: carryProvider ?? prev.provider,
-              estimatedCost: (prev.estimatedCost ?? 0) + carryCost > 0 ? (prev.estimatedCost ?? 0) + carryCost : undefined,
+              ...frameCost({ usd: (prev.estimatedCost ?? 0) + carryCost.usd, complete: prev.costComplete !== false && carryCost.complete }),
               ...speedOf([...(prev.llmCalls ?? []), ...carryCalls]),
             };
           } else frames.push({
@@ -259,7 +275,7 @@ export function createTraceStore(runState: Readable<RunState>) {
             toolsThisStep,
             model: carryModel,
             provider: carryProvider,
-            estimatedCost: carryCost > 0 ? carryCost : undefined,
+            ...frameCost(carryCost),
             ...speedOf(carryCalls),
           });
 
@@ -272,7 +288,7 @@ export function createTraceStore(runState: Readable<RunState>) {
           carryReasoning = undefined;
           carryDurationMs = 0;
           carryEntropy = undefined;
-          carryCost = 0;
+          carryCost = EMPTY_COST_TOTAL;
           carryLlmThought = "";
           carryRawResponse = "";
           carryMessages = undefined;

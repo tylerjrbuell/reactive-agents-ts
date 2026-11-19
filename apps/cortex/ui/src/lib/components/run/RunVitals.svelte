@@ -6,7 +6,7 @@
    * disclosure chips. The line wraps; nothing is clipped. In replay the loop
    * meter follows the scrub. Numbers go through the ui-core formatters.
    */
-  import { formatCost, formatTurnDuration, throughputOfCalls } from "@reactive-agents/ui-core";
+  import { formatCostTotal, formatTurnDuration, partialCostNote, throughputOfCalls } from "@reactive-agents/ui-core";
   import { throughputView } from "$lib/llm-throughput.js";
   import { tooltip } from "$lib/actions/tooltip.js";
   import Badge from "$lib/components/kit/Badge.svelte";
@@ -52,7 +52,7 @@
 <div class="vitals" aria-label="Run vitals" role="group">
   <div class="vital"><span class="k">Duration</span><span class="v">{vitals.durationMs > 0 ? formatTurnDuration(vitals.durationMs) : "—"}</span></div>
   <div class="vital" use:tooltip={tokensTitle}><span class="k">Tokens</span><span class="v">{vitals.tokensUsed.toLocaleString()}</span></div>
-  <div class="vital"><span class="k">Cost</span><span class="v">{formatCost(vitals.cost)}</span></div>
+  <div class="vital" use:tooltip={partialCostNote(vitals.costComplete !== false) || undefined}><span class="k">Cost</span><span class="v">{formatCostTotal(vitals.cost, vitals.costComplete !== false)}</span></div>
   {#if speed}
     <div class="vital" use:tooltip={speed.title}>
       <span class="k">Speed</span><span class="v">{speed.text}{#if speed.ttft}<span class="sub">{` · ${speed.ttft}`}</span>{/if}</span>

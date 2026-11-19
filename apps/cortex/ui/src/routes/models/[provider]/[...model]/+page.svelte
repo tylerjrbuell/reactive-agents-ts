@@ -8,7 +8,7 @@
   import { goto } from "$app/navigation";
   import { tooltip } from "$lib/actions/tooltip.js";
   import { page } from "$app/state";
-  import { formatRelativeTime, formatTokens, statusOfRun } from "@reactive-agents/ui-core";
+  import { formatModelPrice, formatRelativeTime, formatTokens, statusOfRun } from "@reactive-agents/ui-core";
   import CortexDeskShell from "$lib/components/CortexDeskShell.svelte";
   import PageHeader from "$lib/components/kit/PageHeader.svelte";
   import Button from "$lib/components/kit/Button.svelte";
@@ -32,12 +32,16 @@
     capabilityRows,
     capabilityStats,
     runsOnModel,
+    sortModelList,
     speedStats,
     type ModelCapability,
+    type ModelListSort,
     type ModelThroughput,
   } from "$lib/model-page.js";
   import ModelCalibration from "$lib/components/models/ModelCalibration.svelte";
   import ModelSpend from "$lib/components/models/ModelSpend.svelte";
+  import ModelPriceCard from "$lib/components/models/ModelPriceCard.svelte";
+  import Select from "$lib/components/kit/Select.svelte";
   import { fetchModelCalibration, fetchModelCost, type ModelCalibrationView, type ModelCost } from "$lib/model-insights.js";
 
   const provider = $derived(page.params.provider ?? "");
@@ -47,6 +51,12 @@
   let cap = $state<ModelCapability | null>(null);
   let capError = $state<string | null>(null);
   let models = $state<UiModelOption[]>([]);
+  const MODEL_SORTS: { value: ModelListSort; label: string }[] = [
+    { value: "default", label: "Provider order" },
+    { value: "price", label: "Lowest price" },
+  ];
+  let modelSort = $state<ModelListSort>("default");
+  const sortedModels = $derived(sortModelList(models, modelSort));
   let modelRuns = $state<RunRow[]>([]);
   /** Median speed and TTFT over recent runs (`GET /api/model-throughput`). */
   let speed = $state<ModelThroughput | null>(null);
@@ -200,6 +210,8 @@
           {/if}
         </SettingsGroup>
 
+        <ModelPriceCard price={cap?.price} loading={cap === null && capError === null} />
+
         <ModelSpend cost={spend} />
 
         <ModelCalibration view={calibration} />
@@ -220,12 +232,18 @@
           {/if}
         </SettingsGroup>
       {:else}
-        <SettingsGroup id="models" title="Models" description="Pick a model to see its capabilities.">
+        <SettingsGroup id="models" title="Models" description="Pick a model to see its capabilities. Prices are per million input / output tokens.">
           {#if models.length === 0}
             <p class="mp-empty" role="status">No models listed for this provider.</p>
           {:else}
-            {#each models as m (m.value)}
-              <a class="mp-run" href={modelHref(provider, m.value)}><span class="mp-run-name mp-data">{m.label || m.value}</span></a>
+            <div class="mp-sort">
+              <Select id="models-sort" bind:value={modelSort} options={MODEL_SORTS} aria-label="Sort models" />
+            </div>
+            {#each sortedModels as m (m.value)}
+              <a class="mp-run mp-model" href={modelHref(provider, m.value)}>
+                <span class="mp-run-name mp-data">{m.label || m.value}</span>
+                <span class="mp-data mp-run-meta">{formatModelPrice(m.price)}</span>
+              </a>
             {/each}
           {/if}
         </SettingsGroup>
@@ -281,6 +299,8 @@
     color: var(--cortex-text);
     text-decoration: none;
   }
+  .mp-model { grid-template-columns: minmax(0, 1fr) auto; }
+  .mp-sort { display: flex; justify-content: flex-end; padding: 0 0 8px; }
   .mp-run:hover { background: var(--cortex-surface-2); }
   .mp-run:first-child { border-radius: var(--cortex-r-panel) var(--cortex-r-panel) 0 0; }
   .mp-run:last-child { border-radius: 0 0 var(--cortex-r-panel) var(--cortex-r-panel); }

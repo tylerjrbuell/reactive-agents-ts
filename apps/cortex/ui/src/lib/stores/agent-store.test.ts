@@ -159,6 +159,30 @@ describe("createAgentStore", () => {
     const list = get({ subscribe: store.subscribe });
     expect(list[0]?.tokensUsed).toBe(15);
     expect(list[0]?.cost).toBeCloseTo(0.003);
+    expect(list[0]?.costComplete).toBeUndefined();
+  });
+
+  it("an unpriced LLMRequestCompleted adds no dollars and marks the node's cost partial", () => {
+    const store = createAgentStore({ loadOnInit: false, now: () => 9 });
+    store.handleLiveMessage({ agentId: "x", runId: "r", type: "LLMRequestCompleted", payload: { tokensUsed: 10, estimatedCost: 0.001 } });
+    store.handleLiveMessage({ agentId: "x", runId: "r", type: "LLMRequestCompleted", payload: { tokensUsed: 5, priceSource: "unknown" } });
+    const list = get({ subscribe: store.subscribe });
+    expect(list[0]?.cost).toBeCloseTo(0.001);
+    expect(list[0]?.costComplete).toBe(false);
+  });
+
+  it("RunCostFinalized after AgentCompleted sets the node's cost (debrief included) and completeness", () => {
+    const store = createAgentStore({ loadOnInit: false, now: () => 9 });
+    store.handleLiveMessage({ agentId: "x", runId: "r", type: "LLMRequestCompleted", payload: { tokensUsed: 10, estimatedCost: 0.001 } });
+    store.handleLiveMessage({ agentId: "x", runId: "r", type: "AgentCompleted", payload: { success: true, totalCostUsd: 0.001 } });
+    store.handleLiveMessage({ agentId: "x", runId: "r", type: "RunCostFinalized", payload: { totalCostUsd: 0.0015, costComplete: false } });
+    let list = get({ subscribe: store.subscribe });
+    expect(list[0]?.cost).toBeCloseTo(0.0015);
+    expect(list[0]?.costComplete).toBe(false);
+    store.handleLiveMessage({ agentId: "x", runId: "r", type: "RunCostFinalized", payload: { totalCostUsd: 0.0016, costComplete: true } });
+    list = get({ subscribe: store.subscribe });
+    expect(list[0]?.cost).toBeCloseTo(0.0016);
+    expect(list[0]?.costComplete).toBeUndefined();
   });
 
   it("handleLiveMessage sets completed on AgentCompleted success", () => {

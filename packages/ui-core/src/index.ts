@@ -52,6 +52,26 @@ export {
   type TimeFormatOptions,
 } from "./state/format.js";
 export {
+  EMPTY_COST_TOTAL,
+  llmCallCostOf,
+  addCallCost,
+  foldRunCost,
+  finalRunCostOf,
+  formatCostTotal,
+  partialCostNote,
+  type CostTotal,
+} from "./state/cost-total.js";
+export {
+  isLocalPrice,
+  formatPerMillion,
+  formatModelPrice,
+  priceSourceLabel,
+  compareByPrice,
+  type ModelPrice,
+  type ModelPriceSource,
+  type ModelPriceTier,
+} from "./state/model-price.js";
+export {
   buildTurnSteps,
   turnStepsOf,
   persistedTurnStepsOf,

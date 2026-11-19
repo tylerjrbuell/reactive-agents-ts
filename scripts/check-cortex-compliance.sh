@@ -54,6 +54,9 @@ GIANT_BAR=800
 #     queries.ts, tool-playground-invoke.ts, runner-service.ts x2, gateway-process-manager.ts),
 #     the 4 repeated event casts in ingest-service.ts collapsed to one helper, the 9 string
 #     errors added today converted to tagged errors, console.* routed through cortexLog.
+#   2026-11-19 chat-session-service.ts 1448->1446: turn-cost wiring moved to chat-turn-cost.ts.
+#   2026-11-19 chat-session-service.ts 1446->1441: direct-reply StreamCompleted metadata
+#     moved to chat-turn-cost.ts directReplyMetadata.
 SERVER_ANY_BASELINE=0
 UI_ANY_BASELINE=0
 SERVER_AS_UNKNOWN_AS_BASELINE=6
@@ -68,7 +71,7 @@ BUN_SQLITE_BASELINE=49
 # (new giants are forbidden at birth). Keep NO '#' characters inside the array literal: the
 # self-test patches this block by regex.
 SIZE_LEDGER=(
-  "server/services/chat-session-service.ts:1448"
+  "server/services/chat-session-service.ts:1441"
   "server/services/runner-service.ts:801"
   "server/api/chat.ts:834"
   "ui/src/lib/components/ChatPanel.svelte:898"

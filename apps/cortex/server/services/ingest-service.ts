@@ -23,6 +23,7 @@ import { CORTEX_DESK_LIVE_AGENT_ID } from "../types.js";
 import { CortexError } from "../errors.js";
 import { completedStatusOf, runEndingOf } from "./run-ending.js";
 import { strategyClaimsOf } from "@reactive-agents/ui-core";
+import { runCostPatchOf, type RunCostPatch } from "./run-cost.js";
 
 /** An `AgentEvent` as the loose record the run-fold helpers and wire payloads read (the one cast, in one place). */
 const eventRecord = (event: AgentEvent): Record<string, unknown> => event as unknown as Record<string, unknown>;
@@ -63,6 +64,8 @@ const deriveRunStats = (
   tokensUsed: number;
   tokensUsedTotal: number;
   cost: number;
+  costFinal: NonNullable<RunCostPatch["costFinal"]>;
+  costIncomplete: true;
   status: string;
   ending: string;
   completedAt: number;
@@ -93,10 +96,11 @@ const deriveRunStats = (
     };
   }
   if (event._tag === "LLMRequestCompleted") {
-    const e = event as { tokensUsed?: number; estimatedCost?: number; provider?: string; model?: string };
+    const e = event as { tokensUsed?: number; provider?: string; model?: string };
     return {
       tokensUsed: e.tokensUsed ?? 0,
-      cost: e.estimatedCost ?? 0,
+      // An unpriced call adds no dollars and marks the run total partial (`run-cost.ts`).
+      ...runCostPatchOf(event._tag, eventRecord(event)),
       // Override with actual model used (may differ from AgentStarted if routing changed it)
       ...(typeof e.provider === "string" && e.provider && e.provider !== "unknown" ? { provider: e.provider } : {}),
       ...(typeof e.model    === "string" && e.model    && e.model    !== "unknown" ? { model:    e.model    } : {}),
@@ -127,6 +131,8 @@ const deriveRunStats = (
       // How it ended (abstained / partial / failed): an abstention is `failed` by status.
       ending: runEndingOf(eventRecord(event)),
       completedAt: Date.now(),
+      // Run-level completeness only; the run total comes from RunCostFinalized (`run-cost.ts`).
+      ...runCostPatchOf(event._tag, eventRecord(event)),
       // totalTokens is the authoritative count — persisted via MAX so it doesn't
       // overcount when added to per-call accumulated values.
       ...(typeof e.totalTokens === "number" && e.totalTokens > 0
@@ -170,6 +176,8 @@ const deriveRunStats = (
     const e = event as { debrief: unknown };
     return { debrief: JSON.stringify(e.debrief ?? null) };
   }
+  // The run's billed total (debrief call included), once per run: sets the stored cost.
+  if (event._tag === "RunCostFinalized") return runCostPatchOf(event._tag, eventRecord(event));
   return {};
 };
 

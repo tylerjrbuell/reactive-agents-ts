@@ -1,4 +1,5 @@
 import type { TokenUsage } from "../protocol/events.js";
+import { addCallCost, EMPTY_COST_TOTAL } from "./cost-total.js";
 
 /**
  * Per-turn token accounting shared by the live chat UI and by servers that
@@ -137,7 +138,8 @@ export interface CallUsage {
   readonly durationMs: number;
   /** Time to first token, ms, when the runtime measured it; absent otherwise. */
   readonly firstTokenMs?: number;
-  readonly costUsd: number;
+  /** Call cost in USD; absent when the model's price is unknown (not free). */
+  readonly costUsd?: number;
   readonly iteration?: number;
 }
 
@@ -150,7 +152,13 @@ export interface TurnUsage {
   readonly tokensTotal: number;
   /** True when any call lacks a provider split. */
   readonly estimated: boolean;
+  /** Sum of the known call costs in USD; a lower bound when `costComplete` is false. */
   readonly costUsd: number;
+  /**
+   * False when at least one call had no known price (see `addCallCost`).
+   * `summarizeUsage` always sets it; absent (a hand-built or older value) reads as complete.
+   */
+  readonly costComplete?: boolean;
   /** Sums of provider-reported cache figures across the turn's calls. */
   readonly cacheReadTokensIn: number;
   readonly cacheCreationTokensIn: number;
@@ -160,7 +168,15 @@ export interface TurnUsage {
   readonly reasoningTokens: number;
 }
 
-const toCallUsage = (event: TokenUsage): CallUsage => ({
+/** A call's known cost, or `undefined` when its price is unknown (`priceSource: "unknown"`, or no finite `costUsd`). */
+const callCostOf = (event: TokenUsage): number | undefined =>
+  event.priceSource === "unknown" || typeof event.costUsd !== "number" || !Number.isFinite(event.costUsd)
+    ? undefined
+    : event.costUsd;
+
+const toCallUsage = (event: TokenUsage): CallUsage => withCost(event, callCostOf(event));
+
+const withCost = (event: TokenUsage, costUsd: number | undefined): CallUsage => ({
   callId: event.callId,
   tokensTotal: event.tokensTotal,
   ...(event.tokensIn !== undefined ? { tokensIn: event.tokensIn } : {}),
@@ -174,7 +190,7 @@ const toCallUsage = (event: TokenUsage): CallUsage => ({
   provider: event.provider,
   durationMs: event.durationMs,
   ...(typeof event.firstTokenMs === "number" ? { firstTokenMs: event.firstTokenMs } : {}),
-  costUsd: event.costUsd,
+  ...(costUsd !== undefined ? { costUsd } : {}),
   ...(event.iteration !== undefined ? { iteration: event.iteration } : {}),
 });
 
@@ -186,13 +202,15 @@ export function summarizeUsage(previous: TurnUsage | undefined, event: TokenUsag
     : previous.calls.some((c) => c.callId === call.callId)
       ? previous.calls.map((c) => (c.callId === call.callId ? call : c))
       : [...previous.calls, call];
+  const cost = calls.reduce((t, c) => addCallCost(t, c.costUsd), EMPTY_COST_TOTAL);
   return {
     calls,
     tokensIn: calls.reduce((n, c) => n + (c.tokensIn ?? 0), 0),
     tokensOut: calls.reduce((n, c) => n + (c.tokensOut ?? 0), 0),
     tokensTotal: calls.reduce((n, c) => n + c.tokensTotal, 0),
     estimated: calls.some((c) => c.estimated),
-    costUsd: calls.reduce((n, c) => n + c.costUsd, 0),
+    costUsd: cost.usd,
+    costComplete: cost.complete,
     cacheReadTokensIn: calls.reduce((n, c) => n + (c.cacheReadTokensIn ?? 0), 0),
     cacheCreationTokensIn: calls.reduce((n, c) => n + (c.cacheCreationTokensIn ?? 0), 0),
     billedTokens: calls.reduce((n, c) => n + (c.billedTokens ?? 0), 0),

@@ -208,7 +208,16 @@ export interface TokenUsage {
    * call or a runtime that does not forward it; output speed is then a lower bound.
    */
   readonly firstTokenMs?: number;
-  readonly costUsd: number;
+  /**
+   * Cost of this call in USD. Absent means the model's price is unknown, NOT
+   * free: sum with `addCallCost`, which marks the total partial.
+   */
+  readonly costUsd?: number;
+  /**
+   * Where `costUsd` came from; `"unknown"` when no price is known (mirrors
+   * core `PriceSource`). Absent on older publishers.
+   */
+  readonly priceSource?: "provider-reported" | "price-book" | "user" | "unknown";
   readonly iteration?: number;
 }
 export interface PhaseStarted {

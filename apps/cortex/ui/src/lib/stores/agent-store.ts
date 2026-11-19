@@ -10,7 +10,8 @@ import { buildRunHierarchy } from "../run-hierarchy.js";
 import { runStatusAfter } from "../run-live-status.js";
 import { isIdLike, taskHeadline } from "../run-view.js";
 import { effectiveBound, planBudgetEffective } from "../plan-budget.js";
-import { formatCost, turnOutcomeOf } from "@reactive-agents/ui-core";
+import { formatCostTotal, turnOutcomeOf } from "@reactive-agents/ui-core";
+import { runCostPatch } from "../run-cost-patch.js";
 
 export type AgentCognitiveState =
   | "idle"
@@ -38,7 +39,10 @@ export interface AgentNode {
   /** The plan-raised iteration bound, once announced (`plan_budget_raised`). */
   readonly planBudgetMax?: number;
   readonly tokensUsed: number;
+  /** USD spend; a lower bound when `costComplete` is false. */
   readonly cost: number;
+  /** Present and false when a model call had no known price. */
+  readonly costComplete?: false;
   readonly connectedAt: number;
   readonly completedAt?: number;
   readonly lastEventAt: number;
@@ -114,6 +118,8 @@ export interface RunSummaryDto {
   readonly iterationCount: number;
   readonly tokensUsed: number;
   readonly cost: number;
+  /** Present and false when the stored total is a lower bound (an unpriced call). */
+  readonly costComplete?: false;
   readonly provider?: string;
   readonly model?: string;
   readonly strategy?: string;
@@ -198,7 +204,7 @@ export function agentRunDeskTooltipText(agent: AgentNode): string {
     if (agent.reasoningSteps > 0) lines.push(`Reasoning steps: ${agent.reasoningSteps}`);
   }
   if (agent.tokensUsed > 0) lines.push(`Tokens: ${agent.tokensUsed.toLocaleString()}`);
-  if (agent.cost > 0) lines.push(`Cost (USD): ${formatCost(agent.cost)}`);
+  if (agent.cost > 0 || agent.costComplete === false) lines.push(`Cost (USD): ${formatCostTotal(agent.cost, agent.costComplete !== false)}`);
   if (agent.entropy > 0) lines.push(`Entropy: ${agent.entropy.toFixed(3)}`);
   if (agent.connectedAt > 0) {
     lines.push(`Connected: ${new Date(agent.connectedAt).toLocaleString()}`);
@@ -280,6 +286,7 @@ function runToSeedNode(run: RunSummaryDto, now: number): AgentNode {
     maxIterations: 0,
     tokensUsed: run.tokensUsed,
     cost: run.cost,
+    ...(run.costComplete === false ? { costComplete: false as const } : {}),
     connectedAt: 0,
     completedAt,
     lastEventAt: lastEventAtSeed,
@@ -459,6 +466,7 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
                     maxIterations: existing.maxIterations || seeded.maxIterations,
                     tokensUsed:   Math.max(existing.tokensUsed, seeded.tokensUsed),
                     cost:         Math.max(existing.cost, seeded.cost),
+                    ...(existing.costComplete === false || seeded.costComplete === false ? { costComplete: false as const } : {}),
                     connectedAt:  existing.connectedAt,
                     // REST poll must not advance lastEventAt (WS is authoritative; avoids
                     // "Last event" in tooltips ticking after a run has settled).
@@ -556,10 +564,7 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
               : typeof (msg.payload.tokensUsed as { total?: number } | undefined)?.total === "number"
                 ? (msg.payload.tokensUsed as { total: number }).total
                 : 0;
-          const est =
-            typeof msg.payload.estimatedCost === "number" ? msg.payload.estimatedCost : 0;
           patch.tokensUsed = (existing?.tokensUsed ?? 0) + tokens;
-          patch.cost = (existing?.cost ?? 0) + est;
           break;
         }
         case "ReasoningStepCompleted": {
@@ -620,6 +625,9 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
           patch.runEnding = turnOutcomeOf(msg.payload).ending;
           break;
       }
+      // Calls add to a provisional sum; RunCostFinalized sets the run's billed total (`run-cost-patch.ts`).
+      const cost = runCostPatch(existing ?? {}, msg.type, msg.payload);
+      if (cost) Object.assign(patch, cost);
 
       // Summary status: live until an ending event; the ending rules are the
       // server's (`runStatusAfter`: a stopped run that then fails stays stopped).
@@ -688,6 +696,7 @@ export function createAgentStore(options?: CreateAgentStoreOptions) {
         maxIterations: existing?.maxIterations ?? 0,
         tokensUsed: existing?.tokensUsed ?? 0,
         cost: existing?.cost ?? 0,
+        ...(existing?.costComplete === false ? { costComplete: false as const } : {}),
         connectedAt: existing?.connectedAt ?? nowFn(),
         parentRunId: existing?.parentRunId,
         contextRunId: existing?.contextRunId,

@@ -22,6 +22,19 @@ describe("createTraceStore token halves", () => {
     expect(frames[0]).toMatchObject({ tokensUsed: 1500, tokensIn: 1000, tokensOut: 500, billedTokens: 700, reasoningTokens: 120 });
   });
 
+  it("an unpriced call leaves the frame's priced cost and marks it partial", () => {
+    const frames = framesOf([
+      event("LLMRequestCompleted", { tokensUsed: 10, estimatedCost: 0.02, priceSource: "price-book" }),
+      event("LLMRequestCompleted", { tokensUsed: 10, priceSource: "unknown" }),
+      event("ReasoningIterationProgress", { iteration: 1 }),
+      event("LLMRequestCompleted", { tokensUsed: 10, estimatedCost: 0.01, priceSource: "price-book" }),
+      event("ReasoningIterationProgress", { iteration: 2 }),
+    ]);
+    expect(frames[0]).toMatchObject({ estimatedCost: 0.02, costComplete: false });
+    expect(frames[1]).toMatchObject({ estimatedCost: 0.01 });
+    expect(frames[1]).not.toHaveProperty("costComplete");
+  });
+
   it("leaves halves absent when the call reported no split", () => {
     const frames = framesOf([
       event("LLMRequestCompleted", { tokensUsed: 1500 }),

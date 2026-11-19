@@ -6,13 +6,15 @@
  *
  * Honesty rules: calls on another provider/model inside the same runs (a
  * fallback or a routed tier) are not this model's spend and are skipped. A
- * call without a token split counts toward `tokens` only. A call without a
- * numeric `estimatedCost` makes `costKnown` false (the dollar figure is then a
+ * call without a token split counts toward `tokens` only. A call with no known
+ * price (`priceSource: "unknown"`, or no numeric `estimatedCost`; ui-core
+ * `llmCallCostOf`) makes `costKnown` false (the dollar figure is then a
  * lower bound), never a silent $0. "Per successful run" divides all spend in
  * the window by the runs that completed, so failed runs' spend counts against
  * the successes they paid for.
  */
 import type { StoredLlmCall } from "../db/model-throughput-queries.js";
+import { llmCallCostOf } from "@reactive-agents/ui-core";
 
 /** One recent run on the model and how it ended (`cortex_runs.status`, `ending`). */
 export interface ModelRunOutcome {
@@ -93,7 +95,7 @@ export function modelCostOf(
       tokensOut += tout;
     }
     cachedTokensIn += num(p["cacheReadTokensIn"]) ?? 0;
-    const cost = num(p["estimatedCost"]);
+    const cost = llmCallCostOf(p);
     if (cost === undefined) costKnown = false;
     else costUsd += cost;
   }
