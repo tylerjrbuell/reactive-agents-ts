@@ -79,7 +79,9 @@ export const buildJudgmentHealingState = (
   attemptedArguments: Record<string, unknown>,
 ): JudgmentEntry => ({
   attemptedToolName,
-  attemptedArgumentKeys: Object.keys(attemptedArguments),
+  // Healing runs before ToolService.execute normalizes; a zero-argument call
+  // can arrive with undefined arguments.
+  attemptedArgumentKeys: Object.keys(attemptedArguments ?? {}),
 })
 
 /** One Choice over the candidate tool names plus one Noul per top-scoring candidate's parameter, batched into a single `ask()`. */

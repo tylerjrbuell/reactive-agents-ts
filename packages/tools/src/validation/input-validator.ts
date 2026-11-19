@@ -51,11 +51,44 @@ export const exampleCall = (definition: ToolDefinition): string => {
   return `${definition.name}(${JSON.stringify(args)})`;
 };
 
+/**
+ * Normalizes a tool call's raw `arguments` to an object at the execute
+ * boundary. Missing or null arguments mean a zero-argument call and become
+ * `{}` (a model calling `list_websites()` is legitimate). A non-object
+ * (array, string, number, boolean) fails with a typed validation error that
+ * names the tool and shows the expected object shape.
+ */
+export const normalizeToolArguments = (
+  definition: ToolDefinition,
+  raw: unknown,
+): Effect.Effect<Record<string, unknown>, ToolValidationError> => {
+  if (raw === undefined || raw === null) return Effect.succeed({});
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    return Effect.succeed(raw as Record<string, unknown>);
+  }
+  const received = Array.isArray(raw) ? "array" : typeof raw;
+  return Effect.fail(
+    new ToolValidationError({
+      message: `Tool "${definition.name}" expects its arguments as a JSON object keyed by parameter name, got ${received}. Valid call: ${exampleCall(definition)}`,
+      toolName: definition.name,
+      parameter: "arguments",
+      expected: "object",
+      received,
+    }),
+  );
+};
+
+/**
+ * Validates and coerces a tool call's arguments against its definition.
+ * Raw arguments go through {@link normalizeToolArguments} first, so missing
+ * or null arguments validate as `{}`.
+ */
 export const validateToolInput = (
   definition: ToolDefinition,
-  args: Record<string, unknown>,
+  rawArgs: unknown,
 ): Effect.Effect<Record<string, unknown>, ToolValidationError> =>
   Effect.gen(function* () {
+    const args = yield* normalizeToolArguments(definition, rawArgs);
     const validated: Record<string, unknown> = {};
 
     // Pre-check: detect unknown parameters BEFORE the per-param loop.

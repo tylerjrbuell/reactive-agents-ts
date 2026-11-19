@@ -52,7 +52,10 @@ const DEFAULT_UNCACHEABLE = new Set([
 
 // ── Cache key generation ─────────────────────────────────────────────────────
 
-function makeCacheKey(toolName: string, args: Record<string, unknown>): string {
+function makeCacheKey(toolName: string, rawArgs: Record<string, unknown>): string {
+  // The cache is a public service: a direct caller may pass undefined args
+  // for a zero-argument call. Key it the same as `{}`.
+  const args = rawArgs ?? {};
   // Deterministic serialization: sort keys for consistency
   const sortedArgs = JSON.stringify(args, Object.keys(args).sort());
   return `${toolName}::${sortedArgs}`;

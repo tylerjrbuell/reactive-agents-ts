@@ -18,7 +18,7 @@ import {
 import { makeToolRegistry } from "./registry/tool-registry.js";
 import { makeMCPClient } from "./mcp/mcp-client.js";
 import { makeSandbox } from "./execution/sandbox.js";
-import { validateToolInput } from "./validation/input-validator.js";
+import { normalizeToolArguments, validateToolInput } from "./validation/input-validator.js";
 import { EventBus, errorMessage } from "@reactive-agents/core";
 import { builtinTools } from "./skills/builtin.js";
 import { ToolResultCache } from "./caching/tool-result-cache.js";
@@ -409,11 +409,13 @@ export const ToolServiceLive = Layer.effect(
           toolName === input.toolName ? r : annotateToolNameCorrection(r, input.toolName, toolName);
         const nameMetadata = toolName === input.toolName ? {} : { calledAs: input.toolName };
 
-        // Step 2: Validate input
-        const validatedArgs = yield* validateToolInput(
-          tool.definition,
-          input.arguments,
-        );
+        // Step 2: Normalize, then validate input. Untyped callers (the
+        // code-action sandbox, MCP bridges) may send `arguments: undefined`
+        // for a zero-argument call; that means `{}`. A non-object is a typed
+        // validation error. Everything below (approval, cache, handler) sees
+        // the normalized object.
+        const args = yield* normalizeToolArguments(tool.definition, input.arguments);
+        const validatedArgs = yield* validateToolInput(tool.definition, args);
 
         // Step 2.4: Authorization gate (hotfix 0.5-3, opt-in — ToolApprovalGate
         // may not be provided). Fail closed for requiresApproval tools when a

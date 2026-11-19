@@ -166,7 +166,7 @@ export type {
 } from "./execution/docker-sandbox.js";
 
 // ─── Validation ───
-export { validateToolInput } from "./validation/input-validator.js";
+export { normalizeToolArguments, validateToolInput } from "./validation/input-validator.js";
 
 // ─── Artifact truth (Wave C / C2) ───
 export {
