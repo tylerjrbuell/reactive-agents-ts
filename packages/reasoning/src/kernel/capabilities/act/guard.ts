@@ -212,34 +212,102 @@ function canonicalizeArgs(value: unknown): unknown {
 
 /**
  * Repetition boundary (plan 2026-10-28 Task 6): true when `tc`'s canonicalized
- * FULL arguments differ from every prior call to the same tool. Covers tools
- * with no recognised target key (`inventory_lookup({sku})`), where name/key
- * heuristics previously blocked a lookup with a brand-new argument. Calls with
- * no arguments are conservatively NOT distinct.
+ * FULL arguments differ from every prior call to the same tool. Calls with no
+ * arguments are conservatively NOT distinct. Whether a distinct call may run is
+ * decided by {@link distinctArgumentsEligible} and the tool's information yield.
  */
 function hasDistinctArguments(tc: ToolCallSpec, state: KernelState): boolean {
   const args = tc.arguments as Record<string, unknown> | undefined;
   if (!args || Object.keys(args).length === 0) return false;
-  // Tools with a recognised target (path/url/...) are governed by hasDistinctTarget:
-  // same target + different payload is still repetition (e.g. re-writing one file).
-  if (targetSignature(tc.name, args) !== undefined) return false;
   const sig = JSON.stringify(canonicalizeArgs(args));
-  const results = new Set<string>();
-  let observed = 0;
-  for (const { step, index: i } of ranActions(state.steps)) {
+  for (const { step } of ranActions(state.steps)) {
     const stepTc = step.metadata?.toolCall as { name?: string; arguments?: unknown } | undefined;
     if (stepTc?.name !== tc.name) continue;
     if (JSON.stringify(canonicalizeArgs(stepTc.arguments ?? {})) === sig) return false;
-    const next = observationForAction(state.steps, i);
-    if (next?.type === "observation" && typeof next.content === "string") {
-      results.add(next.content.trim().replace(/\s+/g, " "));
-      observed++;
-    }
   }
-  // Varying a no-op argument while the tool keeps returning the same result is
-  // not new work: 2+ observed prior results, all identical, => not distinct.
-  if (observed >= 2 && results.size === 1) return false;
   return true;
+}
+
+/** Name fragments marking a tool whose call changes something outside the run. */
+const SIDE_EFFECT_PREFIXES = ["send", "create", "delete", "push", "merge", "fork", "update", "assign", "remove"] as const;
+
+function isSideEffectToolName(name: string): boolean {
+  const lowered = name.toLowerCase();
+  return SIDE_EFFECT_PREFIXES.some((p) => lowered.includes(p));
+}
+
+/**
+ * Whether distinct full arguments can make a repeated call new work. Untargeted
+ * tools (`inventory_lookup({sku})`, `web-search({query})`) qualify. A targeted
+ * tool qualifies only when it is read-only and its target is not a `command`
+ * string: re-writing one file with a new payload, or a CLI call varying only its
+ * trailing args, stays governed by {@link hasDistinctTarget}. A read-only query
+ * on the same url/id with different parameters is a different query.
+ */
+function distinctArgumentsEligible(tc: ToolCallSpec): boolean {
+  const args = tc.arguments as Record<string, unknown> | undefined;
+  if (targetSignature(tc.name, args) === undefined) return true;
+  if (WORKSPACE_MUTATING_TOOLS.has(tc.name) || isSideEffectToolName(tc.name)) return false;
+  if (isConversationalReplyTool(tc.name)) return false;
+  return typeof args?.command !== "string";
+}
+
+/** Consecutive no-new-information results after which a tool counts as no longer yielding. */
+const NO_YIELD_STREAK = 2;
+/**
+ * Hard backstop on the distinct-arguments pass: once a tool has run
+ * `max(threshold, ceil(maxIterations * fraction))` times, distinct arguments no
+ * longer exempt it, however much it still yields. Proposed config field (none
+ * fits today): `HarnessConfig.repetitionBackstop`.
+ */
+const REPETITION_BACKSTOP_ITERATION_FRACTION = 0.75;
+const DEFAULT_MAX_ITERATIONS = 10;
+
+/** Result text that carries no information (after trim + whitespace collapse). */
+const EMPTY_RESULT = /^(?:\[\s?\]|\{\s?\}|null|undefined|none|n\/a|no results?(?: found)?\.?|0 results?\.?)?$/i;
+
+/** What one prior ran call of a tool returned, for the information-yield rule. */
+interface ResultYield {
+  /** False: failed, empty, or a repeat of an earlier result of the same tool. Undefined: no observation recorded. */
+  readonly yielded: boolean | undefined;
+  /** Normalized result text; absent with no observation. */
+  readonly text?: string;
+  /** Scratchpad key of the result, used to attribute a stalled requirement's truncated refs. */
+  readonly storedKey?: string;
+}
+
+/** One {@link ResultYield} per prior ran call of `toolName`, in order. */
+function resultHistory(state: KernelState, toolName: string): readonly ResultYield[] {
+  const seen = new Set<string>();
+  const out: ResultYield[] = [];
+  for (const { step, index } of ranActions(state.steps)) {
+    if ((step.metadata?.toolCall as { name?: string } | undefined)?.name !== toolName) continue;
+    const obs = observationForAction(state.steps, index);
+    if (obs === undefined || typeof obs.content !== "string") {
+      out.push({ yielded: undefined });
+      continue;
+    }
+    const text = obs.content.trim().replace(/\s+/g, " ");
+    const failed = obs.metadata?.observationResult?.success === false;
+    const yielded = !failed && !EMPTY_RESULT.test(text) && !seen.has(text);
+    seen.add(text);
+    const storedKey = obs.metadata?.storedKey;
+    out.push(typeof storedKey === "string" ? { yielded, text, storedKey } : { yielded, text });
+  }
+  return out;
+}
+
+/**
+ * True when the tool stopped producing new information: its last
+ * {@link NO_YIELD_STREAK} results added none, or 2+ observed results were all
+ * the same text (varying a no-op argument while the result never changes).
+ * An unknown result (no observation) never counts as "no new information".
+ */
+function stoppedYielding(history: readonly ResultYield[]): boolean {
+  const observed = history.flatMap((h) => (h.text === undefined ? [] : [h.text]));
+  if (observed.length >= 2 && new Set(observed).size === 1) return true;
+  if (history.length < NO_YIELD_STREAK) return false;
+  return history.slice(-NO_YIELD_STREAK).every((h) => h.yielded === false);
 }
 
 /** Cap on total injected evidence chars — keeps the deterministic injection
@@ -451,11 +519,7 @@ export const sideEffectGuard: Guard = (tc, state, _input) => {
   // still blocks an *identical* re-send, and `repetitionGuard` caps the count.
   if (isConversationalReplyTool(tc.name)) return { pass: true };
 
-  const SIDE_EFFECT_PREFIXES = ["send", "create", "delete", "push", "merge", "fork", "update", "assign", "remove"];
-  const isSideEffectTool = SIDE_EFFECT_PREFIXES.some(
-    (p) => tc.name.toLowerCase().includes(p),
-  );
-  if (!isSideEffectTool) return { pass: true };
+  if (!isSideEffectToolName(tc.name)) return { pass: true };
 
   const sideEffectAlreadyDone = state.steps.some((step, idx) => {
     if (step.type !== "action") return false;
@@ -473,9 +537,13 @@ export const sideEffectGuard: Guard = (tc, state, _input) => {
   };
 };
 
-/** Nudges the LLM when it calls the same non-meta tool too many times.
- *  Parallel-safe tools (http-get, web-search, etc.) allow up to maxBatchSize
- *  calls before triggering; sequential-only tools are limited to 2. */
+/** Nudges the LLM when it keeps calling a non-meta tool that stopped producing
+ *  new information. Below the review point (maxBatchSize for parallel-safe
+ *  tools, 2 for sequential-only ones, raised to requiredToolQuantities) every
+ *  call passes. Past it a call passes on a new target, or on distinct arguments
+ *  while the tool's last 2 results were not all empty / failed / repeats (up to
+ *  a backstop of max(review point, ceil(maxIterations * 0.75)) calls), or as a
+ *  correction of a failed or superseded call. */
 export const repetitionGuard: Guard = (tc, state, input) => {
   if (META_TOOL_NAMES.has(tc.name)) return { pass: true };
   if (isDelegationTool(tc.name)) return { pass: true };
@@ -520,14 +588,31 @@ export const repetitionGuard: Guard = (tc, state, input) => {
     return { pass: true };
   }
 
-  // Full-argument boundary: distinct canonical arguments are not repetition —
-  // except once the stalled requirement's evidence is exhausted (handled above).
-  // Parallel-safe tools (search/fetch/read...) keep their wider batch ceiling as an
-  // explicit research-runaway budget (pinned: m13 + task-intent tests), so the carve-out
-  // covers the sequential-only tools whose tight ceiling of 2 was the misfire.
-  if (!stalledRequirement && !isParallelBatchSafeTool(tc.name) && hasDistinctArguments(tc, state)) {
+  // Information-yield boundary: repetition means the tool stopped producing new
+  // information, not that its name was seen N times (owner repro: five umami
+  // get_website_metrics calls with distinct `type` args, each a new ranking, were
+  // refused at the 5th). Distinct canonical arguments run while the tool's last
+  // NO_YIELD_STREAK results were not all empty / failed / repeats, up to a hard
+  // backstop. An exhausted stall no longer suppresses this pass for every tool:
+  // a tool feeding the stall is stopped by the same yield rule, and only it gets
+  // the stall suffix below.
+  const history = resultHistory(state, tc.name);
+  const noNewInformation = stoppedYielding(history);
+  // The run's own budget (initialKernelState mirrors KernelRunOptions.maxIterations) wins.
+  const maxIterations = state.meta?.maxIterations ?? input.maxIterations ?? DEFAULT_MAX_ITERATIONS;
+  const backstop = Math.max(threshold, Math.ceil(maxIterations * REPETITION_BACKSTOP_ITERATION_FRACTION));
+  if (
+    priorCallsOfSameTool < backstop &&
+    !noNewInformation &&
+    distinctArgumentsEligible(tc) &&
+    hasDistinctArguments(tc, state)
+  ) {
     return { pass: true };
   }
+  const refEscalation: ReadonlyMap<string, number> | undefined = stalledRequirement?.[1].refEscalation;
+  // No ref data (the stall cannot be attributed) keeps the prior reading: it feeds every tool.
+  const feedsStall = stalledRequirement !== undefined &&
+    (refEscalation === undefined || history.some((h) => h.storedKey !== undefined && refEscalation.has(h.storedKey)));
 
   // Converging-retry carve-out (root fix 2026-08-06). A call that ADAPTS to a
   // prior failure — distinct arguments after the tool's last call failed — is
@@ -579,10 +664,11 @@ export const repetitionGuard: Guard = (tc, state, input) => {
         return `${t} (${actual}/${needed} calls done)`;
       }).join(", ")}. Do that now instead of repeating ${tc.name}.`
     : " Use final-answer if you already have what you need; otherwise try a different tool or different arguments.";
-  const stallSuffix = stalledRequirement
+  const stallSuffix = stalledRequirement && feedsStall
     ? ` The harness has shown you everything it has on requirement "${stalledRequirement[0]}"; this line of evidence is exhausted.`
     : "";
-  const nudge = `⚠️ You have already called ${tc.name} ${priorCallsOfSameTool} times. Stop repeating this tool.${missingHint}${stallSuffix}`;
+  const yieldNote = noNewInformation ? ` Its last ${NO_YIELD_STREAK} results added no new information.` : "";
+  const nudge = `⚠️ You have already called ${tc.name} ${priorCallsOfSameTool} times. Stop repeating this tool.${yieldNote}${missingHint}${stallSuffix}`;
 
   return {
     pass: false,

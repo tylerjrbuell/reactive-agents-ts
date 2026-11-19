@@ -14,11 +14,14 @@ function makeState(overrides: Partial<KernelState> = {}): KernelState {
 const tc = { name: "web-search", arguments: { query: "season 1 episodes" } } as any;
 const input = { requiredToolQuantities: {}, nextMovesPlanning: { maxBatchSize: 4 } } as KernelInput;
 
+// Each prior call returned the same results: since 2026-11-18 a call count alone
+// no longer blocks distinct queries, so the stall pin needs a tool that stopped
+// yielding (the case an exhausted stall is about).
 function stateWithPriorCalls(n: number, stallCount: number): KernelState {
-  const steps = Array.from({ length: n }, (_, i) => ({
-    type: "action",
-    metadata: { toolCall: { name: "web-search", arguments: { query: `q${i}` } } },
-  }));
+  const steps = Array.from({ length: n }, (_, i) => [
+    { type: "action", metadata: { toolCall: { name: "web-search", arguments: { query: `q${i}` } } } },
+    { type: "observation", content: "1. Same page - https://example.com", metadata: { observationResult: { success: true } } },
+  ]).flat();
   return makeState({
     steps: steps as any,
     meta: { assessment: { requirementProgress: new Map([["answer", { stallCount }]]) } } as any,

@@ -401,16 +401,28 @@ describe("M13: Guards + Meta-tools Validation (RED + GREEN Phase)", () => {
   // ─── Test: Repetition guard ───
 
   it("blocks tools when called too many times (repetition guard)", () => {
+    // Repetition is information yield (2026-11-18): five varied queries that
+    // all returned the same results are the runaway this pin covers. A call
+    // count alone no longer blocks distinct queries that keep yielding.
     const state = createMinimalState({
-      steps: Array.from({ length: 5 }, (_, i) => ({
-        id: `step-${i}` as any,
-        type: "action" as const,
-        content: `Calling web-search (attempt ${i + 1})`,
-        timestamp: new Date(),
-        metadata: {
-          toolCall: { id: `search-${i}`, name: "web-search", arguments: { query: `test-${i}` } },
+      steps: Array.from({ length: 5 }, (_, i) => [
+        {
+          id: `step-${i}` as any,
+          type: "action" as const,
+          content: `Calling web-search (attempt ${i + 1})`,
+          timestamp: new Date(),
+          metadata: {
+            toolCall: { id: `search-${i}`, name: "web-search", arguments: { query: `test-${i}` } },
+          },
         },
-      })),
+        {
+          id: `obs-${i}` as any,
+          type: "observation" as const,
+          content: "1. Same page - https://example.com",
+          timestamp: new Date(),
+          metadata: { toolCallId: `search-${i}`, observationResult: { success: true } },
+        },
+      ]).flat() as any,
     });
 
     const input = createMinimalInput({
