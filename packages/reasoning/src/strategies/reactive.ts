@@ -245,8 +245,8 @@ export const executeReactive = (
       availableToolSchemas: capabilitySnapshot.availableToolSchemas,
       allToolSchemas: capabilitySnapshot.allToolSchemas,
       priorContext,
-      contextProfile: input.contextProfile,
-      providerName: input.providerName,
+      // providerName / contextProfile / calibrationMode: the run's model facet
+      // rides RunEnvelope and `runKernel` merges it onto every pass.
       resultCompression: input.resultCompression,
       // GH temp-threading (Wave-4): `input.temperature` (the runtime's
       // command-first merge `config.temperature ?? config.contextProfile

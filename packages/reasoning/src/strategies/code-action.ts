@@ -134,15 +134,6 @@ export const executeCodeAction = (
       ((approvalPolicy.tools?.size ?? 0) > 0 ||
         approvalPolicy.requireFor !== undefined ||
         (approvalPolicy.commands?.length ?? 0) > 0);
-    if (gatesSomeTool) {
-      return yield* Effect.fail(
-        new ExecutionError({
-          strategy: "code-action",
-          message:
-            `code-action cannot honor .withApprovalPolicy({ mode: "${approvalPolicy!.mode}" }): its tool calls run inside the sandbox worker, past the approval gate. Use the reactive, reflexion, plan-execute-reflect or tree-of-thought strategy for gated tools.`,
-        }),
-      );
-    }
 
     // The substrate owns the trajectory: steps, spend (plan / repair / retry
     // calls via `run.call`; the sandbox is 0-LLM), the one run ledger and the
@@ -158,6 +149,18 @@ export const executeCodeAction = (
         ...(input.agentId !== undefined ? { agentId: input.agentId } : {}),
       },
       (run) => Effect.gen(function* () {
+    // The refusal fails INSIDE the run (audit G2): `runStrategy` mints it as a
+    // failed result with a `terminal_decision` (authority `strategy-error`),
+    // before any model call or tool runs. The policy itself is unchanged.
+    if (gatesSomeTool) {
+      return yield* Effect.fail(
+        new ExecutionError({
+          strategy: "code-action",
+          message:
+            `code-action cannot honor .withApprovalPolicy({ mode: "${approvalPolicy!.mode}" }): its tool calls run inside the sandbox worker, past the approval gate. Use the reactive, reflexion, plan-execute-reflect or tree-of-thought strategy for gated tools.`,
+        }),
+      );
+    }
     const start = run.start;
     const toolServiceOpt = yield* Effect.serviceOption(ToolService);
     // Wave C.2 slice 3b-ii — the bus the run ledger announces its growth on.

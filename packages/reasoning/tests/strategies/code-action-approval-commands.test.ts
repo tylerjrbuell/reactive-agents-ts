@@ -6,7 +6,7 @@
 // must be refused like one with gated tools, or a rule-matched `git push`
 // would run with no human decision.
 import { describe, it, expect } from "bun:test";
-import { Effect, Either } from "effect";
+import { Effect } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import { executeCodeAction } from "../../src/strategies/code-action.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
@@ -22,13 +22,18 @@ describe("code-action — approval command rules", () => {
           memoryContext: "",
           availableTools: [],
           config: defaultReasoningConfig,
-        }).pipe(Effect.either, Effect.provide(TestLLMServiceLayer())),
+        }).pipe(Effect.provide(TestLLMServiceLayer())),
         buildRunEnvelope({
           approvalPolicy: { mode: "block", tools: new Set<string>(), commands: ["git push"] },
         }),
       ),
     );
-    expect(Either.isLeft(result)).toBe(true);
-    if (Either.isLeft(result)) expect(result.left.message).toContain("cannot honor");
+    // The refusal ends on the shared terminal (audit G2): a failed result, no
+    // model call, the refusal on `error`, terminal authority `strategy-error`.
+    expect(result.status).toBe("failed");
+    expect(result.error ?? "").toContain("code-action cannot honor .withApprovalPolicy");
+    expect(result.metadata.llmCalls ?? 0).toBe(0);
+    const ext = result.metadata.extensions as { terminalOutcome?: { authority?: unknown } } | undefined;
+    expect(ext?.terminalOutcome?.authority).toBe("strategy-error");
   });
 });

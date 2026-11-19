@@ -58,7 +58,7 @@ import {
 } from "../../state/completion-envelope.js";
 import { deliverableDecisionEnvelope, deriveTerminalOutcome, userStopEnvelope, type TerminalOutcome, type TerminalOutcomeMeta } from "../../state/terminal-outcome.js";
 import { emitGuardFired } from "../../utils/diagnostics.js";
-import { deriveTerminalAuthority } from "../../state/terminal-authority.js";
+import { deriveTerminalAuthority, STRATEGY_ERROR_TERMINATOR } from "../../state/terminal-authority.js";
 import { isUserStopReason } from "../../loop/terminate-reason.js";
 import { emitStrategyTerminalDecision } from "./strategy-terminal-decision.js";
 import { looksLikeHarnessInternalText } from "../verify/harness-internal-text.js";
@@ -758,9 +758,13 @@ export function finalizeStrategyResult(
               ? "contract-coverage"
               : enforced
                 ? "fabrication-guard"
-                : forwardedOutstanding.length > 0
-                  ? "envelope-outstanding"
-                  : undefined;
+                // A failed strategy body set the status, not the passes' outstanding
+                // criteria (they stay on the outcome): authority `strategy-error`.
+                : params.extraMetadata?.["rawTerminatedBy"] === STRATEGY_ERROR_TERMINATOR
+                  ? undefined
+                  : forwardedOutstanding.length > 0
+                    ? "envelope-outstanding"
+                    : undefined;
     // Criteria that kept the claim from `completed`: contract-coverage + delegation
     // outstanding ids (`deriveTerminalOutcome` adds the verifier's failed checks
     // when the gate refused the deliverable).

@@ -1,0 +1,8 @@
+---
+"@reactive-agents/reasoning": patch
+---
+
+Every strategy's kernel passes now run on the run's model settings, and a failed strategy body now ends like any other run.
+
+- **Model facet.** `ReasoningService.execute` puts `providerName`, `contextProfile` and the new `calibrationMode` param on `RunEnvelope.rails`, and `runKernel` merges them onto every kernel pass. Before this, reflexion passes, tree-of-thought branches and plan-execute step kernels left them out. Those passes ran as provider `unknown` on the mid profile: a 2,000-token think budget instead of the frontier 4,000 plus thinking allowance, and a 32,768-token window instead of the model's real one. A `.withCalibration("skip")` run now skips the shipped calibration on every pass of every strategy. `providerName` and `contextProfile` are no longer fields of `CrossCuttingInput` / `PerPassInput`, so a strategy cannot drop them. Code that calls a strategy function directly (not through `ReasoningService`) must put these fields on the `RunEnvelope` it provides.
+- **Strategy-body errors.** When a strategy body fails with an `ExecutionError` (a failed direct model call, an unparseable plan, a refused config), `runStrategy` no longer lets it escape. It mints a `failed` result through the shared terminal. The result keeps the run's steps, spend and run ledger, puts the cause on `error` as `Strategy execution failed (<strategy>): <message>`, and emits a `terminal_decision` with authority `strategy-error` (`rawTerminatedBy: "strategy_error"`). code-action's approval-policy refusal goes through the same path, before any model call. The refusal text (`code-action cannot honor .withApprovalPolicy(...)`) is unchanged, and so is the refusal policy.

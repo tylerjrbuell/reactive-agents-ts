@@ -14,7 +14,7 @@ import { defaultReasoningConfig } from "../../src/types/config.js";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
 import { ToolService, ToolExecutionError, createToolsLayer } from "@reactive-agents/tools";
-import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import { buildRunEnvelope, provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // Pin pre-lazy-tool-disclosure contract — see f51d7d87.
 const PRIOR_LAZY = process.env.RA_LAZY_TOOLS;
@@ -586,6 +586,18 @@ describe("Profile overrides for temperature and maxIterations", () => {
 
 describe("toolSchemaDetail from context profile", () => {
   it("names-and-types detail omits descriptions", async () => {
+    const namesAndTypes = {
+      tier: "local",
+      promptVerbosity: "minimal",
+      rulesComplexity: "simplified",
+      fewShotExampleCount: 0,
+      compactAfterSteps: 4,
+      fullDetailSteps: 2,
+      toolResultMaxChars: 400,
+      toolResultPreviewItems: 5,
+      contextBudgetPercent: 70,
+      toolSchemaDetail: "names-and-types",
+    } as const;
     let capturedContent = "";
     const { LLMService: LLMSvc } = await import("@reactive-agents/llm-provider");
 
@@ -634,19 +646,11 @@ describe("toolSchemaDetail from context profile", () => {
           },
         ],
         config: testConfig,
-        contextProfile: {
-          tier: "local",
-          promptVerbosity: "minimal",
-          rulesComplexity: "simplified",
-          fewShotExampleCount: 0,
-          compactAfterSteps: 4,
-          fullDetailSteps: 2,
-          toolResultMaxChars: 400,
-          toolResultPreviewItems: 5,
-          contextBudgetPercent: 70,
-          toolSchemaDetail: "names-and-types",
-        },
+        contextProfile: namesAndTypes,
       }).pipe(Effect.provide(capturingLLMLayer)),
+      // The kernel reads the profile off the run envelope (the model facet,
+      // which ReasoningService.execute fills from the same param).
+      buildRunEnvelope({ contextProfile: namesAndTypes }),
     ));
 
     // New context engine: compact tool reference with param names and types

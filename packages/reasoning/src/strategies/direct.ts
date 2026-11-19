@@ -165,8 +165,8 @@ export const executeDirect = (
       availableToolSchemas: capabilitySnapshot.availableToolSchemas,
       allToolSchemas: capabilitySnapshot.allToolSchemas,
       priorContext,
-      contextProfile: input.contextProfile,
-      providerName: input.providerName,
+      // providerName / contextProfile / calibrationMode: the run's model facet
+      // rides RunEnvelope and `runKernel` merges it onto every pass.
       resultCompression: input.resultCompression,
       temperature:
         input.temperature ??

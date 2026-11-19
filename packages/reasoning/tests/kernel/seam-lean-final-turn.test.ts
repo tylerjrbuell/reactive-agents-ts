@@ -184,7 +184,8 @@ async function run(
   const result = await Effect.runPromise(
     provideTestEnvelope(
       program.pipe(Effect.provide(Layer.mergeAll(model.layer, tools, EventBusLive))),
-      buildRunEnvelope({ harness }),
+      // The kernel reads the profile off the run envelope (the model facet).
+      buildRunEnvelope({ harness, contextProfile: { tier: "mid", thinkingModel: true } }),
     ),
   );
   return { result, requests: model.requests, executed, fired };

@@ -98,7 +98,24 @@ export interface RunEnvelopeRails {
    * `capabilities/act/user-interaction.ts`; never folded into `KernelInput`.
    */
   readonly askUser?: AskUserRail;
+  /**
+   * The run's model facet: provider name, context profile and calibration
+   * mode, as `ReasoningService.execute` received them. Merged onto every kernel
+   * pass, so a strategy's sub-kernels (reflexion passes, ToT branches,
+   * plan-execute steps) see the same provider, tier, window and calibration
+   * choice as the run. Before this, each strategy copied them by hand and three
+   * dropped them: their passes ran as provider "unknown" on the mid profile
+   * (audit 2026-11-18, G1).
+   */
+  readonly providerName?: KernelInput["providerName"];
+  /** See `providerName`. */
+  readonly contextProfile?: KernelInput["contextProfile"];
+  /** See `providerName`. `"skip"` applies no model calibration on any pass. */
+  readonly calibrationMode?: KernelInput["calibrationMode"];
 }
+
+/** The model facet `withModelFacet` folds onto an envelope's rails. */
+export type RunModelFacet = Pick<RunEnvelopeRails, "providerName" | "contextProfile" | "calibrationMode">;
 
 export interface RunEnvelopeData {
   readonly policy: RunEnvelopePolicy;
@@ -139,6 +156,12 @@ export interface BuildRunEnvelopeOptions {
   readonly maxCallsPerTool?: Readonly<Record<string, number>>;
   /** See `RunEnvelopeRails.askUser`. */
   readonly askUser?: AskUserRail;
+  /** See `RunEnvelopeRails.providerName` (the model facet). */
+  readonly providerName?: KernelInput["providerName"];
+  /** See `RunEnvelopeRails.providerName` (the model facet). */
+  readonly contextProfile?: KernelInput["contextProfile"];
+  /** See `RunEnvelopeRails.providerName` (the model facet). */
+  readonly calibrationMode?: KernelInput["calibrationMode"];
   /** Optional per-agent harness config; absent ⇒ pure env/default resolution. */
   readonly harness?: HarnessConfig;
   /**
@@ -172,6 +195,7 @@ export function buildRunEnvelope(opts: BuildRunEnvelopeOptions = {}): RunEnvelop
       ...(opts.currentTurnText !== undefined ? { currentTurnText: opts.currentTurnText } : {}),
       ...(opts.maxCallsPerTool !== undefined ? { maxCallsPerTool: opts.maxCallsPerTool } : {}),
       ...(opts.askUser !== undefined ? { askUser: opts.askUser } : {}),
+      ...modelFacet(opts),
     },
     harness: resolveHarnessConfig(opts.harness ?? {}, opts.harnessProfileDefault ?? {}),
   };
@@ -256,9 +280,37 @@ export function mergeRunEnvelopeIntoKernelInput(
       ? { maxCallsPerTool: rails.maxCallsPerTool }
       : {}),
     ...(input.harness === undefined ? { harness: envelope.harness } : {}),
+    // The model facet: every pass runs on the run's provider, profile and calibration choice.
+    ...modelFacet(rails, input),
     // Posture is run-level fiat: applied LAST so it beats the classifier's required tools.
     ...postureInputOverrides(rails.posture),
   };
+}
+
+/**
+ * The model-facet fields of `from` that `into` does not set yet (absent keys
+ * are not written). One reader for the three fields, used by the envelope
+ * build, the kernel-input merge and `withModelFacet`.
+ */
+function modelFacet(from: RunModelFacet, into: RunModelFacet = {}): RunModelFacet {
+  return {
+    ...(into.providerName === undefined && from.providerName !== undefined ? { providerName: from.providerName } : {}),
+    ...(into.contextProfile === undefined && from.contextProfile !== undefined ? { contextProfile: from.contextProfile } : {}),
+    ...(into.calibrationMode === undefined && from.calibrationMode !== undefined ? { calibrationMode: from.calibrationMode } : {}),
+  };
+}
+
+/**
+ * Fold the run's model facet (provider name, context profile, calibration
+ * mode) onto an envelope's rails. `ReasoningService.execute` takes them as
+ * params; this puts them on the one carrier so every kernel pass of every
+ * strategy runs on them without a strategy forwarding them. Fields already on
+ * the envelope win; nothing to add returns the same object.
+ */
+export function withModelFacet(envelope: RunEnvelopeData, facet: RunModelFacet): RunEnvelopeData {
+  const added = modelFacet(facet, envelope.rails);
+  if (Object.keys(added).length === 0) return envelope;
+  return { ...envelope, rails: { ...envelope.rails, ...added } };
 }
 
 /**

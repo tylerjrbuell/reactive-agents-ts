@@ -19,7 +19,7 @@ import type { SynthesisConfig } from "../context/synthesis-types.js";
 import type { KernelMetaToolsConfig } from "../types/kernel-meta-tools.js";
 import { CurrentModelRouting } from "../kernel/llm-gateway.js";
 import type { ModelRoutingPool } from "../kernel/policy/purpose-routing.js";
-import { RunEnvelope, buildRunEnvelope, withMaxCallsPerTool, withCurrentTurnText } from "../kernel/envelope/run-envelope.js";
+import { RunEnvelope, buildRunEnvelope, withMaxCallsPerTool, withCurrentTurnText, withModelFacet } from "../kernel/envelope/run-envelope.js";
 import type { RunEnvelopeData } from "../kernel/envelope/run-envelope.js";
 import { CurrentRunBudget, makeRunBudgetMeter, withRunBudgetMeter } from "../kernel/run-budget.js";
 
@@ -153,6 +153,13 @@ export class ReasoningService extends Context.Tag("ReasoningService")<
       /** Pre-resolved model calibration — drives steering channel and context tuning in the kernel. */
       readonly calibration?: import("@reactive-agents/llm-provider").ModelCalibration;
       /**
+       * `"skip"` applies no model calibration on any kernel pass (an explicit
+       * `.withCalibration("skip")`); absent or `"auto"` = the shipped one. Like
+       * `providerName` and `contextProfile`, it rides `envelope.rails` (the
+       * run's model facet) onto every pass of every strategy.
+       */
+      readonly calibrationMode?: "auto" | "skip";
+      /**
        * Custom verifier injected at the terminal §9.0 gate. When set, replaces
        * `defaultVerifier` for both in-loop retry and final-answer verification.
        * Pass `noopVerifier` to bypass the gate entirely (lean harness mode).
@@ -280,10 +287,19 @@ export const ReasoningServiceLive = (
               }),
               RunEnvelope,
               // `maxCallsPerTool` rides the envelope, so every strategy enforces it
-              // without forwarding it (kernel gate + direct-dispatch budget).
-              withCurrentTurnText(
-                withMaxCallsPerTool(params.envelope ?? buildRunEnvelope(), params.maxCallsPerTool),
-                params.currentTurnText,
+              // without forwarding it (kernel gate + direct-dispatch budget). So
+              // does the model facet: every kernel pass runs on the run's provider,
+              // context profile and calibration mode.
+              withModelFacet(
+                withCurrentTurnText(
+                  withMaxCallsPerTool(params.envelope ?? buildRunEnvelope(), params.maxCallsPerTool),
+                  params.currentTurnText,
+                ),
+                {
+                  ...(params.providerName !== undefined ? { providerName: params.providerName } : {}),
+                  ...(params.contextProfile !== undefined ? { contextProfile: params.contextProfile } : {}),
+                  ...(params.calibrationMode !== undefined ? { calibrationMode: params.calibrationMode } : {}),
+                },
               ),
             );
             const piped = provided.pipe(

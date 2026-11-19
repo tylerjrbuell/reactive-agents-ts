@@ -3,7 +3,7 @@ import { Effect, Layer, Stream } from "effect";
 import { executeReactive } from "../../src/strategies/reactive.js";
 import { defaultReasoningConfig } from "../../src/types/config.js";
 import type { StreamEvent } from "@reactive-agents/llm-provider";
-import { provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
+import { buildRunEnvelope, provideTestEnvelope } from "../../src/kernel/envelope/run-envelope.js";
 
 // Pin the pre-lazy-tool-disclosure prompt contract (tools rendered eagerly in
 // the system prompt). Default flipped to lazy on 2026-04-26 (commit f51d7d87).
@@ -125,6 +125,20 @@ describe("Instruction-aware tool filtering", () => {
       ...Array.from({ length: 8 }, (_, i) => makeTool(`tool-${i}`, `Tool ${i} description`, [{ name: "input", type: "string", required: true }])),
     ];
 
+    const contextProfile = {
+      tier: "local",
+      promptVerbosity: "minimal",
+      rulesComplexity: "simplified",
+      fewShotExampleCount: 0,
+      compactAfterSteps: 4,
+      fullDetailSteps: 2,
+      toolResultMaxChars: 400,
+      toolResultPreviewItems: 5,
+      contextBudgetPercent: 70,
+      toolSchemaDetail: "names-only",
+    } as const;
+    // The kernel reads the profile off the run envelope (the model facet,
+    // which ReasoningService.execute fills from the same param).
     await Effect.runPromise(provideTestEnvelope(
       executeReactive({
         taskDescription: "Use github/list_commits to check recent commits then send_message_to_user with results",
@@ -134,19 +148,9 @@ describe("Instruction-aware tool filtering", () => {
         availableToolSchemas: tools,
         requiredTools: ["github/list_commits", "signal/send_message_to_user"],
         config: testConfig,
-        contextProfile: {
-          tier: "local",
-          promptVerbosity: "minimal",
-          rulesComplexity: "simplified",
-          fewShotExampleCount: 0,
-          compactAfterSteps: 4,
-          fullDetailSteps: 2,
-          toolResultMaxChars: 400,
-          toolResultPreviewItems: 5,
-          contextBudgetPercent: 70,
-          toolSchemaDetail: "names-only",
-        },
+        contextProfile,
       }).pipe(Effect.provide(layer)),
+      buildRunEnvelope({ contextProfile }),
     ));
 
     const content = getCaptured();

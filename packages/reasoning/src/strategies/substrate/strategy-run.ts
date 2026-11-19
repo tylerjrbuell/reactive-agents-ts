@@ -24,6 +24,7 @@ import { Data, Effect, Ref } from "effect";
 import type { CompletionResponse } from "@reactive-agents/llm-provider";
 import { LLMService } from "@reactive-agents/llm-provider";
 import { ExecutionError } from "../../errors/errors.js";
+import { STRATEGY_ERROR_TERMINATOR } from "../../kernel/state/terminal-authority.js";
 import type { ReasoningMetadata, ReasoningStatus, ReasoningStep } from "../../types/index.js";
 import { gatewayComplete, type GatewayRequest, type LlmCallIntent } from "../../kernel/llm-gateway.js";
 import { runPass, type PassResult } from "../../kernel/loop/run-pass.js";
@@ -269,13 +270,19 @@ export type StrategyExtras = Readonly<Record<string, unknown>> & {
  *   stopped after planning. Becomes `rawTerminatedBy: "plan-only"` and
  *   `planOnly: true`; the optional `warning` (a plan defect) joins the
  *   verification warning. The status is `partial` and nothing is harness-authored.
+ * - `StrategyError`: the strategy body failed (an `ExecutionError`: a failed
+ *   direct model call, an unparseable plan, a refused config). Set only by
+ *   `runStrategy` itself. Becomes `rawTerminatedBy: "strategy_error"` (terminal
+ *   authority `strategy-error`); the cause rides `error`, and the status is
+ *   `failed`.
  */
 export type StrategyOutcome =
   | { readonly _tag: "Abstained"; readonly reason: string; readonly missing: readonly string[] }
   | { readonly _tag: "BudgetStopped"; readonly rawReason: string; readonly warning: string }
   | { readonly _tag: "Unverified"; readonly warning: string }
   | { readonly _tag: "HarnessJoined"; readonly warning: string }
-  | { readonly _tag: "PlanOnly"; readonly warning?: string };
+  | { readonly _tag: "PlanOnly"; readonly warning?: string }
+  | { readonly _tag: "StrategyError" };
 
 /**
  * How a strategy run ends.
@@ -506,6 +513,8 @@ function outcomeRelay(outcome: StrategyOutcome, priorWarning: unknown, hasOutput
         rawTerminatedBy: "plan-only",
         markers: { planOnly: true, ...(outcome.warning !== undefined ? { verificationWarning: appendWarning(outcome.warning) } : {}) },
       };
+    case "StrategyError":
+      return { rawTerminatedBy: STRATEGY_ERROR_TERMINATOR, markers: {} };
   }
 }
 
@@ -564,16 +573,21 @@ interface PassEnvelope {
   readonly envelope: CompletionEnvelope;
 }
 
+/** A body failure other than a pause. */
+type Unpaused<E> = Exclude<E, Extract<E, StrategyPaused>>;
+/** What still escapes `runStrategy`: neither a pause nor an `ExecutionError` (e.g. blueprint's degrade signal). */
+type RunFailure<E> = Exclude<Unpaused<E>, Extract<Unpaused<E>, ExecutionError>>;
+
 /**
  * Run a strategy body against one trajectory and close it with the shared
- * terminal: the paused result for a pause, otherwise the judged mint
- * (`finalizeStrategyResult`) with the accumulated spend, steps, run ledger and
- * the worst-of envelope cap.
+ * terminal: the paused result for a pause, a failed result for a body
+ * `ExecutionError`, otherwise the judged mint (`finalizeStrategyResult`) with
+ * the accumulated spend, steps, run ledger and the worst-of envelope cap.
  */
 export function runStrategy<E, R>(
   spec: StrategyRunSpec,
   body: (run: StrategyRun) => Effect.Effect<StrategyEnd, E, R>,
-): Effect.Effect<JudgedReasoningResult, Exclude<E, Extract<E, StrategyPaused>>, R | LLMService | RunEnvelope> {
+): Effect.Effect<JudgedReasoningResult, RunFailure<E>, R | LLMService | RunEnvelope> {
   return Effect.gen(function* () {
     const llm = yield* LLMService;
     const taskId = spec.taskId ?? spec.strategy;
@@ -826,6 +840,22 @@ export function runStrategy<E, R>(
     };
 
     const isPaused = (err: E): err is Extract<E, StrategyPaused> => err instanceof StrategyPaused;
+    const isBodyError = (err: Unpaused<E>): err is Extract<Unpaused<E>, ExecutionError> =>
+      typeof err === "object" && err !== null && (err as { readonly _tag?: unknown })._tag === "ExecutionError";
+
+    // A failed body (audit G2, 2026-11-18) ends on the one shared terminal,
+    // like every other run: a failed result minted with the run's steps, spend and ledger
+    // so far, the cause on `error` (same text the runtime used to build from
+    // the escaped error), and a `terminal_decision` with authority
+    // `strategy-error`. Before this the error escaped with none of them.
+    const bodyFailed = (err: ExecutionError) =>
+      settledLedger.pipe(Effect.flatMap((ledger) => terminal({
+        _tag: "Result",
+        output: "",
+        status: "failed",
+        error: `Strategy execution failed (${spec.strategy}): ${err.message.split("\n")[0]?.trim() ?? ""}`,
+        outcome: { _tag: "StrategyError" },
+      }, ledger)));
 
     // Recorded tool evidence joins the ledger unless its call is already there
     // (a direct dispatch through `ledgerSink` recorded it). It carries no
@@ -845,6 +875,7 @@ export function runStrategy<E, R>(
     return yield* body(run).pipe(
       Effect.flatMap((end) => settledLedger.pipe(Effect.flatMap((ledger) => terminal(end, ledger)))),
       Effect.catchIf(isPaused, (p) => paused(p.pause)),
+      Effect.catchIf(isBodyError, bodyFailed),
       Effect.map((result) => withKernelIterations(result, kernelIterations)),
     );
   }).pipe(

@@ -6,6 +6,7 @@ import {
   emptyRunEnvelope,
   provideTestEnvelope,
   mergeRunEnvelopeIntoKernelInput,
+  withModelFacet,
 } from "./run-envelope.js";
 import { resolveHarnessConfig } from "../../harness-config.js";
 import type { KernelInput } from "../state/kernel-state.js";
@@ -67,5 +68,44 @@ describe("RunEnvelope — harness sub-record", () => {
       env,
     );
     expect(folded.harness?.toolIndex).toBe(false);
+  });
+});
+
+describe("RunEnvelope — model facet (audit G1, 2026-11-18)", () => {
+  const facet = { providerName: "gemini", contextProfile: { tier: "frontier" as const }, calibrationMode: "skip" as const };
+
+  it("withModelFacet folds provider, profile and calibration mode onto the rails", () => {
+    const env = withModelFacet(buildRunEnvelope(), facet);
+    expect(env.rails.providerName).toBe("gemini");
+    expect(env.rails.contextProfile?.tier).toBe("frontier");
+    expect(env.rails.calibrationMode).toBe("skip");
+  });
+
+  it("withModelFacet keeps fields already on the envelope and returns the same object when nothing is added", () => {
+    const env = buildRunEnvelope({ providerName: "ollama" });
+    expect(withModelFacet(env, { providerName: "gemini" })).toBe(env);
+    expect(withModelFacet(env, {})).toBe(env);
+  });
+
+  it("merges the facet onto a pass that carries none (a hand-built strategy sub-kernel)", () => {
+    const folded = mergeRunEnvelopeIntoKernelInput({ task: "t" } as KernelInput, buildRunEnvelope(facet));
+    expect(folded.providerName).toBe("gemini");
+    expect(folded.contextProfile?.tier).toBe("frontier");
+    expect(folded.calibrationMode).toBe("skip");
+  });
+
+  it("an explicit pass value wins over the envelope", () => {
+    const folded = mergeRunEnvelopeIntoKernelInput(
+      { task: "t", providerName: "ollama", calibrationMode: "auto" } as KernelInput,
+      buildRunEnvelope(facet),
+    );
+    expect(folded.providerName).toBe("ollama");
+    expect(folded.calibrationMode).toBe("auto");
+    expect(folded.contextProfile?.tier).toBe("frontier");
+  });
+
+  it("an envelope without the facet writes no facet keys (byte-identical pass)", () => {
+    const folded = mergeRunEnvelopeIntoKernelInput({ task: "t" } as KernelInput, buildRunEnvelope());
+    expect("providerName" in folded || "contextProfile" in folded || "calibrationMode" in folded).toBe(false);
   });
 });

@@ -43,7 +43,6 @@ import type { KernelInput } from "./kernel-state.js";
 export type CrossCuttingInput = Pick<
   KernelInput,
   | "resultCompression"
-  | "providerName"
   | "agentId"
   | "sessionId"
   | "requiredTools"
@@ -79,6 +78,11 @@ export type CrossCuttingInput = Pick<
  * strategy at all. They are read from `RunEnvelope`, whose provision is a
  * compile-time requirement of every `StrategyFn` (`R = LLMService |
  * RunEnvelope`). A strategy cannot drop what it never carries.
+ *
+ * 2026-11-18 (audit G1): the model facet left too — `providerName` here and
+ * `contextProfile` in `PerPassInput`, plus the new `calibrationMode`. Three
+ * strategies built these bundles without them, so their passes ran as
+ * provider "unknown" on the mid profile. They ride `RunEnvelope.rails` now.
  */
 
 /**
@@ -96,7 +100,6 @@ export type PerPassInput = Pick<
   | "allToolSchemas"
   | "priorContext"
   | "remainingGoals"
-  | "contextProfile"
   | "temperature"
   | "initialMessages"
   | "verifier"

@@ -25,7 +25,6 @@ const customVerifier: Verifier = {
 
 const crossCutting: CrossCuttingInput = {
   resultCompression: { previewLines: 5 } as never,
-  providerName: "ollama",
   agentId: "agent-1",
   sessionId: "session-1",
   requiredTools: ["http-get"],
@@ -80,7 +79,6 @@ const basePerPass: Omit<PerPassInput, "verifier"> = {
   availableToolSchemas: [{ name: "http-get", description: "", parameters: [] }],
   allToolSchemas: [{ name: "http-get", description: "", parameters: [] }],
   priorContext: "Relevant Memory:\nfoo",
-  contextProfile: { tier: "local" } as never,
   temperature: 0.3,
   initialMessages: [{ role: "user", content: "hi" }],
 };
@@ -96,8 +94,8 @@ function reactiveHandBuilt(verifier: Verifier | undefined): KernelInput {
     availableToolSchemas: basePerPass.availableToolSchemas,
     allToolSchemas: basePerPass.allToolSchemas,
     priorContext: basePerPass.priorContext,
-    contextProfile: basePerPass.contextProfile,
-    providerName: crossCutting.providerName,
+    // providerName / contextProfile / calibrationMode: the model facet rides
+    // RunEnvelope (audit G1, 2026-11-18); reactive's literal no longer sets them.
     resultCompression: crossCutting.resultCompression,
     temperature: basePerPass.temperature,
     agentId: crossCutting.agentId,

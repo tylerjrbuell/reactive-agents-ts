@@ -183,7 +183,9 @@ export const prepareReActPass = (
       ...buildKernelInput(
         {
           resultCompression: input.resultCompression,
-          providerName: input.providerName,
+          // providerName / contextProfile: a caller's own values ride
+          // `passEnvelope` below (buildRunEnvelope reads them off this input);
+          // absent, runKernel fills the run's model facet from RunEnvelope.
           agentId: input.agentId,
           sessionId: input.sessionId,
           requiredTools: input.requiredTools,
@@ -211,7 +213,6 @@ export const prepareReActPass = (
           allToolSchemas: capabilitySnapshot.allToolSchemas,
           priorContext: input.priorContext,
           remainingGoals: input.remainingGoals,
-          contextProfile: input.contextProfile,
           temperature: input.temperature,
         },
       ),

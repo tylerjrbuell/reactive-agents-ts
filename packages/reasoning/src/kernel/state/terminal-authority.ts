@@ -55,11 +55,18 @@ declare module "./kernel-state.js" {
  * Authority label. Open string by design (new guards add `guard:<name>`), with
  * the documented vocabulary: `model-final | gate-verdict | abstention |
  * stall-deliverable | loop-resolution | harness-deliverable | budget |
- * strategy-exhausted | pause | user-stop | error | give-up-gate |
+ * strategy-exhausted | pause | user-stop | error | strategy-error | give-up-gate |
  * contract-coverage | delegation-cap | guard:<name> | none-recorded |
  * unclassified:<terminatedBy>`.
  */
 export type TerminalAuthority = string;
+
+/**
+ * Raw terminator of a run whose strategy body failed (an `ExecutionError`
+ * caught by `runStrategy`). Authority `strategy-error`; the cause rides
+ * `result.error` (prefixed `Strategy execution failed (<strategy>): `).
+ */
+export const STRATEGY_ERROR_TERMINATOR = "strategy_error";
 
 const MODEL_FINAL: ReadonlySet<string> = new Set([
   "final_answer_tool", "final_answer", "final_answer_regex", "end_turn", "llm_end_turn",
@@ -95,6 +102,7 @@ export function deriveTerminalAuthority(meta: {
     case "switching_exhausted": return "strategy-exhausted";
     case "kernel_error":
     case "llm_error": return "error";
+    case STRATEGY_ERROR_TERMINATOR: return "strategy-error";
     case "awaiting-approval":
     case "awaiting-interaction": return "pause";
     case "stop_requested":

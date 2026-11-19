@@ -5,8 +5,9 @@
 // registration instead of by a hand-written per-strategy test:
 //
 //   C1  HITL safety: an approval-gated tool never executes without a decision.
-//       The run either ends with the paused result, or refuses with a typed
-//       error (code-action cannot pause by design and refuses loudly).
+//       The run either ends with the paused result, or refuses loudly
+//       (code-action cannot pause by design: a failed result, authority
+//       `strategy-error`, its error naming the refusal).
 //   C2  Spend: a normal run reports llmCalls > 0 and tokens > 0.
 //   C3  Ledger: a normal run's result carries a runLedger array, and any tool
 //       the run executed appears in it.
@@ -22,6 +23,12 @@
 //       every strategy. The model asks for `add` twice; with {add:1} it runs
 //       once and the extra call is refused with a tool-gate guard-fired event.
 //       The uncapped control runs it twice (the script really asks twice).
+//   C11 Model facet: providerName / contextProfile / calibrationMode handed to
+//       ReasoningService.execute reach every kernel pass (wire-request provider
+//       and output budget match reactive's; a calibration skip applies none).
+//   C12 Body error: a strategy-body failure ends on the shared terminal: a
+//       failed result, terminalOutcome + terminal_decision authority
+//       `strategy-error`, the cause on `error`.
 //
 // KNOWN_GAPS lists cells that are red today. The list may only shrink: a
 // fixed gap whose cell turns green fails here until it is removed, and a new
@@ -29,7 +36,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { Effect, Layer, Ref } from "effect";
 import { EventBus, EventBusLive } from "@reactive-agents/core";
-import { TestLLMServiceLayer, type TestTurn } from "@reactive-agents/llm-provider";
+import { LLMError, LLMService, TestLLMService, TestLLMServiceLayer, type TestTurn } from "@reactive-agents/llm-provider";
 import { ReasoningService, ReasoningServiceLive } from "../../src/services/reasoning-service.js";
 import { ToolService, createToolsLayer } from "@reactive-agents/tools";
 import { succeedingToolLayer } from "../../src/testing/tool-service-mock.js";
@@ -103,7 +110,7 @@ const script = (strategy: string, badPlan = false) =>
   ]);
 
 interface CellRun {
-  readonly result?: { readonly status: string; readonly metadata: Record<string, unknown> };
+  readonly result?: { readonly status: string; readonly error?: string | null; readonly metadata: Record<string, unknown> };
   readonly refused: boolean;
   readonly toolExecutions: number;
   readonly error?: string;
@@ -430,6 +437,159 @@ const runCap = (strategy: ReasoningStrategy, cap: Readonly<Record<string, number
   );
 };
 
+// ── C11: the run's model facet (provider, context profile, calibration mode)
+// reaches every kernel pass of every strategy. Handed to
+// ReasoningService.execute once; no strategy forwards it. Before 2026-11-18
+// reflexion, tree-of-thought and plan-execute step kernels ran as provider
+// "unknown" on the mid profile (audit G1).
+
+/** Strategies that run no kernel pass on this script (sandbox loop; 0-LLM DAG worker). */
+const NO_KERNEL_PASS: ReadonlySet<string> = new Set(["code-action", "blueprint"]);
+
+interface FacetRun {
+  /** `wire-request` facts: provider + output budget of each kernel model call. */
+  readonly wires: readonly { readonly provider: unknown; readonly outputBudget: unknown }[];
+  /** Fields a model calibration overrode on a kernel profile. */
+  readonly overrides: readonly unknown[];
+  readonly error?: string;
+}
+
+const runFacet = (strategy: ReasoningStrategy, facet: Record<string, unknown>): Promise<FacetRun> => {
+  const program = Effect.gen(function* () {
+    const wires = yield* Ref.make<FacetRun["wires"]>([]);
+    const overrides = yield* Ref.make<readonly unknown[]>([]);
+    const bus = yield* EventBus;
+    yield* bus.subscribe((ev) => {
+      if (ev._tag !== "GuardFiredEmitted") return Effect.void;
+      const m = ev.metadata ?? {};
+      if (ev.guard === "wire-request") return Ref.update(wires, (xs) => [...xs, { provider: m["provider"], outputBudget: m["outputBudget"] }]);
+      if (ev.guard === "profile-overrides-applied") return Ref.update(overrides, (xs) => [...xs, m["field"]]);
+      return Effect.void;
+    });
+    const tools = yield* ToolService;
+    yield* tools.register(addTool, (args) => Effect.sync(() => (args.a as number) + (args.b as number)));
+    const reasoning = yield* ReasoningService;
+    const error = yield* reasoning
+      .execute({
+        taskDescription: "Use the add tool to add 2 and 3, and 4 and 5, then report both sums.",
+        taskType: "computation",
+        memoryContext: "",
+        availableTools: ["add"],
+        availableToolSchemas: [addSchema],
+        strategy,
+        taskId: `facet-${strategy}`,
+        taskClassification: classifyTask("What is 2 + 2?"),
+        ...facet,
+      })
+      .pipe(
+        Effect.map(() => undefined),
+        Effect.catchAll((e) => Effect.succeed(`${e._tag}: ${String((e as { message?: unknown }).message)}`)),
+      );
+    return { wires: yield* Ref.get(wires), overrides: yield* Ref.get(overrides), ...(error !== undefined ? { error } : {}) };
+  });
+  const base = Layer.mergeAll(TestLLMServiceLayer(capTurns(strategy)), createToolsLayer(), StrategyRegistryLive, EventBusLive);
+  return Effect.runPromise(program.pipe(Effect.provide(Layer.provideMerge(ReasoningServiceLive(config), base))));
+};
+
+const FRONTIER_GEMINI = { providerName: "gemini", contextProfile: { tier: "frontier" } };
+/** A model with a shipped calibration that overrides `toolResultMaxChars` (calibration-mode.test.ts). */
+const CALIBRATED_MODEL = "cogito:14b";
+/** reactive's own wire facts on the same facet: the reference every strategy must match. */
+let reactiveReference: Promise<FacetRun> | undefined;
+const reference = (): Promise<FacetRun> => (reactiveReference ??= runFacet("reactive", FRONTIER_GEMINI));
+
+// ── C12: a strategy-body failure still ends through the shared terminal: a
+// minted result with its terminalOutcome, a `terminal_decision` whose
+// authority is recorded, and the cause on `error`. Before 2026-11-18 an
+// ExecutionError escaped `runStrategy` with none of them (audit G2).
+
+/** Strategies whose body has no failure of its own: a provider failure is a kernel `llm_error` terminal, or the run delegates. */
+const NO_BODY_ERROR: ReadonlySet<string> = new Set(["reactive", "direct", "adaptive"]);
+
+interface BodyErrorScenario {
+  readonly turns: TestTurn[];
+  /** A direct `complete` call whose messages contain this text fails with a typed LLMError ("" = every one). */
+  readonly failOn?: string;
+  readonly envelope?: Parameters<typeof buildRunEnvelope>[0];
+  readonly taskDescription?: string;
+  /** Text the cause on `error` must carry. */
+  readonly errorContains: string;
+}
+
+const BODY_ERROR: Readonly<Record<string, BodyErrorScenario>> = {
+  // The refusal fires before any model call: a refused config is a run end too.
+  "code-action": {
+    turns: [{ text: CODE_RESPONSE }],
+    envelope: { approvalPolicy: { mode: "detach", tools: new Set(["add"]) } },
+    errorContains: "code-action cannot honor .withApprovalPolicy",
+  },
+  // The generate pass spends its share on tool calls; the tool-less synthesis fallback fails (E4).
+  reflexion: {
+    turns: [{ toolCall: { name: "add", args: { a: 2, b: 3 } } }],
+    failOn: "final answer to the task now",
+    errorContains: "synthesis fallback failed",
+  },
+  // The BFS explore's first expansion call fails at the provider.
+  "tree-of-thought": {
+    turns: [{ text: "unused" }],
+    failOn: "",
+    taskDescription: "Design a three-step plan to add 2 and 3 using the add tool, comparing approaches.",
+    errorContains: "Strategy execution failed (tree-of-thought)",
+  },
+  // An unparseable plan fails the plan step (the C5 gap): the failure still mints a terminal.
+  "plan-execute-reflect": { turns: [{ text: "not a plan" }], errorContains: "Strategy execution failed (plan-execute-reflect)" },
+  blueprint: { turns: [{ text: "not a plan" }], errorContains: "Strategy execution failed (blueprint)" },
+};
+
+interface BodyErrorRun {
+  readonly result?: { readonly status: string; readonly error?: string | null; readonly metadata: Record<string, unknown> };
+  readonly decisions: readonly { readonly authority: unknown; readonly finalStatus: unknown; readonly reason: string }[];
+  readonly escaped?: string;
+}
+
+const runBodyError = (strategy: ReasoningStrategy, sc: BodyErrorScenario): Promise<BodyErrorRun> => {
+  const program = Effect.gen(function* () {
+    const decisions = yield* Ref.make<BodyErrorRun["decisions"]>([]);
+    const bus = yield* EventBus;
+    yield* bus.subscribe((ev) =>
+      ev._tag === "GuardFiredEmitted" && ev.guard === "terminal_decision"
+        ? Ref.update(decisions, (xs) => [...xs, { authority: ev.metadata?.["authority"], finalStatus: ev.metadata?.["finalStatus"], reason: ev.reason }])
+        : Effect.void,
+    );
+    const tools = yield* ToolService;
+    yield* tools.register(addTool, (args) => Effect.sync(() => (args.a as number) + (args.b as number)));
+    const reasoning = yield* ReasoningService;
+    const outcome = yield* reasoning
+      .execute({
+        taskDescription: sc.taskDescription ?? "Use the add tool to add 2 and 3, then report the sum.",
+        taskType: "computation",
+        memoryContext: "",
+        availableTools: ["add"],
+        availableToolSchemas: [addSchema],
+        strategy,
+        taskId: `body-error-${strategy}`,
+        ...(sc.envelope !== undefined ? { envelope: buildRunEnvelope(sc.envelope) } : {}),
+      })
+      .pipe(
+        Effect.map((result) => ({ result })),
+        Effect.catchAll((e) => Effect.succeed({ escaped: `${e._tag}: ${String((e as { message?: unknown }).message)}` })),
+      );
+    return { ...outcome, decisions: yield* Ref.get(decisions) };
+  });
+  const scripted = TestLLMService(sc.turns);
+  const failOn = sc.failOn;
+  const llm = failOn === undefined
+    ? TestLLMServiceLayer(sc.turns)
+    : Layer.succeed(LLMService, LLMService.of({
+        ...scripted,
+        complete: (req) => JSON.stringify(req.messages).includes(failOn)
+          ? Effect.fail(new LLMError({ message: "provider unavailable", provider: "test" }))
+          : scripted.complete(req),
+      }));
+  const base = Layer.mergeAll(llm, createToolsLayer(), StrategyRegistryLive, EventBusLive);
+  return Effect.runPromise(program.pipe(Effect.provide(Layer.provideMerge(ReasoningServiceLive(config), base))));
+};
+
 /** Assert a cell, honoring the shrink-only KNOWN_GAPS list. */
 const cell = (strategy: string, check: string, ok: boolean, detail: string): void => {
   const key = `${strategy}:${check}`;
@@ -452,8 +612,16 @@ describe("strategy conformance over the registry", () => {
       const paused = raw === "awaiting-approval";
       // C1 is safety: no execution without a decision, and no success claimed around it.
       cell(strategy, "C1", r.toolExecutions === 0 && (r.refused || r.result?.status !== "completed" || paused), `executions=${r.toolExecutions} status=${r.result?.status}`);
-      // C1p: the pending approval is surfaced (paused result), or the strategy refuses loudly.
-      cell(strategy, "C1p", r.toolExecutions === 0 && (paused || r.refused), `executions=${r.toolExecutions} paused=${paused} refused=${r.refused} status=${r.result?.status} terminatedBy=${String(r.result?.metadata["terminatedBy"])}/${String(raw)} output=${String((r.result as { output?: unknown } | undefined)?.output).slice(0, 80)}`);
+      // C1p: the pending approval is surfaced (paused result), or the strategy refuses loudly:
+      // since C12 a refusal is a failed result whose terminal authority is `strategy-error`
+      // and whose error names the refusal.
+      const ext = r.result?.metadata["extensions"] as { terminalOutcome?: { authority?: unknown } } | undefined;
+      const refusedLoudly = r.refused || (
+        r.result?.status === "failed" &&
+        ext?.terminalOutcome?.authority === "strategy-error" &&
+        String(r.result.error ?? "").includes("cannot honor .withApprovalPolicy")
+      );
+      cell(strategy, "C1p", r.toolExecutions === 0 && (paused || refusedLoudly), `executions=${r.toolExecutions} paused=${paused} refused=${r.refused} status=${r.result?.status} terminatedBy=${String(r.result?.metadata["terminatedBy"])}/${String(raw)} output=${String((r.result as { output?: unknown } | undefined)?.output).slice(0, 80)}`);
     }, 30_000);
 
     it(`${strategy}: C2-C4 spend, ledger and outcome on a normal run`, async () => {
@@ -524,10 +692,49 @@ describe("strategy conformance over the registry", () => {
       );
     }, 30_000);
 
+    it(`${strategy}: C11 every kernel pass carries the run's provider, context profile and calibration mode`, async () => {
+      if (NO_KERNEL_PASS.has(strategy)) return;
+      const ref = await reference();
+      const refBudget = ref.wires[0]?.outputBudget;
+      // C11r: the reference measures the facet (frontier budget, not the mid default), so the cell cannot pass vacuously.
+      cell("reactive", "C11r", ref.wires.length > 0 && ref.wires.every((w) => w.provider === "gemini" && w.outputBudget === refBudget), `reference wires=${JSON.stringify(ref.wires)}`);
+      const r = await runFacet(strategy, FRONTIER_GEMINI);
+      const off = r.wires.filter((w) => w.provider !== "gemini" || w.outputBudget !== refBudget);
+      cell(strategy, "C11", r.wires.length > 0 && off.length === 0, `wires=${r.wires.length} off=${JSON.stringify(off.slice(0, 2))} reference budget=${String(refBudget)} error=${r.error ?? "-"}`);
+      // C11k: an explicit calibration skip applies no shipped calibration on any pass; auto (control) does.
+      const skip = await runFacet(strategy, { modelId: CALIBRATED_MODEL, calibrationMode: "skip" });
+      const auto = await runFacet(strategy, { modelId: CALIBRATED_MODEL, calibrationMode: "auto" });
+      cell(strategy, "C11k", skip.overrides.length === 0 && auto.overrides.includes("toolResultMaxChars"), `skip overrides=${JSON.stringify(skip.overrides)} auto overrides=${JSON.stringify(auto.overrides)}`);
+    }, 30_000);
+
+    it(`${strategy}: C12 a strategy-body failure ends through the shared terminal with a recorded authority`, async () => {
+      if (NO_BODY_ERROR.has(strategy)) return;
+      const sc = BODY_ERROR[strategy];
+      if (sc === undefined) {
+        cell(strategy, "C12", false, "no body-error scenario");
+        return;
+      }
+      const r = await runBodyError(strategy, sc);
+      const ext = r.result?.metadata["extensions"] as { terminalOutcome?: { authority?: unknown } } | undefined;
+      const last = r.decisions[r.decisions.length - 1];
+      cell(
+        strategy,
+        "C12",
+        r.escaped === undefined &&
+          r.result?.status === "failed" &&
+          String(r.result.error ?? "").includes(sc.errorContains) &&
+          ext?.terminalOutcome?.authority === "strategy-error" &&
+          last?.authority === "strategy-error" &&
+          last.finalStatus === "failed",
+        `escaped=${r.escaped ?? "-"} status=${r.result?.status} error=${String(r.result?.error ?? "").slice(0, 120)} outcomeAuthority=${String(ext?.terminalOutcome?.authority)} decisions=${JSON.stringify(r.decisions)}`,
+      );
+    }, 30_000);
+
     if (PLANNERS.has(strategy)) {
       it(`${strategy}: C5 an unparseable plan never fails the whole run`, async () => {
         const r = await runCell(strategy, false, true);
-        cell(strategy, "C5", !r.refused && r.result !== undefined, `refused=${r.refused} error=${r.error ?? "-"}`);
+        // A failed result is still a failed run (a body error mints one since C12): degrade means not failed.
+        cell(strategy, "C5", !r.refused && r.result !== undefined && r.result.status !== "failed", `refused=${r.refused} status=${r.result?.status} error=${r.error ?? "-"}`);
       }, 30_000);
     }
   }
