@@ -1,8 +1,10 @@
 ---
-"@reactive-agents/core": patch
+"@reactive-agents/core": minor
 "@reactive-agents/observability": patch
 "@reactive-agents/observe": patch
 ---
+
+**Breaking (types):** `LLMRequestCompleted.estimatedCost` is now optional (absent = price unknown). Migration: replace `total += e.estimatedCost` with `addCost(total, e.estimatedCost)` (or `sumCosts`) and show the total as a lower bound when `complete` is `false`.
 
 `LLMRequestCompleted` can now say when a call's cost is unknown. A new optional `priceSource` field (`"provider-reported" | "price-book" | "user" | "unknown"`, exported as the `PriceSource` type) records where the cost came from. **Contract change:** `estimatedCost` is now optional. Absent means the price is unknown, not zero, so readers that sum it must handle `undefined` (and should mark the total as partial) instead of assuming a number. Producers that still always set a number keep compiling.
 

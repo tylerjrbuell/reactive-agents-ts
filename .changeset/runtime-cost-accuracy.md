@@ -3,6 +3,8 @@
 "@reactive-agents/cost": minor
 ---
 
+**Breaking (types):** the public stream's `TokenUsage.costUsd` is now optional (absent = price unknown), and in `@reactive-agents/cost` `costPer1MInput`, `costPer1MOutput` and `ComplexityAnalysis.estimatedCost` are optional (absent when the model has no known price). Migration: handle `undefined` where you read these fields; for a run's billed total use `await result.totalCost()`.
+
 Run cost now matches what the provider bills, an unknown price is reported as unknown, and a pricing outage no longer breaks `build()`.
 
 **Why your cost numbers change.** Every LLM call is now priced from the PriceBook (see the `@reactive-agents/llm-provider` notes): full usage, per-model cache rates and long-context tiers, from a snapshot cross-checked against the providers' price pages. `result.metadata.cost` is the sum of those per-call prices, so most runs report a different, correct number. The old keyword guesses for unlisted models are gone.

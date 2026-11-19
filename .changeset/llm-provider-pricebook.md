@@ -2,6 +2,8 @@
 "@reactive-agents/llm-provider": minor
 ---
 
+**Breaking (types):** `TokenUsage.estimatedCost` is now optional (absent = price unknown), and `calculateCost` is deprecated, drops its pricing argument and returns `number | undefined`. Migration: handle `undefined` where you read `usage.estimatedCost`; replace `calculateCost(...)` with `priceFor(provider, model)` plus `priceUsage(...)`, or pass custom rates through `withModelPricing`.
+
 Per-call cost now matches the provider's bill, from a bundled price source, and an unknown price is reported as unknown instead of guessed.
 
 **Why your cost numbers change.** The old price table was hand-typed and fell back to a keyword guess for any model it did not list ("mini"/"flash" = cheap, "opus"/"gpt-4" = premium, everything else $3/$15). Every Gemini id matched "mini", so Gemini 3.x/4 were priced up to 25x too low; Claude Opus 4.5+/5.5, gpt-6, gpt-4.1, Groq and xAI models were priced up to 30x too high. Cache discounts were one fixed multiplier per provider (OpenAI 0.5x, Gemini 0.25x, Anthropic read 0.1x) although providers bill per model (gpt-5.x caches at 0.1x, Opus 5.5 reads at 0.05x). Long-context tiers were not modeled. Expect lower numbers for most OpenAI/Anthropic runs with caching, higher numbers for Gemini, and exact numbers for the audit's worked examples (e.g. claude-opus-5-5: $0.27375 before, $0.063 billed and reported now).
