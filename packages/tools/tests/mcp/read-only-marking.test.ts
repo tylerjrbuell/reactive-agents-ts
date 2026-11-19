@@ -16,6 +16,7 @@ const SERVER_TOOLS = [
   { name: "browse", annotations: { readOnlyHint: true, openWorldHint: true } },
   { name: "plain" },
   { name: "write_it", annotations: { readOnlyHint: false } },
+  { name: "post_web", annotations: { readOnlyHint: false, openWorldHint: true } },
 ].map((t) => ({ ...t, description: t.name, inputSchema: { type: "object", properties: {} } }));
 
 const withStub = async <T>(run: (endpoint: string) => Promise<T>): Promise<T> => {
@@ -118,21 +119,42 @@ describe("MCP read-only marking (integration)", () => {
   it("trusted server: readOnlyHint honored; destructive/openWorld/unhinted/false are not", async () => {
     await withStub(async (ep) => {
       const m = await readOnlyMap(ep, { trustAnnotations: true });
-      expect(m).toEqual({ lookup: true, wipe: false, browse: false, plain: false, write_it: false });
+      expect(m).toEqual({
+        lookup: true,
+        wipe: false,
+        browse: false,
+        plain: false,
+        write_it: false,
+        post_web: false,
+      });
     });
   });
 
   it("per-tool list marks only listed names; destructive hint still wins", async () => {
     await withStub(async (ep) => {
       const m = await readOnlyMap(ep, { readOnly: ["plain", "wipe"] });
-      expect(m).toEqual({ lookup: false, wipe: false, browse: false, plain: true, write_it: false });
+      expect(m).toEqual({
+        lookup: false,
+        wipe: false,
+        browse: false,
+        plain: true,
+        write_it: false,
+        post_web: false,
+      });
     });
   });
 
-  it("readOnly: true marks all tools except destructive/openWorld", async () => {
+  it("readOnly: true marks all tools except destructive/openWorld/readOnlyHint:false", async () => {
     await withStub(async (ep) => {
       const m = await readOnlyMap(ep, { readOnly: true });
-      expect(m).toEqual({ lookup: true, wipe: false, browse: false, plain: true, write_it: true });
+      expect(m).toEqual({
+        lookup: true,
+        wipe: false,
+        browse: false,
+        plain: true,
+        write_it: false,
+        post_web: false,
+      });
     });
   });
 });
@@ -149,6 +171,25 @@ describe("classifyMCPToolMutation (seam)", () => {
     expect(classifyMCPToolMutation({ trustAnnotations: true }, "t", { readOnlyHint: false })).toBe(true);
     // openWorld alone is not a write claim.
     expect(classifyMCPToolMutation({ readOnly: true }, "t", { openWorldHint: true })).toBeUndefined();
+  });
+
+  it("precedence: write signals beat openWorld and operator read-only; openWorld beats read-only", () => {
+    // A server that says it writes is believed, even when it also reaches the open world.
+    expect(classifyMCPToolMutation({}, "t", { readOnlyHint: false, openWorldHint: true })).toBe(true);
+    expect(classifyMCPToolMutation({}, "t", { destructiveHint: true, openWorldHint: true })).toBe(true);
+    expect(
+      classifyMCPToolMutation({ trustAnnotations: true }, "t", { readOnlyHint: false, openWorldHint: true }),
+    ).toBe(true);
+    // ...and beats an operator read-only promise (annotations only narrow).
+    expect(classifyMCPToolMutation({ readOnly: true }, "t", { readOnlyHint: false })).toBe(true);
+    expect(classifyMCPToolMutation({ readOnly: ["t"] }, "t", { readOnlyHint: false })).toBe(true);
+    // openWorld still blocks a read classification (fail closed to unknown).
+    expect(
+      classifyMCPToolMutation({ trustAnnotations: true }, "t", { readOnlyHint: true, openWorldHint: true }),
+    ).toBeUndefined();
+    expect(classifyMCPToolMutation({ readOnly: ["t"] }, "t", { openWorldHint: true })).toBeUndefined();
+    // No annotations, no declaration: unknown.
+    expect(classifyMCPToolMutation({}, "t", undefined)).toBeUndefined();
   });
 });
 
@@ -172,6 +213,7 @@ describe("tool effect (read | write | unknown)", () => {
         browse: "unknown",
         plain: "unknown",
         write_it: "write",
+        post_web: "write",
       });
     });
   });
@@ -182,6 +224,7 @@ describe("tool effect (read | write | unknown)", () => {
       expect(m["lookup"]).toBe("unknown");
       expect(m["wipe"]).toBe("write");
       expect(m["write_it"]).toBe("write");
+      expect(m["post_web"]).toBe("write");
       expect(m["plain"]).toBe("unknown");
     });
   });

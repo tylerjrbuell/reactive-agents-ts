@@ -29,24 +29,28 @@ export interface MCPReadOnlyDeclaration {
  * `"unknown"`). Fails closed: `false` needs an operator promise (`readOnly`)
  * or a trusted `readOnlyHint: true`.
  *
- * `destructiveHint: true` or an explicit `readOnlyHint: false` marks the tool
- * `true` (write), even from an untrusted server: a server can only narrow
- * here, so honoring those hints is safe without trust. `destructiveHint: true`
- * also beats an operator listing. `openWorldHint: true` leaves the tool
- * unclassified (it says the tool reaches outside, not that it writes).
+ * Precedence, first match wins:
+ * 1. Write signals: `destructiveHint: true` or an explicit `readOnlyHint:
+ *    false` → `true` (write), even from an untrusted server and even if the
+ *    operator declared the tool read-only. A server can only narrow here, so
+ *    a server that says it writes is believed.
+ * 2. `openWorldHint: true` → `undefined` (unknown). It says the tool reaches
+ *    outside, not that it writes, but it blocks a read classification.
+ * 3. Read-only: operator `readOnly` (all or listed) or a trusted
+ *    `readOnlyHint: true` → `false` (read).
+ * 4. Otherwise `undefined` (unknown).
  */
 export const classifyMCPToolMutation = (
   declaration: MCPReadOnlyDeclaration,
   toolName: string,
   annotations: MCPToolAnnotations | undefined,
 ): boolean | undefined => {
-  if (annotations?.destructiveHint === true) return true;
+  if (annotations?.destructiveHint === true || annotations?.readOnlyHint === false) return true;
   if (annotations?.openWorldHint === true) return undefined;
   const { readOnly, trustAnnotations } = declaration;
   if (readOnly === true) return false;
   if (Array.isArray(readOnly) && readOnly.includes(toolName)) return false;
   if (trustAnnotations === true && annotations?.readOnlyHint === true) return false;
-  if (annotations?.readOnlyHint === false) return true;
   return undefined;
 };
 
