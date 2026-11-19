@@ -86,7 +86,13 @@ const run = (scenario: readonly string[], reply: ToolReply, maxIterations = 1) =
     availableTools: [LIST_SCHEMA.name],
     availableToolSchemas: [LIST_SCHEMA],
     config: withIterations(maxIterations),
-  }).pipe(Effect.provide(Layer.merge(TestLLMServiceLayer(scenario.map((text) => ({ text }))), layer)));
+  }).pipe(Effect.provide(Layer.merge(TestLLMServiceLayer([
+    ...scenario.map((text) => ({ text })),
+    // The answer-writing call over a structured result (answer-synthesis.ts)
+    // answers empty, so the run keeps the program's raw result: these pins
+    // read what the code returned (code-action-effectiveness.test.ts pins the synthesis).
+    { match: "raw data gathered by tools", text: "" },
+  ]), layer)));
   return Effect.runPromise(provideTestEnvelope(program, buildRunEnvelope({})));
 };
 

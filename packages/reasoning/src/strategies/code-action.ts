@@ -29,6 +29,9 @@ import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
 import { buildToolParamNames, generateToolBindings } from "./code-action/tool-binding.js";
 import { shapeSandboxToolArgs } from "./code-action/tool-args.js";
 import { decodeSandboxToolResult, unusableSandboxResult } from "./code-action/sandbox-tool-result.js";
+import { resultShapesSection } from "./code-action/result-shape.js";
+import type { SucceededToolCall } from "./code-action/result-shape.js";
+import { writeCodeActionAnswer } from "./code-action/answer-synthesis.js";
 import type { ToolParamPropertySchema, ToolSpec } from "./code-action/tool-binding.js";
 import { buildPlanPrompt, extractCodeBlock } from "./code-action/code-action-plan.js";
 import { runInSandbox } from "./code-action/sandbox.js";
@@ -242,6 +245,11 @@ export const executeCodeAction = (
     // Tool calls the code made this iteration and the last failure, reset per
     // iteration; the sandbox records only the calls that succeeded.
     const toolAttempts = { attempted: 0, lastFailure: undefined as string | undefined };
+    // Every successful call of the run with its decoded result, kept even when
+    // the sandbox later throws: the repair prompt shows their real shapes and
+    // the false-empty check reads them. `iterationStart` marks this attempt's first.
+    const succeededCalls: SucceededToolCall[] = [];
+    let iterationStart = 0;
     // The one throw site: every refused or failed call surfaces to the code as a thrown error.
     const failCall = (message: string): never => {
       toolAttempts.lastFailure = message;
@@ -288,7 +296,9 @@ export const executeCodeAction = (
             return failCall(`${toolName} failed: ${output.error ?? JSON.stringify(output.result) ?? "no error message"}`);
           }
           // JSON text (how MCP tools return data) arrives decoded.
-          return decodeSandboxToolResult(output.result);
+          const decoded = decodeSandboxToolResult(output.result);
+          succeededCalls.push({ fnName, toolName, args: shaped.args, result: decoded });
+          return decoded;
         });
       });
     }
@@ -359,6 +369,7 @@ export const executeCodeAction = (
       // tokensUsed:0 / llmCalls:0 beside a real plan call in the trace).
       toolAttempts.attempted = 0;
       toolAttempts.lastFailure = undefined;
+      iterationStart = succeededCalls.length;
       const sandboxExit = yield* Effect.either(runInSandbox(generatedCode, toolHandlers)); // substrate-ok: sandbox run is 0-LLM, no run.pass inside
       yield* Effect.forEach(
         budgetRefusals.splice(0),
@@ -419,9 +430,12 @@ export const executeCodeAction = (
           break;
         }
         // Regenerate with the real failure as feedback (same shape as the
-        // verifier-feedback retry below).
+        // verifier-feedback retry below), plus the actual result shapes of the
+        // calls that succeeded first, so the next attempt reads real fields.
+        const shapes = resultShapesSection(succeededCalls.slice(iterationStart));
         const repairUser = [
           `The previous code FAILED to execute. Error: ${lastSandboxError}`,
+          ...(shapes.length > 0 ? [shapes] : []),
           `Previous code:\n\`\`\`typescript\n${generatedCode}\n\`\`\``,
           `\nFix the code and try again. Task: ${input.taskDescription}`,
         ].join("\n\n");
@@ -587,6 +601,7 @@ export const executeCodeAction = (
         attempted: toolAttempts.attempted,
         succeeded: sandboxResult.toolCalls.length,
         lastFailure: toolAttempts.lastFailure,
+        evidence: succeededCalls,
       });
       const verdict: VerifierVerdict = verifyResult.verified && lastUnusable === undefined ? "PASS" : "FAIL";
       lastVerdict = verdict;
@@ -680,12 +695,32 @@ export const executeCodeAction = (
     // completed, else `end_turn`) — never `final_answer` on a give-up (the
     // DEFECT-3 lie), so success and goalAchieved never contradict.
     const producedOutput = resultString.trim().length > 0;
+    const completed = lastUnusable === undefined && lastVerdict === "PASS" && producedOutput;
+
+    // The program's return value is data: a completed run whose result is
+    // structured (or misses a requested format) gets one answer-writing call
+    // through the shared quality gate. A failed or empty call keeps the raw result.
+    const answer = completed
+      ? yield* writeCodeActionAnswer((yield* resolveStrategyServices).llm, {
+          task: input.taskDescription,
+          finalResult: lastResult,
+          rawOutput: resultString,
+          ...(input.taskId !== undefined ? { taskId: input.taskId } : {}),
+        })
+      : undefined;
+    if (answer?.synthesized === true) {
+      run.account({ ...answer, llmCalls: 1 });
+      yield* appendStep(
+        makeStep("thought", `[CODE-ACTION] Answer written from the program result (${resultString.length} chars -> ${answer.output.length} chars)`),
+        "code-action:answer",
+      );
+    }
 
     // code-action runs no kernel: the sandbox's action/observation pairs it
     // recorded reach the run ledger through the substrate (one ledger source).
     return {
       _tag: "Result" as const,
-      output: resultString,
+      output: answer?.output ?? resultString,
       // #40: the verifier verdict is the deterministic completion evidence on
       // this kernel-less path. PASS (incl. the default noopVerifier) with a
       // result is `completed`; anything else ships honestly as `partial`. A
@@ -693,7 +728,7 @@ export const executeCodeAction = (
       // failed) is `failed`, with the reason as the error.
       status: lastUnusable !== undefined
         ? ("failed" as const)
-        : lastVerdict === "PASS" && producedOutput ? ("completed" as const) : ("partial" as const),
+        : completed ? ("completed" as const) : ("partial" as const),
       delivery: { runContract },
       ...(lastUnusable !== undefined ? { error: `code-action produced no answer: ${lastUnusable}` } : {}),
       // Surface the real failure cause when the run died on sandbox errors —
@@ -721,6 +756,7 @@ export const executeCodeAction = (
         toolCallCount: lastToolCalls.length,
         iterations: iteration,
         codeLength: generatedCode.length,
+        answerSynthesized: answer?.synthesized === true,
       },
     };
       }),

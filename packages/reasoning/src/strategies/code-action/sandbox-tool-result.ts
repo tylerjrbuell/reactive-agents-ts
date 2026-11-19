@@ -7,6 +7,9 @@
 // result reached the code as a JSON string, the code read `res.websites` off
 // the string, got undefined, and returned `{ error: "No websites found ..." }`.
 // code-action then shipped that object as a completed answer.
+import { contradictedEmptyAnswer } from "../../kernel/capabilities/verify/contradicted-empty.js";
+import { formatResultShapes } from "./result-shape.js";
+import type { SucceededToolCall } from "./result-shape.js";
 
 /**
  * The value a sandbox tool call resolves to. Text that is a JSON object or
@@ -47,26 +50,43 @@ export function errorShapedResult(value: unknown): string | undefined {
 
 /**
  * Why a sandbox run that finished without throwing still produced no answer,
- * or undefined when its result can be judged as an answer. Two cases:
- * the returned value is only an error (`errorShapedResult`), or the code
- * called tools and every call failed. code-action treats either as a failing
- * verdict: it retries while iterations remain and fails the run at the cap.
+ * or undefined when its result can be judged as an answer. Three cases:
+ * the returned value is only an error (`errorShapedResult`), the code called
+ * tools and every call failed, or the value says nothing was found while a
+ * successful call of the run returned data (`contradictedEmptyAnswer`).
+ * code-action treats each as a failing verdict: it retries while iterations
+ * remain and fails the run at the cap.
  *
  * @param run.finalResult - the value the code returned
  * @param run.attempted - tool calls the code made this iteration
  * @param run.succeeded - tool calls that returned a result
  * @param run.lastFailure - the last failed call's message, if any
+ * @param run.evidence - every successful tool call of the run so far
  */
 export function unusableSandboxResult(run: {
   readonly finalResult: unknown;
   readonly attempted: number;
   readonly succeeded: number;
   readonly lastFailure: string | undefined;
+  /** Every successful tool call of the run so far (all iterations). */
+  readonly evidence?: readonly SucceededToolCall[];
 }): string | undefined {
   const returnedError = errorShapedResult(run.finalResult);
   if (returnedError !== undefined) return `the code returned an error instead of an answer: ${returnedError}`;
   if (run.attempted > 0 && run.succeeded === 0) {
     return `every tool call failed (${run.attempted} attempted)${run.lastFailure !== undefined ? `; last error: ${run.lastFailure}` : ""}`;
+  }
+  // A nothing-found answer the run's own tool results contradict (trace
+  // 01M7T7BJMFHVT2PCHNYWMG9S4P): the code misread a result, it did not find nothing.
+  const evidence = run.evidence ?? [];
+  const contradiction = contradictedEmptyAnswer(
+    run.finalResult,
+    evidence.map((c) => ({ name: c.fnName, result: c.result })),
+  );
+  if (contradiction !== undefined) {
+    const shapes = formatResultShapes(evidence.filter((c) => c.fnName === contradiction.contradictedBy));
+    return `the code returned ${contradiction.answer} (nothing found), but ${contradiction.contradictedBy} returned data. ` +
+      `The code misread a result. Actual result shape:\n${shapes}`;
   }
   return undefined;
 }
