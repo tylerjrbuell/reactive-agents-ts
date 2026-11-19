@@ -28,6 +28,7 @@ import { noopVerifier } from "../kernel/capabilities/verify/noop-verifier.js";
 import type { Verifier } from "../kernel/capabilities/verify/verifier.js";
 import { buildToolParamNames, generateToolBindings } from "./code-action/tool-binding.js";
 import { shapeSandboxToolArgs } from "./code-action/tool-args.js";
+import { decodeSandboxToolResult, unusableSandboxResult } from "./code-action/sandbox-tool-result.js";
 import type { ToolParamPropertySchema, ToolSpec } from "./code-action/tool-binding.js";
 import { buildPlanPrompt, extractCodeBlock } from "./code-action/code-action-plan.js";
 import { runInSandbox } from "./code-action/sandbox.js";
@@ -238,6 +239,14 @@ export const executeCodeAction = (
     const toolHandlers = new Map<string, (args: unknown) => Promise<unknown>>();
     // Budget refusals made inside the sandbox; announced (guard-fired) once it returns.
     const budgetRefusals: { toolName: string; reason: string }[] = [];
+    // Tool calls the code made this iteration and the last failure, reset per
+    // iteration; the sandbox records only the calls that succeeded.
+    const toolAttempts = { attempted: 0, lastFailure: undefined as string | undefined };
+    // The one throw site: every refused or failed call surfaces to the code as a thrown error.
+    const failCall = (message: string): never => {
+      toolAttempts.lastFailure = message;
+      throw new Error(message);
+    };
     if (Option.isSome(toolServiceOpt)) {
       const toolSvc = toolServiceOpt.value;
       // The identifiers the model calls tools by (index-aligned, same derivation the sandbox binds).
@@ -246,6 +255,7 @@ export const executeCodeAction = (
         const toolName = schema.name;
         const fnName = fnNames[i] ?? toolName;
         toolHandlers.set(toolName, async (args: unknown) => {
+          toolAttempts.attempted++;
           // P0-4 safety gate — code-action executes tools inside the sandbox
           // Worker (not the kernel act phase), so this closure is its ONLY
           // dispatch choke point. A blocked tool surfaces to the generated code
@@ -260,7 +270,7 @@ export const executeCodeAction = (
           const refusal = decision.blocked ? decision.message : shaped.error ?? run.toolCallBudget.reserve(toolName);
           if (refusal !== undefined) {
             if (!decision.blocked && shaped.error === undefined) budgetRefusals.push({ toolName, reason: refusal });
-            throw new Error(refusal);
+            return failCall(refusal);
           }
           const output = await Effect.runPromise(
             toolSvc.execute({
@@ -269,8 +279,16 @@ export const executeCodeAction = (
               agentId: input.agentId ?? "code-action-agent",
               sessionId: input.sessionId ?? "code-action-session",
             }),
+          ).catch((cause: unknown) =>
+            failCall(typeof cause === "object" && cause !== null && "message" in cause ? String(cause.message) : String(cause)),
           );
-          return output.result;
+          // A failed ToolOutput throws into the code like any other failure;
+          // it never resolves as a value (trace 01M7T338WQJ4TV6Z6M6T3SNHHP).
+          if (output.success === false) {
+            return failCall(`${toolName} failed: ${output.error ?? JSON.stringify(output.result) ?? "no error message"}`);
+          }
+          // JSON text (how MCP tools return data) arrives decoded.
+          return decodeSandboxToolResult(output.result);
         });
       });
     }
@@ -319,6 +337,8 @@ export const executeCodeAction = (
     let lastVerifySummary = "";
 
     let lastSandboxError: string | null = null;
+    // Set when the last sandbox run finished but its result is not an answer.
+    let lastUnusable: string | undefined;
     let repeatedSandboxFailure = false;
 
     while (!done) {
@@ -337,6 +357,8 @@ export const executeCodeAction = (
       // threw away both the recovery chance AND the tokens already spent
       // (probe p7 2026-07-11: one syntax error ⇒ run failed with
       // tokensUsed:0 / llmCalls:0 beside a real plan call in the trace).
+      toolAttempts.attempted = 0;
+      toolAttempts.lastFailure = undefined;
       const sandboxExit = yield* Effect.either(runInSandbox(generatedCode, toolHandlers)); // substrate-ok: sandbox run is 0-LLM, no run.pass inside
       yield* Effect.forEach(
         budgetRefusals.splice(0),
@@ -347,6 +369,7 @@ export const executeCodeAction = (
       if (sandboxExit._tag === "Left") {
         const previousSandboxError = lastSandboxError;
         lastSandboxError = sandboxExit.left.message;
+        lastUnusable = undefined;
         repeatedSandboxFailure = isRepeatedSandboxFailure(previousSandboxError, lastSandboxError);
         yield* appendStep(
           makeStep(
@@ -557,13 +580,21 @@ export const executeCodeAction = (
         priorSteps: run.steps(),
       });
 
-      const verdict: VerifierVerdict = verifyResult.verified ? "PASS" : "FAIL";
+      // A result that is only an error, or a run where every tool call failed,
+      // is not an answer whatever the verifier says (deterministic, no LLM).
+      lastUnusable = unusableSandboxResult({
+        finalResult: sandboxResult.finalResult,
+        attempted: toolAttempts.attempted,
+        succeeded: sandboxResult.toolCalls.length,
+        lastFailure: toolAttempts.lastFailure,
+      });
+      const verdict: VerifierVerdict = verifyResult.verified && lastUnusable === undefined ? "PASS" : "FAIL";
       lastVerdict = verdict;
-      lastVerifySummary = verifyResult.summary;
+      lastVerifySummary = lastUnusable ?? verifyResult.summary;
       yield* emitLog({
         _tag: "log",
         level: verdict === "PASS" ? "info" : "warn",
-        message: `Code-action verification ${verdict}: ${verifyResult.summary}`,
+        message: `Code-action verification ${verdict}: ${lastVerifySummary}`,
         source: "framework",
         timestamp: new Date(),
       });
@@ -579,7 +610,7 @@ export const executeCodeAction = (
         yield* appendStep(
           makeStep("thought", `[CODE-ACTION] Terminating: verdict=${verdict}, iteration=${iteration}`),
           `code-action:verify:${iteration}`,
-          codeActionData({ code: generatedCode, stdout: observationText, verify: { verdict, summary: verifyResult.summary } }),
+          codeActionData({ code: generatedCode, stdout: observationText, verify: { verdict, summary: lastVerifySummary } }),
         );
         break;
       }
@@ -593,19 +624,19 @@ export const executeCodeAction = (
 
       // ── Retry — regenerate code with verifier feedback ────────────────────
       yield* appendStep(
-        makeStep("thought", `[CODE-ACTION] Retrying (iteration ${iteration}): ${verifyResult.summary}`),
+        makeStep("thought", `[CODE-ACTION] Retrying (iteration ${iteration}): ${lastVerifySummary}`),
         `code-action:verify:${iteration}`,
-        codeActionData({ code: generatedCode, stdout: observationText, verify: { verdict, summary: verifyResult.summary } }),
+        codeActionData({ code: generatedCode, stdout: observationText, verify: { verdict, summary: lastVerifySummary } }),
       );
       yield* emitLog({
         _tag: "warning",
-        message: `Code-action retry scheduled after iteration ${iteration}: ${verifyResult.summary}`,
+        message: `Code-action retry scheduled after iteration ${iteration}: ${lastVerifySummary}`,
         context: "code-action",
         timestamp: new Date(),
       });
 
       const retryUser = [
-        `Previous attempt failed verification. Reason: ${verifyResult.summary}`,
+        `Previous attempt failed verification. Reason: ${lastVerifySummary}`,
         `Previous code:\n\`\`\`typescript\n${generatedCode}\n\`\`\``,
         `Observation:\n${observationText}`,
         `\nTry again. Task: ${input.taskDescription}`,
@@ -657,9 +688,14 @@ export const executeCodeAction = (
       output: resultString,
       // #40: the verifier verdict is the deterministic completion evidence on
       // this kernel-less path. PASS (incl. the default noopVerifier) with a
-      // result is `completed`; anything else ships honestly as `partial`.
-      status: lastVerdict === "PASS" && producedOutput ? ("completed" as const) : ("partial" as const),
+      // result is `completed`; anything else ships honestly as `partial`. A
+      // last result that is not an answer (only an error, or every tool call
+      // failed) is `failed`, with the reason as the error.
+      status: lastUnusable !== undefined
+        ? ("failed" as const)
+        : lastVerdict === "PASS" && producedOutput ? ("completed" as const) : ("partial" as const),
       delivery: { runContract },
+      ...(lastUnusable !== undefined ? { error: `code-action produced no answer: ${lastUnusable}` } : {}),
       // Surface the real failure cause when the run died on sandbox errors —
       // the mint's M7 invariant will force `failed` on the empty
       // output, and this is the message the user sees instead of nothing.
