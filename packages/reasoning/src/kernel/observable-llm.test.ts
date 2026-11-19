@@ -135,7 +135,8 @@ describe("makeObservableLLM — trace correlation via request.traceContext", () 
 
 // Capture ContextPressure events off the bus for a given inner LLM + request.
 const captureContextPressureWith =
-  (inner: ReturnType<typeof makeInnerLLM>) => (request: CompletionRequest) =>
+  (inner: ReturnType<typeof makeInnerLLM>, opts?: { readonly userNumCtx?: number }) =>
+  (request: CompletionRequest) =>
     Effect.gen(function* () {
       const sink = yield* Ref.make<AgentEvent[]>([]);
       const bus = yield* EventBus;
@@ -145,7 +146,7 @@ const captureContextPressureWith =
       yield* Stream.runCollect(stream);
       return yield* Ref.get(sink);
     }).pipe(
-      Effect.provide(Layer.merge(makeObservableLLM().pipe(Layer.provide(inner)), EventBusLive)),
+      Effect.provide(Layer.merge(makeObservableLLM(opts).pipe(Layer.provide(inner)), EventBusLive)),
     );
 
 describe("makeObservableLLM — uniform ContextPressure chokepoint", () => {
@@ -247,6 +248,22 @@ describe("makeObservableLLM — ContextPressure capability fallback (hosted prov
       ),
     );
     expect(captured.length).toBe(0);
+  }, 15000);
+
+  it("per-agent userNumCtx gives a fallback model id the agent's window (no registry row)", async () => {
+    const { _resetProbedRegistryForTesting, resolveCapability } = await import("@reactive-agents/llm-provider");
+    _resetProbedRegistryForTesting();
+    expect(resolveCapability("openai", "zz-unknown-model-xyz").source).toBe("fallback");
+    const captured = await Effect.runPromise(
+      captureContextPressureWith(hostedInner("openai", usageOnlyEvents(false)), { userNumCtx: 8000 })(
+        cpRequest("zz-unknown-model-xyz"),
+      ),
+    );
+    expect(captured.length).toBe(1);
+    const cp = captured[0]! as Extract<AgentEvent, { _tag: "ContextPressure" }>;
+    expect(cp.tokensAvailable).toBe(8000 - 1000);
+    // Per call only: the process-wide registry still resolves the fallback.
+    expect(resolveCapability("openai", "zz-unknown-model-xyz").source).toBe("fallback");
   }, 15000);
 
   it("provider-set window wins over the capability row", async () => {

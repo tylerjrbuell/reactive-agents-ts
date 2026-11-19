@@ -198,9 +198,17 @@ function registryLookupKey(
  * model, so tiering must not trust it — the caller falls to the
  * provisional name-regex path.
  *
+ * `userNumCtx` (the agent's `.withModel({ numCtx })`) goes to the resolver
+ * per call: a fallback model id resolves the `source: "user"` row for this
+ * agent only, never through a process-wide registry row.
+ *
  * @returns The registry tier, or null on miss / unconsultable provider.
  */
-export function tierFromRegistry(model: string, provider?: string): ModelTier | null {
+export function tierFromRegistry(
+  model: string,
+  provider?: string,
+  userNumCtx?: number,
+): ModelTier | null {
   const key = registryLookupKey(model, provider);
   if (key === null) return null;
   // GH #239 (replaces the W2b provider-name carve-out): stub truth is
@@ -209,7 +217,7 @@ export function tierFromRegistry(model: string, provider?: string): ModelTier | 
   // about a model — so ANY consumer consulting the registry read path gets
   // "do not arbitrate" for free, instead of duplicating a provider-string
   // special case per call site (which Wave 3b was about to become).
-  const cap = resolveCapability(key.providerKey, key.modelKey);
+  const cap = resolveCapability(key.providerKey, key.modelKey, { userNumCtx });
   if (cap.nominal === true) return null;
   return cap.source === "fallback" ? null : cap.tier;
 }
@@ -275,12 +283,19 @@ export function resolveProfile(
  * provisional name-regex path and marks the returned profile
  * `provisionalTier: true`. Window binding is unchanged (already
  * registry-fed via `applyCapabilityMaxTokens`).
+ *
+ * `opts.userNumCtx` is the agent's declared window (`.withModel({ numCtx })`).
+ * It reaches both the tier read and the window binding per call, so a numCtx
+ * agent on a fallback model id keeps its window without any process-wide
+ * capability row. Absent ⇒ unchanged behavior.
  */
 export function resolveProfileWithWindow(
   model: string,
   provider?: string,
+  opts?: { readonly userNumCtx?: number },
 ): ContextProfile {
-  const registryTier = tierFromRegistry(model, provider);
+  const userNumCtx = opts?.userNumCtx;
+  const registryTier = tierFromRegistry(model, provider, userNumCtx);
   const base =
     registryTier !== null
       ? CONTEXT_PROFILES[registryTier]
@@ -289,5 +304,5 @@ export function resolveProfileWithWindow(
         // routing) can tell an unverified tier from an arbiter verdict.
         // Registry-hit profiles keep CONTEXT_PROFILES identity (no spread).
         { ...resolveProfile(model, undefined, provider), provisionalTier: true };
-  return applyCapabilityMaxTokens(base, provider, model, undefined);
+  return applyCapabilityMaxTokens(base, provider, model, undefined, userNumCtx);
 }

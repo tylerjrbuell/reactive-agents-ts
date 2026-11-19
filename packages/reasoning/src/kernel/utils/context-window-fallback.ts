@@ -15,17 +15,21 @@ import { resolveCapability } from "@reactive-agents/llm-provider";
  * capability row supplies `maxContextTokens`. Ollama is excluded: its real
  * `num_ctx` may differ from the table, so a missing reading stays missing.
  *
+ * @param userNumCtx - the window this agent declared (`.withModel({ numCtx })`).
+ *   Passed per call to `resolveCapability`, so a fallback model id resolves a
+ *   `source: "user"` row for this agent only; no process-wide registry row.
  * @returns window in tokens, or 0 when unknown.
  */
 export function resolveContextWindow(
   providerSet: number | undefined,
   provider: string | undefined,
   model: string | undefined,
+  userNumCtx?: number,
 ): number {
   if (typeof providerSet === "number" && providerSet > 0) return providerSet;
   if (!provider || !model || provider === "ollama" || provider === "unknown") return 0;
   try {
-    const cap = resolveCapability(provider, model);
+    const cap = resolveCapability(provider, model, { userNumCtx });
     return cap.source !== "fallback" && cap.maxContextTokens > 0 ? cap.maxContextTokens : 0;
   } catch {
     return 0;

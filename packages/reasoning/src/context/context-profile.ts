@@ -219,15 +219,20 @@ export const mergeProfile = (
  *
  * Pure / synchronous — `resolveCapability` is a sync three-tier lookup
  * (cache → static table → conservative fallback 2048).
+ *
+ * `userNumCtx` is the window this agent declared (`.withModel({ numCtx })`),
+ * applied to this resolve only: on a fallback/inferred model it becomes the
+ * `recommendedNumCtx`, with no process-wide registry row.
  */
 export function applyCapabilityMaxTokens(
   profile: ContextProfile,
   providerName: string | undefined,
   modelId: string | undefined,
   callerProvidedMaxTokens: number | undefined,
+  userNumCtx?: number,
 ): ContextProfile {
   if (!providerName || !modelId) return profile;
-  const cap = resolveCapability(providerName, modelId);
+  const cap = resolveCapability(providerName, modelId, { userNumCtx });
   // thinkingModel threads regardless of the maxTokens resolution — it is
   // orthogonal metadata the kernel needs for its per-turn output budget (B2).
   const withThinking = cap.supportsThinkingMode

@@ -167,13 +167,24 @@ function resolveProviderLabel(request: CompletionRequest, providerId: string | u
   return (typeof request.model === "object" ? request.model?.provider : undefined) ?? providerId ?? "unknown";
 }
 
+/**
+ * What the wrapped service knows about its provider, fixed at layer build:
+ * the provider id (`getModelConfig`) and the agent's declared window
+ * (`.withModel({ numCtx })`), which the ContextPressure fallback passes per
+ * call to the capability resolver.
+ */
+interface ProviderFacts {
+  readonly id: string | undefined;
+  readonly userNumCtx?: number;
+}
+
 function emitForRequest(
   request: CompletionRequest,
   responseContent: string,
   durationMs: number,
   kind: "complete" | "stream" | "completeStructured",
-  fullResponse?: PartialCompletion,
-  providerId?: string,
+  fullResponse: PartialCompletion | undefined,
+  provider: ProviderFacts,
   failure?: LlmFailure,
 ): Effect.Effect<void, never> {
   // Adaptive-harness wave 1 (2026-07-07): ambient fallback for correlation.
@@ -183,7 +194,7 @@ function emitForRequest(
   // placeholder — never a wrong attribution.
   return currentRunContext.pipe(
     Effect.flatMap((ambient) =>
-      emitForRequestWith(request, responseContent, durationMs, kind, fullResponse, ambient ? runTaskId(ambient) : undefined, providerId, failure),
+      emitForRequestWith(request, responseContent, durationMs, kind, fullResponse, ambient ? runTaskId(ambient) : undefined, provider, failure),
     ),
   );
 }
@@ -195,10 +206,11 @@ function emitForRequestWith(
   kind: "complete" | "stream" | "completeStructured",
   fullResponse: PartialCompletion | undefined,
   ambientTaskId: string | undefined,
-  providerId?: string,
+  provider: ProviderFacts,
   /** Set when the call FAILED: recorded on the exchange as `response.error` + `stopReason:"error"`. */
   failure?: LlmFailure,
 ): Effect.Effect<void, never> {
+  const providerId = provider.id;
   // Uniform ContextPressure: emit from this single chokepoint (all strategy
   // paths flow through here, including eventBus-less plan-execute/reflexion
   // sub-kernels) when the call is correlated to a real run (traceContext.taskId
@@ -213,6 +225,7 @@ function emitForRequestWith(
     fullResponse?.resolvedParams?.contextWindow,
     typeof request.model === "object" ? (request.model?.provider ?? providerId) : providerId,
     typeof request.model === "string" ? request.model : (request.model?.model ?? fullResponse?.model),
+    provider.userNumCtx,
   );
   const contextPressure =
     taskId !== undefined && taskId.length > 0 && tokensUsed > 0 && contextWindow > 0
@@ -388,8 +401,15 @@ const emitLLMRequestStarted = (
  * Layer that wraps an upstream LLMService to emit `LLMExchangeEmitted` on
  * every complete/completeStructured call. Apply after rate limiting; the
  * order is: provider → rate-limited → observable.
+ *
+ * @param opts.userNumCtx - the agent's declared window (`.withModel({ numCtx })`).
+ *   The ContextPressure fallback passes it per call to the capability
+ *   resolver, so a numCtx agent on a fallback model id still gets a gauge
+ *   without a process-wide capability row. Absent ⇒ unchanged behavior.
  */
-export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> =>
+export const makeObservableLLM = (
+  opts?: { readonly userNumCtx?: number },
+): Layer.Layer<LLMService, never, LLMService> =>
   Layer.effect(
     LLMService,
     Effect.gen(function* () {
@@ -401,6 +421,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
         Effect.map((c) => c?.provider),
         Effect.catchAllDefect(() => Effect.succeed(undefined)),
       );
+      const facts: ProviderFacts = { id: providerId, userNumCtx: opts?.userNumCtx };
       return {
         complete: (request) =>
           Effect.gen(function* () {
@@ -408,7 +429,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             yield* emitLLMRequestStarted(request, "complete", providerId);
             const response = yield* inner.complete(request).pipe(
               Effect.tapError((err) =>
-                emitForRequest(request, "", Date.now() - start, "complete", undefined, providerId, describeLlmFailure(err)),
+                emitForRequest(request, "", Date.now() - start, "complete", undefined, facts, describeLlmFailure(err)),
               ),
             );
             // Run-scoped budget accounting (Issue #231): feed the ambient meter
@@ -423,7 +444,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
               outputTokens: response.usage?.outputTokens,
               llmCalls: 1,
             });
-            yield* emitForRequest(request, response.content, Date.now() - start, "complete", response, providerId);
+            yield* emitForRequest(request, response.content, Date.now() - start, "complete", response, facts);
             return response;
           }),
         completeStructured: <A>(request: StructuredCompletionRequest<A>) =>
@@ -446,7 +467,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                 Effect.gen(function* () {
                   const report = yield* readStructuredCallReport;
                   if (hasReportedUsage(report.usage)) yield* addRunSpend(structuredCallSpend(report.usage));
-                  yield* emitForRequest(request, "", Date.now() - start, "completeStructured", structuredExchangeFields(report), providerId, describeLlmFailure(err));
+                  yield* emitForRequest(request, "", Date.now() - start, "completeStructured", structuredExchangeFields(report), facts, describeLlmFailure(err));
                 }),
               ),
             );
@@ -468,7 +489,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
               Date.now() - start,
               "completeStructured",
               structuredExchangeFields(report),
-              providerId,
+              facts,
             );
             return result;
           }),
@@ -507,7 +528,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
             }>({ content: "", toolCalls: [] });
             const innerStream = yield* inner.stream(request).pipe(
               Effect.tapError((err) =>
-                emitForRequestWith(request, "", Date.now() - start, "stream", undefined, ambientTaskId, providerId, describeLlmFailure(err)),
+                emitForRequestWith(request, "", Date.now() - start, "stream", undefined, ambientTaskId, facts, describeLlmFailure(err)),
               ),
             );
             return innerStream.pipe(
@@ -676,7 +697,7 @@ export const makeObservableLLM = (): Layer.Layer<LLMService, never, LLMService> 
                         : {}),
                     },
                     ambientTaskId,
-                    providerId,
+                    facts,
                     failure,
                   );
                 }),
