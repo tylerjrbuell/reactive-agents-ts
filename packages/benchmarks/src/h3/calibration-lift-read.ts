@@ -31,7 +31,9 @@ export function calibrationOfTrace(traceFile: string | null): { readonly calibra
   if (!started) return null
   const config = (started.config ?? {}) as Record<string, unknown>
   const calibration = (config.calibration ?? null) as CalibrationRecord | null
-  const aoa = config.actOrAnswerSource
+  // The runtime writes it under config.mechanisms (execute-run-config.ts), not at the config root.
+  const mechanisms = (config.mechanisms ?? {}) as Record<string, unknown>
+  const aoa = mechanisms.actOrAnswerSource ?? config.actOrAnswerSource
   return { calibration, actOrAnswerSource: typeof aoa === "string" ? aoa : aoa == null ? null : JSON.stringify(aoa) }
 }
 
