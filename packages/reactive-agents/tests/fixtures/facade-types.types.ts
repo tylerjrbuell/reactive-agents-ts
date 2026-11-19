@@ -4,7 +4,19 @@
  * runtime. Pins type names the facade must re-export, so users do not
  * redeclare them (the examples redeclared `ProviderName` before 2026-11-17).
  */
-import type { JudgmentShadowOptions, ProviderName } from "../../src/index.js";
+import type {
+  CodeActionApprovalConflict,
+  CodeActionApprovalConflictInput,
+  JudgmentShadowOptions,
+  ProviderName,
+} from "../../src/index.js";
+
+// Code-action approval rule (audit G6): apps check it without importing reasoning.
+export const conflictInput: CodeActionApprovalConflictInput = {
+  callableTools: ["file-write"],
+  policy: { tools: new Set(["file-write"]) },
+};
+export const conflict: CodeActionApprovalConflict = { refuse: true, gatedCallable: ["file-write"], requireFor: false };
 
 export const provider: ProviderName = "anthropic";
 

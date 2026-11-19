@@ -25,6 +25,7 @@ import { runSession } from "../runner.js"
 import { applySearchKeysFromEnvFiles, searchBackendConfigured } from "../search-env.js"
 import { isSolved } from "../report-format.js"
 import type { BenchmarkTask, HarnessVariant, InternalVariant, ModelVariant } from "../types.js"
+import { CalibrationArmError } from "../calibration-arm-error.js"
 import { H3_TASKS } from "./tasks.js"
 import { H3_SELECTABLE_TASKS } from "./tasks-v2.js"
 import { LH_TASKS } from "./long-horizon-tasks.js"
@@ -75,7 +76,7 @@ export function calibrationArmVariant(tier: string, env: Readonly<Record<string,
     : v === "swap" && partner ? { swapFrom: partner }
     : v.startsWith("swap:") && v.length > 5 ? { swapFrom: v.slice(5) }
     : null
-  if (!calibration) throw new Error(`RA_BENCH_CALIBRATION: expected skip | auto | swap | swap:<modelId> (swap needs tier cogito:8b or qwen3:4b), got ${v} for ${tier}`)
+  if (!calibration) throw new CalibrationArmError({ message: `RA_BENCH_CALIBRATION: expected skip | auto | swap | swap:<modelId> (swap needs tier cogito:8b or qwen3:4b), got ${v} for ${tier}` })
   return { ...H3_VARIANT, config: { ...H3_VARIANT.config, calibration } }
 }
 

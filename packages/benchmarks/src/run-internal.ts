@@ -17,6 +17,7 @@ import type {
 } from "./types.js"
 import { COMPETITOR_RUNNERS } from "./competitors/index.js"
 import { mergeConfigs } from "./session.js"
+import { CalibrationArmError } from "./calibration-arm-error.js"
 
 /**
  * Apply env vars for the duration of a variant's run, return a restore fn.
@@ -268,7 +269,7 @@ async function runInternal(
       if (typeof config.calibration === "string") builder.withCalibration(config.calibration)
       else {
         const swapped = loadCalibration(config.calibration.swapFrom)
-        if (!swapped) throw new Error(`calibration swapFrom: no shipped calibration for ${config.calibration.swapFrom}`)
+        if (!swapped) throw new CalibrationArmError({ message: `calibration swapFrom: no shipped calibration for ${config.calibration.swapFrom}` })
         builder.withCalibration(swapped)
       }
     }

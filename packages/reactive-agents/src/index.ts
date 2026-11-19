@@ -186,6 +186,10 @@ export type {
 
 export { DEFAULT_JUDGE_RANK_CHUNK_CAP } from "@reactive-agents/runtime";
 
+// ─── Approval policy: the code-action refusal rule, for pre-run warnings ───
+export { codeActionApprovalConflict } from "@reactive-agents/runtime";
+export type { CodeActionApprovalConflict, CodeActionApprovalConflictInput } from "@reactive-agents/runtime";
+
 // ─── Judgment (calibrated Choice/Score/Noul typed judgments) ───
 
 export {

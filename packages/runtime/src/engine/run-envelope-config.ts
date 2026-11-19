@@ -94,6 +94,14 @@ export type RunEnvelopeExtras = Pick<
    * envelope itself.
    */
   readonly runTask?: string;
+  /**
+   * Registered tools the approval policy must gate in addition to the
+   * configured list: tools registered after build (MCP, sub-agent tools,
+   * `registerTool`). Read per pass by `registeredApprovalTools`. Ignored when
+   * the agent has no approval policy. Carried on EVERY pass: a continuation
+   * that could call the tool must gate it too.
+   */
+  readonly gatedTools?: readonly string[];
 };
 
 /**
@@ -138,7 +146,7 @@ export function buildRunEnvelopeFromConfig(
   config: ReactiveAgentsConfig,
   extras: RunEnvelopeExtras = {},
 ): RunEnvelopeData {
-  const { environmentUpdate, posture, runTask, ...buildExtras } = extras;
+  const { environmentUpdate, posture, runTask, gatedTools = [], ...buildExtras } = extras;
   const live = approvalWaitsLive(config);
   const envelope = buildRunEnvelope({
     taskContract:
@@ -160,7 +168,7 @@ export function buildRunEnvelopeFromConfig(
           // A live `detach` wait is the kernel's in-process (`block`) seam with
           // the human gate as its decider; see `approvalWaitsLive`.
           mode: live ? "block" : config.approvalPolicy.mode,
-          tools: new Set(config.approvalPolicy.tools),
+          tools: new Set([...config.approvalPolicy.tools, ...gatedTools]),
           requireFor: config.approvalPolicy.requireFor,
           // Shell command rules; the agent's shells hold the same list
           // (`approvalCommandsOf`), so a matched write runs only once approved.

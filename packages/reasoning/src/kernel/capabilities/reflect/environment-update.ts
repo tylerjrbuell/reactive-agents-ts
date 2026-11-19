@@ -9,11 +9,17 @@
  *    renders in the `Guidance:` block (never a stray USER message — pitfall #9);
  *  - once: a signal-ledger entry of kind `environment-update` marks it consumed,
  *    so later iterations (and resumed passes) never repeat it;
+ *  - once per RUN: the envelope merges the notice into every kernel pass, and a
+ *    fresh pass starts with an empty signal ledger, so a multi-pass strategy
+ *    (reflexion improve, plan-execute steps, a switch) re-showed it per pass
+ *    (audit G10). A run slot latches consumption across passes (`reset` for
+ *    sub-agents). Outside a run scope a bare pass is its own run: ledger only;
  *  - observable: `harness-signal-injected` (origin "environment-update") plus a
  *    rendered ledger signal so `signal-rendered` / `signal-effect` fire.
  * Deterministic (golden rule 5); no LLM.
  */
 import { Effect } from "effect";
+import { currentRunContext, getRunSlot, runSlot, type RunSlot } from "@reactive-agents/core/internal/run-scope";
 import { markRendered, openSignal, type SignalLedger } from "../../state/signal-ledger.js";
 import { emitHarnessSignalInjected } from "../../utils/diagnostics.js";
 
@@ -27,6 +33,22 @@ declare module "../../state/kernel-state.js" {
 }
 
 export const ENVIRONMENT_UPDATE_SIGNAL_KIND = "environment-update";
+
+/** Whether this run already consumed its environment notice. Mutated in place. */
+export interface EnvironmentUpdateLatch {
+  shown: boolean;
+}
+
+/** The run's notice latch (fresh per run; `reset` for sub-agents, which are their own run). */
+export const environmentUpdateShownSlot: RunSlot<EnvironmentUpdateLatch> = runSlot<EnvironmentUpdateLatch>(
+  "reasoning.environmentUpdateShown",
+  { child: "reset", fresh: () => ({ shown: false }) },
+);
+
+/** The active run's latch, or `null` outside a run scope (the slot's process fallback would be shared). */
+const runLatch: Effect.Effect<EnvironmentUpdateLatch | null> = Effect.flatMap(currentRunContext, (run) =>
+  run === null ? Effect.succeed(null) : getRunSlot(environmentUpdateShownSlot),
+);
 
 export interface EnvironmentUpdateStep {
   readonly notice?: string;
@@ -52,10 +74,18 @@ export function stepEnvironmentUpdate(args: {
    */
   readonly suppressed?: boolean;
 }): Effect.Effect<EnvironmentUpdateStep> {
+  return Effect.flatMap(runLatch, (latch) => seedNotice(args, latch));
+}
+
+function seedNotice(
+  args: Parameters<typeof stepEnvironmentUpdate>[0],
+  latch: EnvironmentUpdateLatch | null,
+): Effect.Effect<EnvironmentUpdateStep> {
   const signals = args.signalLedger ?? [];
-  const consumed = signals.some((s) => s.signalKind === ENVIRONMENT_UPDATE_SIGNAL_KIND);
+  const consumed = latch?.shown === true || signals.some((s) => s.signalKind === ENVIRONMENT_UPDATE_SIGNAL_KIND);
   const notice = args.pending ?? (consumed ? undefined : args.inputNotice);
   if (notice === undefined || notice.trim().length === 0 || consumed) return Effect.succeed({});
+  if (latch !== null) latch.shown = true;
   const opened = openSignal(signals, {
     signalKind: ENVIRONMENT_UPDATE_SIGNAL_KIND,
     origin: "environment-update",

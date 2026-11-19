@@ -307,6 +307,13 @@ export {
 } from "./services/run-store.js";
 export { listDurableRuns } from "./engine/durable-resume.js";
 
+// ─── Code-action approval rule (audit G6): the check the strategy applies ───
+export {
+  codeActionApprovalConflict,
+  type CodeActionApprovalConflict,
+  type CodeActionApprovalConflictInput,
+} from "./approval-scope.js";
+
 // ─── Goal supervisor (plan 2026-10-29 A1): consumed by Cortex's chat goals ───
 export {
   evaluateGoal,

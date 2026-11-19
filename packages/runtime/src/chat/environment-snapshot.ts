@@ -200,13 +200,19 @@ export class EnvironmentTracker {
     return this.enabled && this.ports.environment ? snapshotEnvironment(this.ports.environment()) : undefined;
   }
 
-  /** Turn start: diff, publish `EnvironmentChanged` on a non-empty diff, return the notice. */
-  async begin(): Promise<string | undefined> {
+  /**
+   * Turn start: diff, publish `EnvironmentChanged` on a non-empty diff, return the notice.
+   *
+   * @param hasPriorTurn - Whether the conversation already holds a turn. Without
+   *   one there is no "last turn" to compare against (audit G10): the current
+   *   environment becomes the baseline, even over a seed, and no notice is sent.
+   */
+  async begin(hasPriorTurn: boolean): Promise<string | undefined> {
     const cur = this.#current();
     if (!cur) return undefined;
-    const prev = this.#prev;
-    // First turn: baseline only, never a notice.
-    this.#prev ??= cur;
+    const prev = hasPriorTurn ? this.#prev : undefined;
+    // First turn of the conversation: baseline only, never a notice.
+    if (!prev) this.#prev = cur;
     if (!prev) return undefined;
     const changes = diffEnvironment(prev, cur);
     if (changes.length === 0) return undefined;

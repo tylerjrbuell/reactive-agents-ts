@@ -27,6 +27,7 @@ import { extractTaskText, isEnforcedAbstention, normalizeReasoningResult } from 
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { readPosture } from "../../../chat/todo-seed.js";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
+import { registeredApprovalTools } from "../../registered-approval-tools.js";
 import { asExecutionContextEffect } from "./as-execution-context-effect.js";
 import { calibrationRequestFields } from "./setup/calibration.js";
 
@@ -136,7 +137,12 @@ export const runVerificationThinkRetry = (
         // `.withFabricationGuard("block")` replaced a correct, tool-grounded
         // answer with the abstention sentinel. The evidence is in the FIRST
         // pass, which was judged as the terminal it is.
-        envelope: buildRunEnvelopeFromConfig(config, { auxiliaryPass: true, posture: readPosture(task), runTask: extractTaskText(task.input) }),
+        envelope: buildRunEnvelopeFromConfig(config, {
+          auxiliaryPass: true,
+          posture: readPosture(task),
+          runTask: extractTaskText(task.input),
+          gatedTools: yield* registeredApprovalTools(config),
+        }),
       });
       const retryOutcome = yield* Effect.exit(retryEffect);
       if (retryOutcome._tag === "Success") {

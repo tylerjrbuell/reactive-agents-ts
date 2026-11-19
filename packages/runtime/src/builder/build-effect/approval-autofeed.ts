@@ -23,16 +23,39 @@ import type {
   ConfiguredApprovalPolicy,
 } from "@reactive-agents/reasoning";
 
-interface ApprovalFlaggable {
+/** The slice of a tool definition that decides whether it needs approval. */
+export interface ApprovalFlaggable {
   readonly name: string;
   readonly requiresApproval?: boolean;
+  readonly source?: string;
+  readonly mutatesExternalState?: boolean;
 }
 
-/** Names of tool definitions that declare `requiresApproval: true`. Pure. */
+/**
+ * True when an approval policy must gate this tool.
+ *
+ * - Any tool that declares `requiresApproval: true`.
+ * - An MCP tool that writes (`mutatesExternalState: true`). MCP tools cannot
+ *   declare `requiresApproval`; the MCP-native signal is the server's
+ *   `destructiveHint: true` / `readOnlyHint: false` annotation, which
+ *   `connectMCPServer` turns into `mutatesExternalState: true`. A server can
+ *   only narrow with these hints, so honoring them without trust is safe.
+ *
+ * An MCP tool whose effect is unknown (no annotation, no operator promise)
+ * follows the rule for custom tools that omit the flag: it is NOT gated by
+ * default. Gate it by name in `policy.tools` or with `requireFor`. A tool
+ * declared read-only is never gated here.
+ */
+export function toolNeedsApproval(def: ApprovalFlaggable): boolean {
+  if (def.requiresApproval === true) return true;
+  return def.source === "mcp" && def.mutatesExternalState === true;
+}
+
+/** Names of tool definitions that need approval ({@link toolNeedsApproval}). Pure. */
 export function requiresApprovalToolNames(
   defs: readonly ApprovalFlaggable[],
 ): readonly string[] {
-  return defs.filter((d) => d.requiresApproval === true).map((d) => d.name);
+  return defs.filter(toolNeedsApproval).map((d) => d.name);
 }
 
 /**

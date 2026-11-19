@@ -35,6 +35,20 @@ describe("Umbrella re-exports", () => {
     expect(typeof mod.registerShutdownHandlers).toBe("function");
   });
 
+  test("codeActionApprovalConflict is on the main entry and applies the strategy's rule", async () => {
+    const mod = await import("../src/index.js");
+    const gated = mod.codeActionApprovalConflict({
+      callableTools: ["web-search", "file-write"],
+      policy: { tools: new Set(["file-write"]) },
+    });
+    expect(gated).toEqual({ refuse: true, gatedCallable: ["file-write"], requireFor: false });
+    const unreachable = mod.codeActionApprovalConflict({
+      callableTools: ["web-search"],
+      policy: { tools: new Set(["file-write"]) },
+    });
+    expect(unreachable.refuse).toBe(false);
+  });
+
   test("layer-factory and tool re-exports are functions", async () => {
     const mod = await import("../src/index.js");
 

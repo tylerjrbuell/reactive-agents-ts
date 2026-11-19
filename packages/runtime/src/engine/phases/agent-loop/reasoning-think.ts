@@ -20,6 +20,7 @@ import { taskOriginalContent } from "../../../agent/task-input.js";
 import type { ModelCalibration } from "@reactive-agents/llm-provider";
 import { classifyTask, deserializeKernelState } from "@reactive-agents/reasoning";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
+import { registeredApprovalTools } from "../../registered-approval-tools.js";
 import { readPosture, readTodoSeed } from "../../../chat/todo-seed.js";
 import { adoptedPlan, readPlanExec, readPlanOnly } from "../../../agent/plan-executor.js";
 import { readPlanFindings } from "../../../chat/plan-findings.js";
@@ -435,6 +436,8 @@ export const runReasoningThink = (
         environmentUpdate: readEnvironmentUpdate(task),
         posture: readPosture(task),
         runTask: extractTaskText(task.input),
+        // Tools registered after build (MCP, sub-agent tools) that need approval.
+        gatedTools: yield* registeredApprovalTools(config),
       }),
     };
 

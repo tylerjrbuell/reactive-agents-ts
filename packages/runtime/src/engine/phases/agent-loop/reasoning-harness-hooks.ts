@@ -34,6 +34,7 @@ import { calibrationRequestFields } from "./setup/calibration.js";
 import type { ReasoningServiceLike } from "../../types-reasoning.js";
 import { readPosture } from "../../../chat/todo-seed.js";
 import { buildRunEnvelopeFromConfig } from "../../run-envelope-config.js";
+import { registeredApprovalTools } from "../../registered-approval-tools.js";
 import { absorbedLedgerMetadata } from "../../run-ledger-scope.js";
 import { addedRunKernelTurns, passKernelTurns, readRunKernelTurns } from "../../run-kernel-turns.js";
 
@@ -132,6 +133,7 @@ export const runReasoningHarnessHooks = (
       auxiliaryPass: true,
       posture: readPosture(task),
       runTask: extractTaskText(task.input),
+      gatedTools: yield* registeredApprovalTools(config),
     });
 
     // Common request builder for the three "continue working" style hooks.

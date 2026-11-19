@@ -9,7 +9,13 @@ import { Effect } from "effect";
 
 const base: EnvironmentSnapshotInput = { provider: "ollama", model: "qwen3:8b", toolNames: ["a"] };
 
-function mk(env: EnvironmentSnapshotInput, initialEnvironment?: EnvironmentSnapshotInput) {
+// A rebuilt engine continues a conversation: the seed rides with its history.
+const priorTurns = [
+  { role: "user" as const, content: "earlier question", timestamp: 0 },
+  { role: "assistant" as const, content: "earlier answer", timestamp: 0 },
+];
+
+function mk(env: EnvironmentSnapshotInput, initialEnvironment?: EnvironmentSnapshotInput, withHistory = true) {
   const events: EnvironmentChangedEvent[] = [];
   const notices: Array<string | undefined> = [];
   const engine = new ChatEngine(
@@ -22,7 +28,7 @@ function mk(env: EnvironmentSnapshotInput, initialEnvironment?: EnvironmentSnaps
       environment: () => env,
       publishEnvironment: async (e) => void events.push(e),
     },
-    { sessionId: "s", ...(initialEnvironment ? { initialEnvironment } : {}) },
+    { sessionId: "s", ...(initialEnvironment ? { initialEnvironment } : {}), ...(withHistory ? { initialHistory: priorTurns } : {}) },
   );
   return { engine, events };
 }
@@ -44,6 +50,35 @@ describe("seam: ChatEngine initialEnvironment seed", () => {
     const { engine, events } = mk(base, base);
     await turn(engine);
     expect(events).toHaveLength(0);
+  });
+  // G10 (2026-11-18): a fresh conversation has no "last turn", so a stale seed
+  // (provider switched, to-do list cleared before the first message) must not
+  // reach the model. The current environment becomes the baseline instead.
+  it("seeded, changed, but no prior turn => none; next turn diffs from the current state", async () => {
+    let env: EnvironmentSnapshotInput = { ...base, model: "qwen3:14b" };
+    const events: EnvironmentChangedEvent[] = [];
+    const notices: Array<string | undefined> = [];
+    const engine = new ChatEngine(
+      {
+        complete: async () => ({ message: "ok" }),
+        runTask: async (_i, o) => {
+          notices.push(o.environmentUpdate);
+          return { output: "ok", metadata: { tokensUsed: 1, stepsCount: 1, cost: 0, duration: 0 } } as never;
+        },
+        environment: () => env,
+        publishEnvironment: async (e) => void events.push(e),
+      },
+      { sessionId: "s", initialEnvironment: { ...base, todoUserEdits: { added: 0, removed: 0 } } },
+    );
+    env = { ...env, todoUserEdits: { added: 0, removed: 4 } };
+    await engine.turn("hi", { useTools: true });
+    expect(events).toHaveLength(0);
+    expect(notices).toEqual([undefined]);
+    await engine.turn("again", { useTools: true });
+    expect(events).toHaveLength(0);
+    env = { ...env, model: "qwen3:32b" };
+    await engine.turn("third", { useTools: true });
+    expect(events.flatMap((e) => e.changes.map((c) => c.summary))).toEqual(["Model switched to qwen3:32b."]);
   });
 });
 

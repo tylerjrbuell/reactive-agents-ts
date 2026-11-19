@@ -344,7 +344,7 @@ export class ChatEngine {
   async #turn(input: TaskInput, options?: TurnOptions): Promise<ChatReply> {
     const message = taskInputText(input);
     await this.#resolveLoadedHistory();
-    const environmentUpdate = await this.#env.begin();
+    const environmentUpdate = await this.#env.begin(this.#history.length > 0);
     if ((options?.useTools ?? this.#deps.toolIntent?.(message)) === true || taskInputHasMedia(input)) {
       if (!this.#deps.runTask) {
         throw new ChatEngineCapabilityError({
@@ -456,7 +456,7 @@ export class ChatEngine {
     async function* locked(): AsyncGenerator<AgentStreamEvent> {
       await engine.#resolveLoadedHistory();
       const history = await engine.#historyForPath();
-      const environmentUpdate = await engine.#env.begin();
+      const environmentUpdate = await engine.#env.begin(engine.#history.length > 0);
       const handle = streamTask(input, {
         history,
         ...(environmentUpdate ? { environmentUpdate } : {}), ...planPosture(turnPosture(engine.#mode, options?.posture)), ...originCarry(options?.origin ?? engine.#origin),
