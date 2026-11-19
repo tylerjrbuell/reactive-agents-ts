@@ -14,6 +14,18 @@ bun add @reactive-agents/diagnose
 # or: npm install -g @reactive-agents/diagnose   # exposes the `rax-diagnose` bin
 ```
 
+## Try it on a real failed run
+
+The package ships one recorded failed run (qwen2.5-coder:14b via Ollama), so you can try it with no API key, no model and no run of your own:
+
+```bash
+npm install @reactive-agents/diagnose
+npx rax-diagnose cause node_modules/@reactive-agents/diagnose/examples/failed-run.jsonl
+npx rax-diagnose attribute node_modules/@reactive-agents/diagnose/examples/failed-run.jsonl
+```
+
+`cause` reports `cause=never-engaged confidence=decisive`: the model never called the tool it needed. `attribute` reports `harness (harness:contradictory-guidance)`: the request told the model to call `file-write` but offered no tool schemas, so the harness, not the model, is at fault.
+
 ## Usage
 
 Point `rax-diagnose` at a trace recorded by `@reactive-agents/trace`. A run ID is a bare ID resolved under `~/.reactive-agents/traces/`, an absolute path to a `.jsonl` file, or `latest`.
