@@ -4,7 +4,9 @@
 // it refuses any approval policy that gates something. Shell command rules
 // (`approvalPolicy.commands`) gate calls too: a policy with only command rules
 // must be refused like one with gated tools, or a rule-matched `git push`
-// would run with no human decision.
+// would run with no human decision. Since audit G6 (2026-11-18) the refusal
+// needs a callable shell tool (command rules only gate shell calls); the
+// no-shell-tool case is pinned in code-action-approval-scope.test.ts.
 import { describe, it, expect } from "bun:test";
 import { Effect } from "effect";
 import { TestLLMServiceLayer } from "@reactive-agents/llm-provider";
@@ -20,7 +22,14 @@ describe("code-action — approval command rules", () => {
           taskDescription: "push the branch",
           taskType: "simple",
           memoryContext: "",
-          availableTools: [],
+          availableTools: ["shell-execute"],
+          availableToolSchemas: [
+            {
+              name: "shell-execute",
+              description: "Run a shell command",
+              parameters: [{ name: "command", type: "string", description: "command", required: true }],
+            },
+          ],
           config: defaultReasoningConfig,
         }).pipe(Effect.provide(TestLLMServiceLayer())),
         buildRunEnvelope({

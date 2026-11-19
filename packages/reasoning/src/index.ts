@@ -345,6 +345,11 @@ export type {
   ConfiguredApprovalPolicy,
   ResolvedApprovalPolicy,
 } from "./kernel/capabilities/act/approval-gate.js";
+// Audit G6: which approval policies code-action refuses (gated callable tool,
+// command rules with a callable shell tool, or a requireFor predicate). UIs use
+// it to warn before a run with the same rule the strategy applies.
+export { codeActionApprovalConflict } from "./strategies/code-action/approval-scope.js";
+export type { CodeActionApprovalConflict } from "./strategies/code-action/approval-scope.js";
 export type { ToolSchema, ToolParamSchema } from "./kernel/capabilities/attend/tool-formatting.js";
 export type { KernelMessage, EntropyScoreLike, KernelState } from "./kernel/state/kernel-state.js";
 

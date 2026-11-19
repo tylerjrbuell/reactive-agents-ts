@@ -30,6 +30,7 @@ import { generateToolBindings } from "./code-action/tool-binding.js";
 import type { ToolParamPropertySchema, ToolSpec } from "./code-action/tool-binding.js";
 import { buildPlanPrompt, extractCodeBlock } from "./code-action/code-action-plan.js";
 import { runInSandbox } from "./code-action/sandbox.js";
+import { codeActionApprovalConflict, codeActionApprovalRefusal } from "./code-action/approval-scope.js";
 import type { ToolCallRecord } from "./code-action/code-action-observe.js";
 import { formatObservationMessage } from "./code-action/code-action-observe.js";
 import { shouldTerminate } from "./code-action/code-action-reflect.js";
@@ -108,7 +109,8 @@ export interface CodeActionInput {
 /**
  * Run the code-action strategy: generate TypeScript that composes the tools,
  * run it in the Worker sandbox, verify, and regenerate on failure. Refuses
- * (typed ExecutionError) when an approval policy gates any tool.
+ * (typed ExecutionError) when an approval policy can gate a tool the sandbox
+ * can call (see `codeActionApprovalConflict`).
  */
 export const executeCodeAction = (
   input: CodeActionInput,
@@ -128,12 +130,16 @@ export const executeCodeAction = (
     // blueprint, code-action is never chosen by adaptive routing, so this is
     // only reached by an explicit `defaultStrategy: "code-action"` — the caller
     // can pick a gate-capable strategy.
+    // Audit G6 (2026-11-18): refuse only when the policy can gate a call this
+    // sandbox can make. `callableSchemas` is the ONE list both this check and
+    // the handler map below are built from, so they cannot drift apart: the
+    // sandbox refuses a call to any name without a handler.
     const approvalPolicy = envelope.rails.approvalPolicy;
-    const gatesSomeTool =
-      approvalPolicy !== undefined &&
-      ((approvalPolicy.tools?.size ?? 0) > 0 ||
-        approvalPolicy.requireFor !== undefined ||
-        (approvalPolicy.commands?.length ?? 0) > 0);
+    const callableSchemas: readonly ToolSchema[] = input.availableToolSchemas ?? [];
+    const approvalConflict = codeActionApprovalConflict({
+      callableTools: callableSchemas.map((s) => s.name),
+      policy: approvalPolicy,
+    });
 
     // The substrate owns the trajectory: steps, spend (plan / repair / retry
     // calls via `run.call`; the sandbox is 0-LLM), the one run ledger and the
@@ -152,12 +158,11 @@ export const executeCodeAction = (
     // The refusal fails INSIDE the run (audit G2): `runStrategy` mints it as a
     // failed result with a `terminal_decision` (authority `strategy-error`),
     // before any model call or tool runs. The policy itself is unchanged.
-    if (gatesSomeTool) {
+    if (approvalConflict.refuse && approvalPolicy !== undefined) {
       return yield* Effect.fail(
         new ExecutionError({
           strategy: "code-action",
-          message:
-            `code-action cannot honor .withApprovalPolicy({ mode: "${approvalPolicy!.mode}" }): its tool calls run inside the sandbox worker, past the approval gate. Use the reactive, reflexion, plan-execute-reflect or tree-of-thought strategy for gated tools.`,
+          message: codeActionApprovalRefusal(approvalPolicy.mode, approvalConflict),
         }),
       );
     }
@@ -197,7 +202,7 @@ export const executeCodeAction = (
     };
 
     // ── Build tool specs for binding generation ─────────────────────────────
-    const toolSpecs: ToolSpec[] = (input.availableToolSchemas ?? []).map((s) => {
+    const toolSpecs: ToolSpec[] = callableSchemas.map((s) => {
       const properties: Record<string, ToolParamPropertySchema> = {};
       const required: string[] = [];
       for (const p of s.parameters) {
@@ -234,7 +239,7 @@ export const executeCodeAction = (
     const budgetRefusals: { toolName: string; reason: string }[] = [];
     if (Option.isSome(toolServiceOpt)) {
       const toolSvc = toolServiceOpt.value;
-      for (const schema of input.availableToolSchemas ?? []) {
+      for (const schema of callableSchemas) {
         const toolName = schema.name;
         toolHandlers.set(toolName, async (args: unknown) => {
           // P0-4 safety gate — code-action executes tools inside the sandbox
