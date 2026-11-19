@@ -41,6 +41,7 @@ import { ChannelCredentials } from "./services/channel-credentials.js";
 import { dirname } from "node:path";
 import { capabilitiesRouter } from "./api/capabilities.js";
 import { workspaceRouter } from "./api/workspace.js";
+import { strategyConflictRouter } from "./api/strategy-conflict.js";
 import { ChatSessionBusyError, ChatSessionService } from "./services/chat-session-service.js";
 import { ChatScheduleService } from "./services/chat-schedule-service.js";
 import { ChatGoalService } from "./services/chat-goal-service.js";
@@ -194,7 +195,8 @@ export async function startCortexServer(
     .use(judgmentRouter(providerKeys))
     .use(ollamaSettingsRouter(ollamaEndpoint))
     .use(voiceRouter({ settings: voiceSettings, keys: providerKeys, supervisor: speechSupervisor, allowDocker: isLoopbackHost(resolveCortexHostname(config.hostname, env.raw)) || token !== undefined }))
-    .use(capabilitiesRouter)
+    // One `.use` for two routers: this chain is at the compiler's type-depth limit.
+    .use(new Elysia().use(capabilitiesRouter).use(strategyConflictRouter))
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
     .use(agentConfigSourceRouter(runtime.storeLayer))
     .use(messagesRouter(runtime.rawDb))

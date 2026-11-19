@@ -64,6 +64,7 @@
     "effect": "^3.10.0",
     "@reactive-agents/core": "workspace:*",
     "@reactive-agents/memory": "workspace:*",
+    "@reactive-agents/reasoning": "workspace:*",
     "@reactive-agents/runtime": "workspace:*",
     "@reactive-agents/ui-core": "workspace:*",
     "@reactive-agents/observability": "workspace:*",

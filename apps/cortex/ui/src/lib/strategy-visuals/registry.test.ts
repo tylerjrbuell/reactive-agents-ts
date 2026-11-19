@@ -130,6 +130,7 @@ describe("StrategyConflictNote render", () => {
     const conflict = {
       strategy: "code-action",
       message: "Code Action cannot ask before risky tools.",
+      gatedTools: ["file-write"],
       resolutions: [
         { id: "switch-strategy" as const, label: "Use the reactive strategy", patch: { strategy: "reactive" } },
         { id: "turn-off-approvals" as const, label: "Turn off approvals for risky tools", patch: { askBeforeRiskyTools: false as const } },

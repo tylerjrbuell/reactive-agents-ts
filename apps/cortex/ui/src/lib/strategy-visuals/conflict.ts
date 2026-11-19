@@ -1,21 +1,40 @@
 /**
- * The strategy / approval-gate conflict for a config the panel or the chat bar holds. The rule is
- * ui-core's (`strategyApprovalConflictOf`, also what the server's 409 uses); this reads the gate from
- * the config the way the server builds it, so the note appears before the run is refused.
+ * The strategy / approval-gate conflict for a config the panel or the chat bar holds. The server decides
+ * (`POST /api/strategy-conflict` runs the framework's `codeActionApprovalConflict` on the agent as it
+ * would be built, the same call behind the 409 on the run and chat routes); the UI holds no copy of the
+ * rule, it asks and renders the answer (ui-core wording, `strategyApprovalConflictOf`).
  */
-import { approvalGateOf, strategyApprovalConflictOf, type StrategyApprovalConflict } from "@reactive-agents/ui-core";
-import { approvalPolicyBody, approvalPolicyFrom } from "../approval-policy.js";
+import type { StrategyApprovalConflict } from "@reactive-agents/ui-core";
+import { CORTEX_SERVER_URL } from "../constants.js";
+
+/** Only Code Action has an approval-scope rule: no need to ask the server about any other strategy. */
+const hasApprovalScopeRule = (cfg: Readonly<Record<string, unknown>>): boolean => cfg.strategy === "code-action";
+
+/** The slice of `fetch` this module uses (a test passes a stub). */
+export type ConflictFetch = (url: string, init: RequestInit) => Promise<Pick<Response, "ok" | "json">>;
 
 /**
- * The conflict `cfg` would hit, or `undefined`. `toolsEnabled: false` (a chat with tools off) builds no
- * gate, so it never conflicts; leave it out for a desk or Lab run, which always builds one.
+ * The conflict `cfg` would hit, or `undefined` (none, or the server could not say: the framework's own
+ * refusal and the run route's 409 still stand). `toolsEnabled: false` (a chat with tools off) builds no
+ * tool layer; leave it out for a desk or Lab run.
  */
-export function strategyConflictOfConfig(
+export async function fetchStrategyConflict(
   cfg: Readonly<Record<string, unknown>>,
   opts: { readonly toolsEnabled?: boolean } = {},
-): StrategyApprovalConflict | undefined {
-  if (opts.toolsEnabled === false) return undefined;
-  const strategy = typeof cfg.strategy === "string" ? cfg.strategy : undefined;
-  const explicit = approvalPolicyBody(approvalPolicyFrom(cfg)) !== undefined;
-  return strategyApprovalConflictOf({ strategy, gate: approvalGateOf({ hasExplicitPolicy: explicit, askBeforeRiskyTools: cfg.askBeforeRiskyTools }) });
+  fetchFn: ConflictFetch = (url, init) => fetch(url, init),
+  baseUrl: string = CORTEX_SERVER_URL,
+): Promise<StrategyApprovalConflict | undefined> {
+  if (!hasApprovalScopeRule(cfg)) return undefined;
+  try {
+    const res = await fetchFn(`${baseUrl}/api/strategy-conflict`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ config: cfg, ...(opts.toolsEnabled === undefined ? {} : { toolsEnabled: opts.toolsEnabled }) }),
+    });
+    if (!res.ok) return undefined;
+    const json = (await res.json()) as { conflict?: StrategyApprovalConflict | null };
+    return json.conflict ?? undefined;
+  } catch {
+    return undefined;
+  }
 }

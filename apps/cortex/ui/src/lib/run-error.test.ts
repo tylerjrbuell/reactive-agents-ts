@@ -8,6 +8,11 @@ describe("code-action refused behind an approval gate", () => {
     expect(line).toContain("Code Action cannot run with an approval gate");
     expect(line).not.toContain("withApprovalPolicy");
   });
+
+  it("names the gated tools when the framework's refusal lists them", () => {
+    const framework = 'code-action cannot honor .withApprovalPolicy({ mode: "detach" }): it can call gated tool(s) file-write, shell-execute, and its tool calls run inside the sandbox worker, past the approval gate. Use the reactive strategy.';
+    expect(runErrorLine(framework)).toContain("approval on file-write, shell-execute");
+  });
 });
 
 describe("Ollama authentication failures", () => {

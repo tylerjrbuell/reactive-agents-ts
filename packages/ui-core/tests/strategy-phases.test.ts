@@ -162,21 +162,29 @@ describe("tree of thought with structured nodes", () => {
 });
 
 describe("approval conflict", () => {
-  it("code-action with the default gate is caught, offering both ways out", () => {
-    const c = strategyApprovalConflictOf({ strategy: "code-action", gate: "default" });
-    expect(c?.message).toContain("approval gate");
+  const refused = { strategy: "code-action", refuse: true, gatedCallable: ["file-write", "shell-execute"] } as const;
+
+  it("a refusing verdict names the gated tools and offers both ways out under the default gate", () => {
+    const c = strategyApprovalConflictOf({ ...refused, gate: "default" });
+    expect(c?.message).toContain("cannot ask before file-write, shell-execute");
+    expect(c?.gatedTools).toEqual(["file-write", "shell-execute"]);
     expect(c?.resolutions.map((r) => r.id)).toEqual(["switch-strategy", "turn-off-approvals"]);
   });
 
   it("an explicit policy is never dropped by a resolution: only the strategy switch is offered", () => {
-    const c = strategyApprovalConflictOf({ strategy: "code-action", gate: "explicit" });
+    const c = strategyApprovalConflictOf({ ...refused, gate: "explicit" });
+    expect(c?.message).toContain("approval policy for file-write, shell-execute");
     expect(c?.resolutions.map((r) => r.id)).toEqual(["switch-strategy"]);
   });
 
-  it("no conflict for other strategies or an ungated agent", () => {
-    expect(strategyApprovalConflictOf({ strategy: "reactive", gate: "default" })).toBeUndefined();
-    expect(strategyApprovalConflictOf({ strategy: "code-action", gate: "none" })).toBeUndefined();
-    expect(strategyApprovalConflictOf({ gate: "default" })).toBeUndefined();
+  it("no conflict unless the framework refuses", () => {
+    expect(strategyApprovalConflictOf({ strategy: "code-action", gate: "default", refuse: false, gatedCallable: [] })).toBeUndefined();
+  });
+
+  it("a requireFor-only refusal still reads sensibly", () => {
+    const c = strategyApprovalConflictOf({ strategy: "code-action", gate: "explicit", refuse: true, gatedCallable: [], requireFor: true });
+    expect(c?.gatedTools).toEqual([]);
+    expect(c?.message).toContain("some tool calls");
   });
 
   it("gate is read from the config fields", () => {
@@ -185,9 +193,14 @@ describe("approval conflict", () => {
     expect(approvalGateOf({ hasExplicitPolicy: false })).toBe("default");
   });
 
-  it("the framework's own refusal text maps to the same plain line", () => {
-    const framework = 'code-action cannot honor .withApprovalPolicy({ mode: "detach" }): its tool calls run inside the sandbox worker';
-    expect(strategyConflictLineOf(framework)).toContain("Code Action cannot run with an approval gate");
+  it("the framework's own refusal text maps to a plain line naming the gated tools", () => {
+    const framework =
+      'code-action cannot honor .withApprovalPolicy({ mode: "detach" }): it can call gated tool(s) file-write, shell-execute, and its tool calls run inside the sandbox worker, past the approval gate. Use the reactive strategy.';
+    expect(strategyConflictLineOf(framework)).toContain("approval on file-write, shell-execute");
+    const withPredicate =
+      'code-action cannot honor .withApprovalPolicy({ mode: "block" }): it can call gated tool(s) file-write; a requireFor predicate can gate any of its calls, and its tool calls run inside the sandbox worker';
+    expect(strategyConflictLineOf(withPredicate)).toContain("approval on file-write.");
+    expect(strategyConflictLineOf('code-action cannot honor .withApprovalPolicy({ mode: "block" }): a requireFor predicate can gate any of its calls, and its tool calls run')).toContain("approval gate");
     expect(strategyConflictLineOf("something else")).toBeUndefined();
   });
 });
