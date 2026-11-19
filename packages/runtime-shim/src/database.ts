@@ -127,4 +127,30 @@ function loadDatabase(): DatabaseConstructor {
   }
 }
 
-export const Database: DatabaseConstructor = loadDatabase();
+let _impl: DatabaseConstructor | undefined;
+function resolveDatabase(): DatabaseConstructor {
+  return (_impl ??= loadDatabase());
+}
+
+/**
+ * Cross-runtime SQLite database (`bun:sqlite` on Bun, `node:sqlite` on Node
+ * 22.5+, an in-memory no-op stub where neither works).
+ *
+ * The backend loads lazily on the first `new Database(...)`, not at import.
+ * Node prints `ExperimentalWarning: SQLite is an experimental feature` the
+ * moment `node:sqlite` is loaded, so an eager load made every importer of the
+ * package (agents with no memory, `rax-diagnose`) print it. The warning now
+ * appears only when a database is actually opened.
+ *
+ * The constructor returns the backend's own instance, so prototype checks
+ * against `Database` do not hold; type against `DatabaseLike` instead.
+ */
+class LazyDatabase {
+  constructor(path: string, options?: { create?: boolean; readonly?: boolean }) {
+    const Impl = resolveDatabase();
+    // Returning an object from a constructor makes `new` yield it.
+    return new Impl(path, options);
+  }
+}
+
+export const Database: DatabaseConstructor = LazyDatabase as unknown as DatabaseConstructor;
