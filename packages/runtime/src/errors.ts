@@ -1,5 +1,6 @@
 import { Data } from "effect";
 import { errorMessage } from "@reactive-agents/core";
+import { AgentRunError } from "./errors/agent-run-error.js";
 
 /**
  * Thrown when an unexpected error occurs during a lifecycle phase.
@@ -523,7 +524,7 @@ function firstMeaningfulLine(msg: string): string {
 
 /**
  * Map an already-unwrapped error to the value thrown at the `agent.run()`
- * boundary. By default this is a plain `Error` with a single-line message and
+ * boundary. By default this is an {@link AgentRunError} with a single-line message and
  * NO internal runtime stack on the console — the full original is preserved on
  * `.cause` (with its own stack trimmed to one line so a bare
  * `console.error(err)` stays concise). Set `RA_DEBUG_ERRORS=1` (or
@@ -540,38 +541,11 @@ export function toRunBoundaryError(unwrapped: Error): Error {
   if (debug) return unwrapped;
 
   const oneLine = firstMeaningfulLine(unwrapped.message);
-  const clean = new RunBoundaryError(oneLine, unwrapped);
   // Preserve the full error for programmatic inspection, but trim its stack to
   // a single line so the runtime's internal frames don't reach the console
   // unless debugging is explicitly requested.
   unwrapped.stack = `${unwrapped.name || "Error"}: ${oneLine}`;
-  clean.stack = `${clean.name}: ${clean.message}`;
-  return clean;
-}
-
-/**
- * The error `agent.run()` rejects with by default. Named "Error" so it prints
- * as a plain error. `cause` (the full unwrapped error) is a prototype accessor,
- * not an own property: Bun's uncaught-error printer renders an own `cause` as
- * a second source-frame block, and a bad API key at a top-level await printed
- * three stacked frames that buried the one-line message.
- */
-class RunBoundaryError extends Error {
-  readonly #full: Error;
-
-  constructor(message: string, full: Error) {
-    super(message);
-    this.#full = full;
-  }
-
-  static {
-    Object.defineProperty(RunBoundaryError.prototype, "cause", {
-      get(this: RunBoundaryError): Error {
-        return this.#full;
-      },
-      configurable: true,
-    });
-  }
+  return new AgentRunError(oneLine, unwrapped);
 }
 
 function isFiberFailure(error: unknown): boolean {

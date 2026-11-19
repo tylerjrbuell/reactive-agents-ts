@@ -68,6 +68,7 @@ export {
   type RuntimeErrors,
   type ErrorContext,
 } from "./errors.js";
+export { AgentRunError } from "./errors/agent-run-error.js";
 export { StructuredOutputError, OutputSchemaError } from "./errors/structured-output-error.js";
 export { PlanNoStepsError } from "./errors/plan-no-steps-error.js";
 export { PlanInvalidError } from "./errors/plan-invalid-error.js";
