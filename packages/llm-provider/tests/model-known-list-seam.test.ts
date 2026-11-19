@@ -80,6 +80,48 @@ describe("xai live list refused for credits (403)", () => {
     expect(r.left.reason).toBe("http");
   });
 
+  /** Reason a refused listing gets for a given body + status ("ok" if it unexpectedly succeeded). */
+  const reasonFor = async (body: unknown, status: number): Promise<string> => {
+    const r = await Effect.runPromise(
+      Effect.either(listProviderModels("xai", { apiKey: "k", fetch: fetchReturning(() => json(body, status)) })),
+    );
+    return r._tag === "Left" ? r.left.reason : "ok";
+  };
+
+  it("a 403 that only links a billing page stays http", async () => {
+    expect(await reasonFor({ error: "Forbidden. Manage billing at https://x.ai/billing or see https://x.ai/billing/docs" }, 403)).toBe("http");
+  });
+
+  it("a 403 that mentions a credit card stays http", async () => {
+    expect(await reasonFor({ error: "This key's team has no credit card on file for this region; access denied." }, 403)).toBe("http");
+  });
+
+  it("OpenAI insufficient_quota 429 is quota", async () => {
+    const body = {
+      error: {
+        message: "You exceeded your current quota, please check your plan and billing details.",
+        type: "insufficient_quota",
+        code: "insufficient_quota",
+      },
+    };
+    expect(await reasonFor(body, 429)).toBe("quota");
+  });
+
+  it("exhausted-balance phrasings are quota", async () => {
+    for (const error of [
+      "Your credit balance is too low to access the API.",
+      "Insufficient credits.",
+      "insufficient balance",
+      "billing_hard_limit_reached",
+      "Payment Required",
+    ])
+      expect(await reasonFor({ error }, 403)).toBe("quota");
+  });
+
+  it("a plain 429 rate limit stays http", async () => {
+    expect(await reasonFor({ error: "Rate limit exceeded, retry later" }, 429)).toBe("http");
+  });
+
   it("402 is quota", async () => {
     const r = await Effect.runPromise(
       Effect.either(listProviderModels("openai", { apiKey: "k", fetch: fetchReturning(() => json({}, 402)) })),

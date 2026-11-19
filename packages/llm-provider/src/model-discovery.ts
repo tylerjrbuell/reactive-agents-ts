@@ -372,13 +372,22 @@ export function clearModelDiscoveryCache(): void {
 
 // ─── Fetching ───
 
-/** Body wording providers use for an exhausted balance or spending/quota cap. */
-const QUOTA_BODY = /credit|spending limit|billing|insufficient[_ ]quota|quota exceeded|exceeded your (current )?quota|payment required/i;
+/**
+ * Phrases providers use to state an exhausted balance or a reached spending/quota
+ * cap. Phrase-level on purpose: bare "billing" or "credit" also appear in bodies
+ * that merely link a billing page or mention a credit card, and must not read as
+ * "out of credits".
+ */
+const QUOTA_BODY =
+  /used (up )?all (of )?(your |its |the )?(available )?credits|insufficient[_ ](credits?|balance|funds|quota)|credit balance is too low|out of credits|(reached|exceeded|hit) (its|your|the) (monthly )?spending limit|spending limit (reached|exceeded)|quota exceeded|exceeded your (current )?quota|payment[_ ]required|billing[_ ]hard[_ ]limit/i;
 
 /**
- * Typed error for a non-2xx listing. HTTP 402, or 403/429 whose body speaks of
- * credits, spending limits, billing or quota, is `quota`; anything else is
- * `http`. The body is only matched, never echoed (it can carry account ids).
+ * Typed error for a non-2xx listing. HTTP 402, or 403/429 whose body states an
+ * exhausted balance or a reached cap (used all credits, insufficient
+ * credits/balance/quota, spending limit reached, quota exceeded, payment
+ * required, billing hard limit), is `quota`; anything else, including a body
+ * that only mentions or links billing, is `http`. The body is only matched,
+ * never echoed (it can carry account ids).
  */
 function refusalOf(provider: string, response: Response): Effect.Effect<ModelDiscoveryError> {
   const status = response.status;
