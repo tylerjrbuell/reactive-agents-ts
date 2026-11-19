@@ -20,6 +20,7 @@ import type { RunContract } from "../contract/run-contract.js";
 import type { RunLedger } from "../ledger/run-ledger.js";
 import { toolEvidence } from "../capabilities/verify/requirement-state.js";
 import { seedInitialAdvisory } from "./checklist-seed.js";
+import { resetResumedStreaks } from "../assessment/guard-adapters.js";
 import { normalizeKernelMessages } from "./kernel-message.js";
 import { transitionState, type KernelInput, type KernelState } from "./kernel-state.js";
 
@@ -121,11 +122,12 @@ export function seedCarriedScratchpad(
 /**
  * The runner's pre-loop state seeding: normalize the seeded thread's content,
  * adopt the pass ledger seed, then the conversation's advisory todo seed (which
- * no-ops when the adopted ledger already carries checklist facts).
+ * no-ops when the adopted ledger already carries checklist facts). A durable
+ * resume restarts the low-delta streak (state/resume-epoch.ts).
  */
 export function seedPassState(
   state: KernelState,
   input: Pick<KernelInput, "seedRunLedger" | "resumeState" | "initialAdvisory">,
 ): KernelState {
-  return seedInitialAdvisory(adoptPassLedger(normalizeSeededThread(state), input), input);
+  return seedInitialAdvisory(adoptPassLedger(normalizeSeededThread(resetResumedStreaks(state, input)), input), input);
 }

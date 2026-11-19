@@ -20,6 +20,7 @@
 
 import type { RunAssessment } from "./assess.js";
 import { isMetaTool } from "./progress-arbiter.js";
+import { transitionState, type KernelInput, type KernelState } from "../state/kernel-state.js";
 
 /**
  * ABLATION SEAM (2026-07-26). The evidence-delta reset is opt-in behind the
@@ -76,6 +77,18 @@ export function nextLowDeltaCount(
 ): number {
   const evidenceProgress = assessmentShowsEvidenceProgress(horizonActive, assessment);
   return lowDelta && !evidenceProgress ? prev + 1 : 0;
+}
+
+/**
+ * Guard 1 (low_delta) on a durable resume (`input.resumeState`): the streak
+ * counts consecutive passes of THIS run, so a resumed run starts it at 0.
+ * Carried over, the stopped run's stalled passes ended the resume on its first
+ * pass, before its tool call ran (gate attempt 5 B5, 2026-11-19;
+ * kernel/state/resume-epoch.ts). Returns `state` by identity otherwise.
+ */
+export function resetResumedStreaks(state: KernelState, input: Pick<KernelInput, "resumeState">): KernelState {
+  if (input.resumeState === undefined || (state.consecutiveLowDeltaCount ?? 0) === 0) return state;
+  return transitionState(state, { consecutiveLowDeltaCount: 0 });
 }
 
 /**

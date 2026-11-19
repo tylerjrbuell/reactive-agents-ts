@@ -70,6 +70,7 @@ import {
   type KernelState,
 } from "../state/kernel-state.js";
 import { contributeGuidance } from "../state/guidance-channel.js";
+import { gateHistory } from "../state/resume-epoch.js";
 import { makeStep } from "../capabilities/sense/step-utils.js";
 import { authorityOf } from "../capabilities/decide/authority.js";
 import { deliverableTextOf } from "../capabilities/reason/assistant-turn.js";
@@ -744,6 +745,7 @@ export function proposeExit(args: {
     // Only the answer is missing (no required tool, no unmet delivery
     // condition): a denial is an answer turn, and the next think call withholds tools.
     const answerOnly = classified.blocking.length === 0;
+    const history = gateHistory(state.steps, args.maxIterations); // a spent cap's reservation does not count (resume)
     const decision = disposeExit({
       ...(progress === undefined
         ? {}
@@ -752,16 +754,16 @@ export function proposeExit(args: {
       kind: proposal.kind,
       outstanding,
       hasMaterial: hasHandoffMaterial(state),
-      deniedBefore: exitDeniedBefore(state.steps),
+      deniedBefore: exitDeniedBefore(history),
       iteration: state.iteration,
       llmCalls: state.llmCalls ?? 0,
       maxIterations: args.maxIterations,
       answerOnly,
       unmeetableOnly,
       budgetAnswerTurn: args.input.harness?.budgetAnswerTurn === true,
-      answerTurnGiven: state.steps.some((s) => s.metadata?.exitGate?.answerTurnAt !== undefined),
+      answerTurnGiven: history.some((s) => s.metadata?.exitGate?.answerTurnAt !== undefined),
     });
-    const progressDenial = decision === "deny-once" && exitDeniedBefore(state.steps) && progress?.writeProgress === true;
+    const progressDenial = decision === "deny-once" && exitDeniedBefore(history) && progress?.writeProgress === true;
     const answerTurn = decision === "deny-once" && answerOnly;
     const record: ExitGateRecord = {
       proposedBy: proposal.proposedBy,
