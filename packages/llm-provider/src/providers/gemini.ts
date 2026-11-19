@@ -25,6 +25,7 @@ import {
   reserveThinkingBudget,
   type ThinkingOptions,
 } from "../thinking/index.js";
+import { makeThoughtMarkerStripper, stripLeadingThoughtMarker } from "./gemini-thought-marker.js";
 import { clampOutputBudget } from "../params/output-budget.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
@@ -158,7 +159,7 @@ const mapGeminiResponse = (
     candidatesTokens === undefined ? undefined : candidatesTokens + (reasoningTokens ?? 0);
 
   return {
-    content: response.text ?? "",
+    content: stripLeadingThoughtMarker(response.text ?? ""),
     // Shared table-driven mapping — gemini's table is intentionally empty
     // (finishReason was never consulted here; non-OK reasons error out via
     // the W22 guard), so this preserves the original tool_use/end_turn shape.
@@ -473,6 +474,16 @@ export const GeminiProviderLive = Layer.effect(
                 // Raw functionCalls captured for adapter normalization at
                 // end-of-stream. Populated only when useAdapterNormalization.
                 const rawFunctionCalls: GeminiFunctionCall[] = [];
+                // gemini-2.5-flash sometimes leads visible text with a bare
+                // "thought" line (model text, not a thought part) — see
+                // gemini-thought-marker.ts. Single visible-text sink.
+                const markerStripper = makeThoughtMarkerStripper();
+                const emitVisibleRaw = (text: string): void => {
+                  if (text.length === 0) return;
+                  emit.single({ type: "text_delta", text });
+                  fullContent += text;
+                };
+                const emitVisible = (text: string): void => emitVisibleRaw(markerStripper.push(text));
 
                 for await (const chunk of stream) {
                   // Walk parts directly when present — Gemini-2.5-pro emits
@@ -516,8 +527,7 @@ export const GeminiProviderLive = Layer.effect(
                       }
                       // Visible text
                       if (typeof part.text === "string" && part.text.length > 0) {
-                        emit.single({ type: "text_delta", text: part.text });
-                        fullContent += part.text;
+                        emitVisible(part.text);
                       }
                       // Tool call
                       const fc = (part as { functionCall?: GeminiFunctionCall }).functionCall;
@@ -534,8 +544,7 @@ export const GeminiProviderLive = Layer.effect(
                   } else {
                     // Fallback for chunks without candidates (older SDK or test mocks).
                     if (chunk.text && chunk.text.length > 0) {
-                      emit.single({ type: "text_delta", text: chunk.text });
-                      fullContent += chunk.text;
+                      emitVisible(chunk.text);
                     }
                     const fcs = chunk.functionCalls;
                     if (fcs && fcs.length > 0) {
@@ -574,6 +583,8 @@ export const GeminiProviderLive = Layer.effect(
                     }
                   }
                 }
+
+                emitVisibleRaw(markerStripper.flush());
 
                 // Adapter-normalized end-of-stream tool-call synthesis. Build
                 // a synthetic Gemini response shape so the adapter sees the
