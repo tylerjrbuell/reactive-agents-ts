@@ -49,7 +49,14 @@ export interface TraceSnapshot {
     readonly toolCalls: readonly { readonly toolName: string; readonly argsHash: string; readonly ok: boolean }[]
     readonly output: string | undefined
     readonly totalTokens: number
+    /** Known USD spend. A lower bound when `costComplete` is `false`. */
     readonly totalCostUsd: number
+    /**
+     * `false` when `totalCostUsd` understates the spend (an unpriced call, or
+     * no cost reported). Absent when the source does not say (a trace
+     * recorded before the flag existed).
+     */
+    readonly costComplete?: boolean
     readonly durationMs: number
 }
 
@@ -65,6 +72,11 @@ export interface ReplayDiff {
     readonly outputDiff: { readonly original: string | undefined; readonly replay: string | undefined; readonly equal: boolean }
     readonly tokensDelta: number
     readonly costDelta: number
+    /**
+     * `true` when either side's cost is a lower bound (`costComplete: false`),
+     * so `costDelta` is not the true spend difference. Absent otherwise.
+     */
+    readonly costPartial?: true
     readonly durationDeltaMs: number
 }
 

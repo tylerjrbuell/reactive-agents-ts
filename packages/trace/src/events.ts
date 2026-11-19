@@ -57,6 +57,8 @@ export type TraceEvent =
   | EvalGradedEvent
   // ─── Structured-output provenance (2026-11-11 — core StructuredOutputReported) ───
   | StructuredOutputReportedTraceEvent
+  // ─── Final billed run cost (2026-11-19 — core RunCostFinalized, appended late) ───
+  | RunCostFinalizedEvent
 
 export interface TraceEventBase {
   readonly runId: string
@@ -146,7 +148,21 @@ export interface RunCompletedEvent extends TraceEventBase {
   /** Raw termination reason (AgentCompleted.terminationReason) — e.g. "abstained", "max-iterations:5". */
   readonly terminatedBy?: string
   readonly totalTokens: number
+  /**
+   * Spend known when the result was built (`AgentCompleted.totalCostUsd`). It
+   * excludes the background debrief call: the billed run total is on the
+   * run's `run-cost-finalized` event when one was recorded. A lower bound when
+   * `costComplete` is `false`; `0` with `costComplete: false` means the
+   * publisher reported no cost at all (unknown, not free).
+   */
   readonly totalCostUsd: number
+  /**
+   * `false` when `totalCostUsd` understates the spend (an LLM call had an
+   * unknown price, or no cost was reported). Additive optional
+   * (REQUIRED_FIELDS_BY_KIND unchanged): absent on traces recorded before it
+   * existed, where completeness is not known.
+   */
+  readonly costComplete?: boolean
   readonly durationMs: number
   // ─── Signal consumption edge (2026-10-25) ───
   // Additive optional: REQUIRED_FIELDS_BY_KIND for run-completed does NOT
@@ -163,6 +179,21 @@ export interface RunCompletedEvent extends TraceEventBase {
    * recorded before it existed and on publishers that do not forward it.
    */
   readonly outcome?: RunOutcome
+}
+
+/**
+ * The run's final billed cost (core `RunCostFinalized`), recorded once per run.
+ * It can arrive AFTER `run-completed` (the background debrief call settles
+ * first), so the recorder appends it to the run's trace late. Readers take the
+ * run total from here when present, not from `run-completed.totalCostUsd`
+ * (which excludes the debrief call). Conventionally `iter: -1`.
+ */
+export interface RunCostFinalizedEvent extends TraceEventBase {
+  readonly kind: "run-cost-finalized"
+  /** Total billed USD, debrief included. A lower bound when `costComplete` is `false`. */
+  readonly totalCostUsd: number
+  /** `true` when every LLM call in the run had a known price. */
+  readonly costComplete: boolean
 }
 
 /** Shape of the kernel's `TerminalOutcome` (structural twin; trace stays dependency-free of reasoning). */
@@ -890,6 +921,7 @@ const REQUIRED_FIELDS_BY_KIND: Readonly<Record<TraceEvent["kind"], readonly stri
   "environment-updated": ["changes"],
   "eval-graded": ["score", "passed", "checks", "grader", "taskId"],
   "structured-output-reported": ["report"],
+  "run-cost-finalized": ["totalCostUsd", "costComplete"],
 }
 
 /** Type-narrowing helper. Validates the base fields, that `kind` is a known

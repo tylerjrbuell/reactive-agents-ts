@@ -37,6 +37,7 @@ import type {
   LedgerEntryTraceEvent,
 } from "./events.js";
 import { analyzeCause, type CauseAnalysis } from "./cause.js";
+import { runCost, renderRunCost, type RunCost } from "./run-cost.js";
 import { guardEndedRun } from "./guard-run-end.js";
 
 export interface GuardStat {
@@ -439,6 +440,12 @@ export interface CostSignal {
    * because no provider populates tokensIn/tokensOut/cacheRead yet (coverage gap).
    */
   readonly inOutSplitAvailable: boolean;
+  /**
+   * The run's USD spend (see `runCost`): the late `run-cost-finalized` total
+   * when recorded, else `run-completed`'s. Check `spend.complete` before
+   * reading the number as the full spend.
+   */
+  readonly spend: RunCost;
 }
 
 export interface EntropyDegradation {
@@ -647,6 +654,7 @@ export function analyzeRun(trace: Trace, opts: AnalyzeOptions = {}): RunAnalysis
     llmCalls: lastSnap?.llmCalls ?? 0,
     interventionEstimatedTokens,
     inOutSplitAvailable: false,
+    spend: runCost(ev),
   };
 
   // ── Reasoning trajectory ──────────────────────────────────────────────────
@@ -814,7 +822,7 @@ export function renderRunReport(a: RunAnalysis): string {
   const ed = a.reasoning.entropyDegradation;
   L.push(`REASONING: entropy ${a.reasoning.entropyFirst ?? "?"}→${a.reasoning.entropyLast ?? "?"} (${a.reasoning.entropyShape}); steps=${JSON.stringify(a.reasoning.stepsByTypeFinal)} · sources ${ed.minSourcesPresent}-${ed.maxSourcesPresent}/4 (degraded ${ed.degradedIterations} iter) · confidence: low in ${ed.lowConfidenceIterations} iter`);
   if (Object.keys(a.reasoning.decisionTypes).length) L.push(`  decisions: ${Object.entries(a.reasoning.decisionTypes).map(([k, v]) => `${k}:${v}`).join(" ")}`);
-  L.push(`COST: trajectory=[${a.cost.tokenTrajectory.join("→")}] maxΔ=${a.cost.maxIterTokenDelta}${a.cost.inOutSplitAvailable ? "" : "  (in/out+cache split BLIND)"}`);
+  L.push(`COST: usd=${renderRunCost(a.cost.spend)} trajectory=[${a.cost.tokenTrajectory.join("→")}] maxΔ=${a.cost.maxIterTokenDelta}${a.cost.inOutSplitAvailable ? "" : "  (in/out+cache split BLIND)"}`);
   if (a.tools.length) {
     L.push(`TOOLS:`);
     for (const t of a.tools) L.push(`  ${t.tool.padEnd(22)} calls=${t.calls} ok=${t.ok} err=${t.errors} trunc=${t.truncated}`);

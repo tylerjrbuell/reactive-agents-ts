@@ -98,7 +98,8 @@ const HARNESS_DEFAULT: TestTurn = { text: "{}" };
 
 const usageFor = (req: CompletionRequest, outputTokens: number) => {
   const inputTokens = requestTokens(req);
-  return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens, estimatedCost: 0 };
+  // The sim bills nothing: a known $0 (priced), not an unknown price.
+  return { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens, estimatedCost: 0, priceSource: "price-book" as const };
 };
 
 const withRequestUsage = (req: CompletionRequest, res: CompletionResponse): CompletionResponse => ({

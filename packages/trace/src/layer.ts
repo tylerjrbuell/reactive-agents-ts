@@ -42,8 +42,16 @@ export const TraceBridgeLayer: Layer.Layer<
         if (traced !== null) {
           yield* recorder.emit(traced)
         }
-        // Flush pending events to disk when a run ends
-        if (event._tag === "AgentCompleted" || event._tag === "AgentAborted" || event._tag === "TaskFailed") {
+        // Flush pending events to disk when a run ends. RunCostFinalized can
+        // arrive after the run-end flush (background debrief); flushing it too
+        // appends the late record to the same run file instead of leaving it
+        // pending until the layer closes.
+        if (
+          event._tag === "AgentCompleted" ||
+          event._tag === "AgentAborted" ||
+          event._tag === "TaskFailed" ||
+          event._tag === "RunCostFinalized"
+        ) {
           yield* recorder.flush(event.taskId)
         }
       })

@@ -6,6 +6,9 @@ export { resolveTraceDir, defaultTraceDir, effectiveTraceDir } from "./paths.js"
 export { pruneTraceDir, planRunPrune, classifyProvenance, retentionPolicyFromEnv } from "./retention.js"
 export type { RetentionPolicy, TraceFileInfo, TraceProvenance } from "./retention.js"
 export { loadTrace, parseTrace, traceStats } from "./replay.js"
+/** A run's USD spend from its trace: the late `run-cost-finalized` total first, with completeness. */
+export { runCost, renderRunCost } from "./run-cost.js"
+export type { RunCost } from "./run-cost.js"
 export type { Trace, TraceStats } from "./replay.js"
 export {
   analyzeInterventions,

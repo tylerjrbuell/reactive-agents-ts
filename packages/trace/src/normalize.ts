@@ -41,6 +41,7 @@ import type {
   EnvironmentUpdatedTraceEvent,
   IterationBoundaryEvent,
   StructuredOutputReportedTraceEvent,
+  RunCostFinalizedEvent,
 } from "./events.js";
 
 export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
@@ -115,8 +116,27 @@ export function toTraceEvent(raw: AgentEvent, seq: number): TraceEvent | null {
         ...(raw.signals !== undefined ? { signals: raw.signals } : {}),
         ...(corr.outcome !== undefined ? { outcome: corr.outcome } : {}),
         totalTokens: raw.totalTokens,
+        // An absent total is unknown spend, not $0: keep the field numeric
+        // (the known lower bound, 0) and say it is incomplete. A present
+        // total is complete unless the publisher flagged an unpriced call.
         totalCostUsd: raw.totalCostUsd ?? 0,
+        costComplete: raw.totalCostUsd !== undefined && raw.costComplete !== false,
         durationMs: raw.durationMs,
+      }
+      return ev
+    }
+
+    case "RunCostFinalized": {
+      // Keyed by taskId like run-started / run-completed, so the late record
+      // lands in the same run's trace file.
+      const ev: RunCostFinalizedEvent = {
+        kind: "run-cost-finalized",
+        runId: raw.taskId,
+        timestamp: Date.now(),
+        iter: -1,
+        seq,
+        totalCostUsd: raw.totalCostUsd,
+        costComplete: raw.costComplete,
       }
       return ev
     }

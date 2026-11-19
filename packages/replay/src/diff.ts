@@ -15,6 +15,7 @@ export function diffTraces(a: TraceSnapshot, b: TraceSnapshot): ReplayDiff {
         outputDiff: { original: a.output, replay: b.output, equal: outputEqual },
         tokensDelta: b.totalTokens - a.totalTokens,
         costDelta: b.totalCostUsd - a.totalCostUsd,
+        ...(a.costComplete === false || b.costComplete === false ? { costPartial: true as const } : {}),
         durationDeltaMs: b.durationMs - a.durationMs,
     }
 }

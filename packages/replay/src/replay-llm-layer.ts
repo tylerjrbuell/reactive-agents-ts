@@ -72,7 +72,9 @@ function toStreamEvents(rec: RecordedExchange): readonly StreamEvent[] {
             inputTokens: rec.response.tokensIn ?? 0,
             outputTokens: rec.response.tokensOut ?? 0,
             totalTokens: (rec.response.tokensIn ?? 0) + (rec.response.tokensOut ?? 0),
+            // Replay bills nothing: a known, deterministic $0.
             estimatedCost: 0,
+            priceSource: "price-book",
         },
     })
     return out
@@ -100,7 +102,9 @@ export function makeReplayLLMLayer(table: LLMTable): Layer.Layer<LLMService> {
                         inputTokens: rec.response.tokensIn ?? 0,
                         outputTokens: rec.response.tokensOut ?? 0,
                         totalTokens: (rec.response.tokensIn ?? 0) + (rec.response.tokensOut ?? 0),
+                        // Replay bills nothing: a known, deterministic $0.
                         estimatedCost: 0,
+                        priceSource: "price-book",
                     },
                     model: resolveModelLabel(req),
                     toolCalls: toToolCalls(rec.response),

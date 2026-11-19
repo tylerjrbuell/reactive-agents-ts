@@ -4,7 +4,7 @@
 // (verifier rejections, harness signals, strategy switches). Use --raw to get
 // per-event lines or --json for the full JSONL stream.
 
-import { loadTrace, traceStats, type TraceEvent } from "@reactive-agents/trace";
+import { loadTrace, renderRunCost, runCost, traceStats, type TraceEvent } from "@reactive-agents/trace";
 import { resolveTracePath } from "../lib/resolve.js";
 import {
   badge, bold, cyan, dim, fmtMs, gray, green, red, truncate, yellow, indent,
@@ -45,6 +45,7 @@ export async function replayCommand(idOrPath: string, opts: ReplayOpts = {}): Pr
       ? yellow(`${stats.harnessSignalsInjected} harness signals`)
       : `${stats.harnessSignalsInjected} harness signals`,
     `${stats.totalTokens} tok`,
+    `cost ${renderRunCost(runCost(trace.events))}`,
     fmtMs(stats.durationMs),
   ];
   console.log(`${dim("│")} ${statsParts.join(`  ${dim("·")}  `)}`);
@@ -86,8 +87,13 @@ function formatEventLine(ev: TraceEvent): string {
       return `${ts} ${badge("run-start", cyan)} task model=${ev.model} provider=${ev.provider}`;
     case "run-completed": {
       const status = ev.status === "success" ? green(ev.status) : red(ev.status);
-      return `${ts} ${badge("run-end", cyan)} ${status} tokens=${ev.totalTokens} ${fmtMs(ev.durationMs)}`;
+      // Spend known at result time (debrief excluded; the billed total is the
+      // later run-cost-finalized line). Unknown completeness on old traces.
+      const cost = renderRunCost({ totalCostUsd: ev.totalCostUsd, complete: ev.costComplete, source: "run-completed" });
+      return `${ts} ${badge("run-end", cyan)} ${status} tokens=${ev.totalTokens} cost=${cost} ${fmtMs(ev.durationMs)}`;
     }
+    case "run-cost-finalized":
+      return `${ts} ${badge("run-cost", cyan)} billed=${renderRunCost({ totalCostUsd: ev.totalCostUsd, complete: ev.costComplete, source: "run-cost-finalized" })}`;
     case "kernel-state-snapshot": {
       const stepStr = Object.entries(ev.stepsByType)
         .map(([k, n]) => `${k}=${n}`)
