@@ -77,6 +77,18 @@ describe("buildRunEnvelopeFromConfig — disclosure-mode floor (F-4)", () => {
     expect(buildRunEnvelopeFromConfig(withProfile({})).harness.llmRecoveryBudget).toBeUndefined();
   });
 
+  it("reasoningOptions.harness.repetitionBackstop reaches the ResolvedHarness clamped (absent stays absent)", () => {
+    const calls = buildRunEnvelopeFromConfig(
+      withProfile({ reasoningOptions: { harness: { repetitionBackstop: { maxCalls: 3 } } } }),
+    );
+    expect(calls.harness.repetitionBackstop).toEqual({ maxCalls: 3 });
+    const clamped = buildRunEnvelopeFromConfig(
+      withProfile({ reasoningOptions: { harness: { repetitionBackstop: { iterationFraction: 2 } } } }),
+    );
+    expect(clamped.harness.repetitionBackstop).toEqual({ iterationFraction: 1 });
+    expect(buildRunEnvelopeFromConfig(withProfile({})).harness.repetitionBackstop).toBeUndefined();
+  });
+
   it("an explicit RA_LAZY_TOOLS env var still wins over the profile floor", () => {
     const saved = process.env["RA_LAZY_TOOLS"];
     process.env["RA_LAZY_TOOLS"] = "0";

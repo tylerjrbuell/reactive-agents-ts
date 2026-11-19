@@ -21,6 +21,7 @@ import { isRunOrigin, type RunOrigin, type Task } from "@reactive-agents/core";
 import type { CalibrationResolution } from "./execute-calibration-record.js";
 import {
   actOrAnswerIsDefault,
+  DEFAULT_REPETITION_BACKSTOP_FRACTION,
   llmRecoveryBudgetOf,
   resolveActOrAnswer,
   resolveHarnessConfig,
@@ -165,6 +166,8 @@ export function buildRunConfigSnapshot(args: {
     parallelToolHint: harness.parallelToolHint ?? false,
     leanFinalTurn: harness.leanFinalTurn === true,
     llmRecoveryBudget: llmRecoveryBudgetOf(harness),
+    // The backstop the guard uses: the configured (clamped) one, else the default fraction.
+    repetitionBackstop: harness.repetitionBackstop ?? { iterationFraction: DEFAULT_REPETITION_BACKSTOP_FRACTION },
   } satisfies { readonly [K in keyof ResolvedHarness]-?: unknown } & { readonly actOrAnswerSource: unknown };
   const mechanisms = defined({
     leanHarness: lean,

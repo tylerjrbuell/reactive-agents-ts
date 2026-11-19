@@ -140,6 +140,21 @@ export const HarnessConfigSchema = Schema.Struct({
    * Config only (no env var).
    */
   llmRecoveryBudget: Schema.optional(Schema.Number),
+  /**
+   * Repetition backstop: the hard cap on how many times the repetition guard
+   * lets one tool run with new arguments while its results still add
+   * information. `maxCalls` sets the cap as a call count (whole number >= 0)
+   * and wins over `iterationFraction`, which sets it as
+   * `ceil(maxIterations * fraction)` (clamped to 0..1). The guard's review
+   * point is always the floor. Default: 0.75 of `maxIterations`. Raise it for
+   * long-horizon tasks that query one tool many times. Config only (no env var).
+   */
+  repetitionBackstop: Schema.optional(
+    Schema.Struct({
+      iterationFraction: Schema.optional(Schema.Number),
+      maxCalls: Schema.optional(Schema.Number),
+    }),
+  ),
 });
 
 export type HarnessConfigEncoded = typeof HarnessConfigSchema.Type;

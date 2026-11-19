@@ -229,6 +229,8 @@ Every key of `AgentConfig`, its type, and whether it is required. This table is
 | `reasoning.harness.planToolCatalog` | `boolean` | no |  |
 | `reasoning.harness.promptDumpPathPrefix` | `string` | no |  |
 | `reasoning.harness.recencyBudgetChars` | `number` | no |  |
+| `reasoning.harness.repetitionBackstop.iterationFraction` | `number` | no |  |
+| `reasoning.harness.repetitionBackstop.maxCalls` | `number` | no |  |
 | `reasoning.harness.stableToolList` | `boolean` | no |  |
 | `reasoning.harness.toolDiscovery` | `boolean` | no |  |
 | `reasoning.harness.toolIndex` | `boolean` | no |  |

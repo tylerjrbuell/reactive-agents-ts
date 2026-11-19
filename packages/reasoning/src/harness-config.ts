@@ -278,6 +278,66 @@ export interface HarnessConfig {
    * including the overflow compaction. Default 2. Config only (no env flag).
    */
   readonly llmRecoveryBudget?: number;
+  /**
+   * Repetition backstop: the hard cap on the repetition guard's distinct-arguments
+   * pass. Past its review point a tool keeps running with new arguments while its
+   * results still add information, until it has run this many times; then the
+   * guard refuses the call however much it still yields. Raise it for
+   * long-horizon tasks that query one tool many times.
+   *
+   * - `maxCalls`: the cap as a call count. A whole number >= 0 (fractions are
+   *   floored, negatives become 0). When set, it replaces `iterationFraction`.
+   * - `iterationFraction`: the cap as `ceil(maxIterations * fraction)`. Clamped
+   *   to 0..1. Default {@link DEFAULT_REPETITION_BACKSTOP_FRACTION} (0.75).
+   *
+   * The guard's review point (2 calls, or `maxBatchSize` for parallel-safe
+   * tools, or the tool's required quantity) is always the floor: a lower cap
+   * never refuses a call the review point lets through. Non-finite values are
+   * ignored. Default: unset, which keeps 0.75 of `maxIterations`. Config only
+   * (no env flag).
+   */
+  readonly repetitionBackstop?: RepetitionBackstop;
+}
+
+/** The two ways to set the repetition backstop (see `HarnessConfig.repetitionBackstop`). */
+export interface RepetitionBackstop {
+  /** Cap as a fraction of `maxIterations` (0..1). */
+  readonly iterationFraction?: number;
+  /** Cap as a call count (whole number >= 0); wins over `iterationFraction`. */
+  readonly maxCalls?: number;
+}
+
+/** Default {@link RepetitionBackstop.iterationFraction}: 0.75 of the run's `maxIterations`. */
+export const DEFAULT_REPETITION_BACKSTOP_FRACTION = 0.75;
+
+/**
+ * The repetition backstop as a call count for a run of `maxIterations`:
+ * `maxCalls` when configured, else `ceil(maxIterations * iterationFraction)`
+ * (default fraction 0.75). The caller applies the review-point floor.
+ */
+export function repetitionBackstopCalls(
+  h: Pick<ResolvedHarness, "repetitionBackstop"> | undefined,
+  maxIterations: number,
+): number {
+  const configured = h?.repetitionBackstop;
+  if (configured?.maxCalls !== undefined) return configured.maxCalls;
+  return Math.ceil(maxIterations * (configured?.iterationFraction ?? DEFAULT_REPETITION_BACKSTOP_FRACTION));
+}
+
+/** Clamp a configured backstop: fraction to 0..1, maxCalls to a whole number >= 0; non-finite = unset. */
+function clampRepetitionBackstop(b: RepetitionBackstop | undefined): RepetitionBackstop | undefined {
+  if (b === undefined) return undefined;
+  const fraction = b.iterationFraction !== undefined && Number.isFinite(b.iterationFraction)
+    ? Math.min(1, Math.max(0, b.iterationFraction))
+    : undefined;
+  const maxCalls = b.maxCalls !== undefined && Number.isFinite(b.maxCalls)
+    ? Math.max(0, Math.floor(b.maxCalls))
+    : undefined;
+  if (fraction === undefined && maxCalls === undefined) return undefined;
+  return Object.freeze({
+    ...(fraction !== undefined ? { iterationFraction: fraction } : {}),
+    ...(maxCalls !== undefined ? { maxCalls } : {}),
+  });
 }
 
 /** Default {@link HarnessConfig.llmRecoveryBudget}: recoveries per run. */
@@ -427,6 +487,12 @@ export interface ResolvedHarness {
    * in 0..10. Present only when configured; absent = {@link DEFAULT_LLM_RECOVERY_BUDGET}.
    */
   readonly llmRecoveryBudget?: number;
+  /**
+   * Repetition backstop (see `HarnessConfig.repetitionBackstop`), clamped.
+   * Present only when configured with at least one valid field; absent = 0.75
+   * of `maxIterations` ({@link repetitionBackstopCalls}).
+   */
+  readonly repetitionBackstop?: RepetitionBackstop;
 }
 
 /** The recovery budget a resolved harness grants per run. */
@@ -477,6 +543,7 @@ export function resolveHarnessConfig(
   );
   const promptDump = pickOptional(config.promptDumpPathPrefix, promptDumpPathPrefix());
   const llmRecoveryBudget = clampRecoveryBudget(config.llmRecoveryBudget);
+  const repetitionBackstop = clampRepetitionBackstop(config.repetitionBackstop);
   // `false` = off; `true` = calibration-gated; `"always"` = forced; unset = env.
   const parallelHint =
     config.parallelToolHint === undefined ? parallelToolHintMode()
@@ -541,6 +608,7 @@ export function resolveHarnessConfig(
     ...(pick(config.bookkeepingRefund, bookkeepingRefundEnabled()) ? {} : { bookkeepingRefund: false as const }),
     ...(pick(config.planRecon, planReconEnabled()) ? { planRecon: true as const } : {}),
     ...(llmRecoveryBudget !== undefined ? { llmRecoveryBudget } : {}),
+    ...(repetitionBackstop !== undefined ? { repetitionBackstop } : {}),
   });
 }
 

@@ -106,6 +106,7 @@ export const MAXIMAL_CONFIG: AgentConfig = {
       parallelToolHint: "always",
       leanFinalTurn: true,
       llmRecoveryBudget: 3,
+      repetitionBackstop: { iterationFraction: 0.5, maxCalls: 12 },
     },
   },
   tools: {

@@ -21,6 +21,7 @@ import { makeObservationResult } from "../../../../src/kernel/utils/observation-
 import { initialKernelState, type KernelState, type KernelInput } from "../../../../src/kernel/state/kernel-state.js";
 import type { ReasoningStep } from "../../../../src/types/index.js";
 import { withEvidence } from "../../tool-evidence-fixture.js";
+import { resolveHarnessConfig, repetitionBackstopCalls, type HarnessConfig } from "../../../../src/harness-config.js";
 
 const METRICS = "umami/get_website_metrics";
 
@@ -133,6 +134,65 @@ describe("repetitionGuard — information yield (c): research runaway", () => {
     expect(outcome.pass).toBe(false);
     const underBackstop = steps.slice(0, 10); // 5 prior calls
     expect(repetitionGuard(call(METRICS, { type: "language" }), stateOf(underBackstop, small), input)).toEqual({ pass: true });
+  });
+});
+
+describe("repetitionGuard — configurable backstop (HarnessConfig.repetitionBackstop)", () => {
+  const small = { maxIterations: 8 }; // default backstop = max(4, ceil(8 * 0.75)) = 6
+  const priorCalls = (n: number): ReasoningStep[] =>
+    metricTypes.slice(0, n).flatMap((type) => ran(call(METRICS, { type }), `rows for ${type}`));
+  const withBackstop = (repetitionBackstop: HarnessConfig["repetitionBackstop"]): KernelInput =>
+    ({ ...input, harness: resolveHarnessConfig({ repetitionBackstop }) }) as KernelInput;
+  // A type no prior call used, so the call always has distinct arguments.
+  const next = () => call(METRICS, { type: "region" });
+
+  it("a resolved harness with no repetitionBackstop keeps the default (6 prior calls block, 5 pass)", () => {
+    const h = { ...input, harness: resolveHarnessConfig() } as KernelInput;
+    expect(repetitionGuard(next(), stateOf(priorCalls(6), small), h).pass).toBe(false);
+    expect(repetitionGuard(next(), stateOf(priorCalls(5), small), h)).toEqual({ pass: true });
+  });
+
+  it("a lower maxCalls blocks earlier (5 prior calls block at maxCalls 5)", () => {
+    expect(repetitionGuard(next(), stateOf(priorCalls(5), small), withBackstop({ maxCalls: 5 })).pass).toBe(false);
+    expect(repetitionGuard(next(), stateOf(priorCalls(4), small), withBackstop({ maxCalls: 5 }))).toEqual({ pass: true });
+  });
+
+  it("maxCalls replaces the fraction: a higher count allows more than ceil(maxIterations * fraction)", () => {
+    expect(repetitionGuard(next(), stateOf(priorCalls(7), small), withBackstop({ maxCalls: 8 }))).toEqual({ pass: true });
+    expect(repetitionGuard(next(), stateOf(priorCalls(8), small), withBackstop({ maxCalls: 8 })).pass).toBe(false);
+  });
+
+  it("a higher iterationFraction allows more (1.0 of 8 iterations = 8 calls)", () => {
+    expect(repetitionGuard(next(), stateOf(priorCalls(7), small), withBackstop({ iterationFraction: 1 }))).toEqual({ pass: true });
+    expect(repetitionGuard(next(), stateOf(priorCalls(8), small), withBackstop({ iterationFraction: 1 })).pass).toBe(false);
+  });
+
+  it("the review point stays the floor: maxCalls below it still lets calls under the threshold pass", () => {
+    // threshold = maxBatchSize 4 for this parallel-safe tool; maxCalls 1 floors to 4.
+    expect(repetitionGuard(next(), stateOf(priorCalls(3), small), withBackstop({ maxCalls: 1 }))).toEqual({ pass: true });
+    expect(repetitionGuard(next(), stateOf(priorCalls(4), small), withBackstop({ maxCalls: 1 })).pass).toBe(false);
+  });
+});
+
+describe("resolveHarnessConfig — repetitionBackstop clamping", () => {
+  it("absent when unset or when every field is invalid", () => {
+    expect("repetitionBackstop" in resolveHarnessConfig()).toBe(false);
+    expect("repetitionBackstop" in resolveHarnessConfig({ repetitionBackstop: {} })).toBe(false);
+    expect("repetitionBackstop" in resolveHarnessConfig({ repetitionBackstop: { iterationFraction: Number.NaN, maxCalls: Number.POSITIVE_INFINITY } })).toBe(false);
+  });
+
+  it("clamps iterationFraction to 0..1 and floors maxCalls to a whole number >= 0", () => {
+    expect(resolveHarnessConfig({ repetitionBackstop: { iterationFraction: 1.5 } }).repetitionBackstop).toEqual({ iterationFraction: 1 });
+    expect(resolveHarnessConfig({ repetitionBackstop: { iterationFraction: -0.2 } }).repetitionBackstop).toEqual({ iterationFraction: 0 });
+    expect(resolveHarnessConfig({ repetitionBackstop: { maxCalls: 6.9 } }).repetitionBackstop).toEqual({ maxCalls: 6 });
+    expect(resolveHarnessConfig({ repetitionBackstop: { maxCalls: -3 } }).repetitionBackstop).toEqual({ maxCalls: 0 });
+  });
+
+  it("repetitionBackstopCalls: default ceil(maxIterations * 0.75); maxCalls wins over the fraction", () => {
+    expect(repetitionBackstopCalls(undefined, 10)).toBe(8);
+    expect(repetitionBackstopCalls(resolveHarnessConfig(), 8)).toBe(6);
+    expect(repetitionBackstopCalls(resolveHarnessConfig({ repetitionBackstop: { iterationFraction: 0.5 } }), 10)).toBe(5);
+    expect(repetitionBackstopCalls(resolveHarnessConfig({ repetitionBackstop: { iterationFraction: 0.5, maxCalls: 12 } }), 10)).toBe(12);
   });
 });
 

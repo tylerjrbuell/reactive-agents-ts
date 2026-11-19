@@ -20,6 +20,7 @@ import { contractOutstanding } from "../../loop/exit-gate.js";
 import { deriveListedInputs, pairedOutputForInput } from "../verify/derive-inputs.js";
 import { isInputRead, isTargetWritten } from "../verify/post-conditions.js";
 import type { ReasoningStep } from "../../../types/index.js";
+import { repetitionBackstopCalls } from "../../../harness-config.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -261,11 +262,10 @@ function distinctArgumentsEligible(tc: ToolCallSpec): boolean {
 const NO_YIELD_STREAK = 2;
 /**
  * Hard backstop on the distinct-arguments pass: once a tool has run
- * `max(threshold, ceil(maxIterations * fraction))` times, distinct arguments no
- * longer exempt it, however much it still yields. Proposed config field (none
- * fits today): `HarnessConfig.repetitionBackstop`.
+ * `max(threshold, repetitionBackstopCalls(harness, maxIterations))` times
+ * (default `ceil(maxIterations * 0.75)`), distinct arguments no longer exempt
+ * it, however much it still yields. Configured by `HarnessConfig.repetitionBackstop`.
  */
-const REPETITION_BACKSTOP_ITERATION_FRACTION = 0.75;
 const DEFAULT_MAX_ITERATIONS = 10;
 
 /** Result text that carries no information (after trim + whitespace collapse). */
@@ -552,7 +552,8 @@ export const sideEffectGuard: Guard = (tc, state, _input) => {
  *  tools, 2 for sequential-only ones, raised to requiredToolQuantities) every
  *  call passes. Past it a call passes on a new target, or on distinct arguments
  *  while the tool's last 2 results were not all empty / failed / repeats (up to
- *  a backstop of max(review point, ceil(maxIterations * 0.75)) calls), or as a
+ *  a backstop of max(review point, ceil(maxIterations * 0.75)) calls, set by
+ *  `HarnessConfig.repetitionBackstop`), or as a
  *  correction of a failed or superseded call. */
 export const repetitionGuard: Guard = (tc, state, input) => {
   if (META_TOOL_NAMES.has(tc.name)) return { pass: true };
@@ -610,7 +611,7 @@ export const repetitionGuard: Guard = (tc, state, input) => {
   const noNewInformation = stoppedYielding(history);
   // The run's own budget (initialKernelState mirrors KernelRunOptions.maxIterations) wins.
   const maxIterations = state.meta?.maxIterations ?? input.maxIterations ?? DEFAULT_MAX_ITERATIONS;
-  const backstop = Math.max(threshold, Math.ceil(maxIterations * REPETITION_BACKSTOP_ITERATION_FRACTION));
+  const backstop = Math.max(threshold, repetitionBackstopCalls(input.harness, maxIterations));
   if (
     priorCallsOfSameTool < backstop &&
     !noNewInformation &&

@@ -399,7 +399,7 @@ export {
   scoresEntropyInline,
 } from "./kernel/state/kernel-constants.js";
 // ─── HarnessConfig — the typed per-agent harness control surface (W3) ───
-export { resolveHarnessConfig, defaultResolvedHarness, fromDisclosureMode, resolveActOrAnswer, actOrAnswerIsDefault, resolveRunStartHarness, llmRecoveryBudgetOf, DEFAULT_LLM_RECOVERY_BUDGET } from "./harness-config.js";
+export { resolveHarnessConfig, defaultResolvedHarness, fromDisclosureMode, resolveActOrAnswer, actOrAnswerIsDefault, resolveRunStartHarness, llmRecoveryBudgetOf, DEFAULT_LLM_RECOVERY_BUDGET, repetitionBackstopCalls, DEFAULT_REPETITION_BACKSTOP_FRACTION } from "./harness-config.js";
 export type {
   HarnessConfig,
   ResolvedHarness,
@@ -409,6 +409,7 @@ export type {
   ActOrAnswerCalibration,
   ActOrAnswerSource,
   ResolvedActOrAnswer,
+  RepetitionBackstop,
 } from "./harness-config.js";
 // Per-run act-or-answer counts (`result.metadata.extensions.actOrAnswer`), read by calibration learning.
 export { actOrAnswerTally, sumActOrAnswerTally, type ActOrAnswerTally } from "./kernel/capabilities/reason/act-or-answer-tally.js";

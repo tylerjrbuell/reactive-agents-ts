@@ -579,6 +579,30 @@ describe("run-started config + origin", () => {
     await dflt.dispose();
     expect(dfltMech?.llmRecoveryBudget).toBe(2);
   });
+
+  test("repetitionBackstop is recorded as a mechanism (default 0.75 fraction; .withHarness({ repetitionBackstop: { maxCalls: 3 } }) gives maxCalls 3)", async () => {
+    const mechanismsOf = async (agentRun: Promise<{ metadata: { tracePath?: string } }>) => {
+      const started = (await eventsOf((await agentRun).metadata.tracePath!)).find((e) => e.kind === "run-started");
+      return ((started?.kind === "run-started" ? started.config : {}) as { mechanisms?: Record<string, unknown> })
+        .mechanisms;
+    };
+    const capped = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .withHarness({ repetitionBackstop: { maxCalls: 3 } })
+      .build();
+    const cappedMech = await mechanismsOf(capped.run("repetition-backstop maxCalls pin"));
+    await capped.dispose();
+    expect(cappedMech?.repetitionBackstop).toEqual({ maxCalls: 3 });
+
+    const dflt = await ReactiveAgents.create()
+      .withTestScenario([{ text: "FINAL ANSWER: ok" }])
+      .withReasoning({ defaultStrategy: "reactive" })
+      .build();
+    const dfltMech = await mechanismsOf(dflt.run("repetition-backstop default pin"));
+    await dflt.dispose();
+    expect(dfltMech?.repetitionBackstop).toEqual({ iterationFraction: 0.75 });
+  });
 });
 
 describe("run-aborted sentinel", () => {

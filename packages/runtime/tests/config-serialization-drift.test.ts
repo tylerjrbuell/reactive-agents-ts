@@ -451,12 +451,14 @@ describe("HarnessConfigSchema <-> HarnessConfig bidirectional drift guard", () =
       parallelToolHint: true,
       leanFinalTurn: true,
       llmRecoveryBudget: true,
+      repetitionBackstop: true,
       // disclosureMode is set only by `.withTools({ disclosure })`, never by
       // `.withHarness`, so it has no HarnessConfigSchema leaf.
     } satisfies Record<Exclude<keyof HarnessConfig, "disclosureMode">, true>;
 
-    // Runtime half of the guard: HarnessConfigSchema's own field keys (it's a
-    // flat Schema.Struct, no nesting) must equal that same set exactly — no
+    // Runtime half of the guard: HarnessConfigSchema's top-level field keys
+    // must equal that same set exactly. Leaves are compared by top-level key
+    // only: a nested leaf (repetitionBackstop is a Struct) counts once — no
     // schema leaf missing a HarnessConfig field, and no HarnessConfig field
     // missing a schema leaf.
     const schemaKeys = Object.keys(HarnessConfigSchema.fields).sort();

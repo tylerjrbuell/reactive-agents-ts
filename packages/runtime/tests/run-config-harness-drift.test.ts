@@ -49,6 +49,7 @@ const EVERY_FIELD: Required<HarnessConfig> = {
   parallelToolHint: "always",
   leanFinalTurn: true,
   llmRecoveryBudget: 3,
+  repetitionBackstop: { maxCalls: 12 },
 };
 
 const prior: Record<string, string | undefined> = {};

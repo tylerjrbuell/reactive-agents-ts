@@ -77,6 +77,21 @@ describe(".withHarness()", () => {
     }
   });
 
+  it("carries the nested repetitionBackstop through toConfig, JSON and fromConfig", async () => {
+    for (const backstop of [{ maxCalls: 3 }, { iterationFraction: 0.5 }]) {
+      const cfg = ReactiveAgents.create()
+        .withName("h")
+        .withProvider("anthropic")
+        .withModel("claude-haiku-4-5-20251001")
+        .withHarness({ repetitionBackstop: backstop })
+        .toConfig();
+      expect(cfg.reasoning?.harness?.repetitionBackstop).toEqual(backstop);
+      const json = JSON.parse(JSON.stringify(cfg)) as typeof cfg;
+      const rebuilt = (await ReactiveAgents.fromConfig(json)).toConfig();
+      expect(rebuilt.reasoning?.harness?.repetitionBackstop).toEqual(backstop);
+    }
+  });
+
   it("survives a later .withReasoning() call regardless of call order", () => {
     const cfgHarnessFirst = ReactiveAgents.create()
       .withName("h")
