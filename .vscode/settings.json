@@ -18,16 +18,34 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode",
     "typescript.tsdk": "node_modules/typescript/lib",
     "typescript.enablePromptUseWorkspaceTsdk": true,
+    "typescript.disableAutomaticTypeAcquisition": true,
+    "typescript.preferences.includePackageJsonAutoImports": "off",
+    "typescript.workspaceSymbols.scope": "currentProject",
+    "typescript.tsserver.maxTsServerMemory": 4096,
+    "typescript.tsserver.watchOptions": {
+        "excludeDirectories": [
+            "**/node_modules",
+            "**/.turbo",
+            "**/dist",
+            "**/.svelte-kit",
+            "**/.claude/worktrees"
+        ]
+    },
     "files.watcherExclude": {
         "**/.claude/worktrees/**": true,
         "**/.turbo/**": true,
         "**/.repo-logs/**": true,
-        "**/.wardens/**": true
+        "**/.wardens/**": true,
+        "**/dist/**": true,
+        "**/.svelte-kit/**": true,
+        "**/.astro/**": true
     },
     "search.exclude": {
         "**/.claude/worktrees/**": true,
         "**/.turbo/**": true,
-        "**/.repo-logs/**": true
+        "**/.repo-logs/**": true,
+        "**/dist/**": true,
+        "**/.svelte-kit/**": true
     },
     "files.exclude": {
         "**/.claude/worktrees": true

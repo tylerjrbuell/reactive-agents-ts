@@ -1,0 +1,21 @@
+{
+    "recommendations": [
+        "oven.bun-vscode",
+        "svelte.svelte-vscode",
+        "esbenp.prettier-vscode",
+        "streetsidesoftware.code-spell-checker"
+    ],
+    "unwantedRecommendations": [
+        "octref.vetur",
+        "vue.volar",
+        "bmewburn.vscode-intelephense-client",
+        "zobo.php-intellisense",
+        "xdebug.php-pack",
+        "xdebug.php-debug",
+        "onecentlin.laravel-extension-pack",
+        "onecentlin.laravel-blade",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-toolsai.jupyter"
+    ]
+}

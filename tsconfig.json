@@ -25,5 +25,25 @@
             "@reactive-agents/*": ["./packages/*/src/index.ts"]
         }
     },
-    "exclude": ["node_modules", "dist", "**/dist/**"]
+    "include": [
+        "*.ts",
+        "scripts/**/*",
+        ".agents/**/*",
+        "packages/*/tests/**/*",
+        "packages/*/test/**/*",
+        "packages/*/__tests__/**/*",
+        "packages/*/scripts/**/*",
+        "apps/*/tests/**/*",
+        "apps/*/scripts/**/*"
+    ],
+    "exclude": [
+        "**/node_modules",
+        "**/dist",
+        "**/.turbo",
+        "**/.svelte-kit",
+        ".claude",
+        "wiki",
+        "apps/docs",
+        "packages/benchmarks/mastra-vs-ra"
+    ]
 }
