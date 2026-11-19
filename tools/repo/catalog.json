@@ -639,6 +639,20 @@
       "invoke": "bun .agents/skills/harness-improvement-loop/scripts/probe-code-action-approval-scope.ts"
     },
     {
+      "id": ".agents/skills/harness-improvement-loop/scripts/probe-strategy-crypto-report.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/probe-strategy-crypto-report.ts",
+      "kind": "research",
+      "summary": "Live probe: Cortex crypto-report task per strategy (gemini, detach approval)",
+      "invoke": "bun --env-file=.env .agents/skills/harness-improvement-loop/scripts/probe-strategy-crypto-report.ts --out <results.json> --trace-root <dir> --strategies reflexion,direct --n 2"
+    },
+    {
+      "id": ".agents/skills/harness-improvement-loop/scripts/repetition-risk-scan.ts",
+      "path": ".agents/skills/harness-improvement-loop/scripts/repetition-risk-scan.ts",
+      "kind": "research",
+      "summary": "Zero-token trace scan: repeated tool calls and repetitionGuard risk per run",
+      "invoke": "bun .agents/skills/harness-improvement-loop/scripts/repetition-risk-scan.ts <trace-dir> [<trace-dir> ...]"
+    },
+    {
       "id": "scripts/lift/probe-2-thinking-loss.ts",
       "path": "scripts/lift/probe-2-thinking-loss.ts",
       "kind": "research",
