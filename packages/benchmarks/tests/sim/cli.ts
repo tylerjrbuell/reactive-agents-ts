@@ -14,6 +14,7 @@ import { SHAPES, findShape } from "../../src/sim/shapes/index.js";
 import type { Shape } from "../../src/sim/shape.js";
 import { loadTier, tierNames, type Tier } from "../../src/sim/tier.js";
 import { formatMatrix, formatSweeps, matrix, sweep } from "./matrix.js";
+import { formatKernelProvenance, kernelProvenance } from "./provenance.js";
 
 const USAGE =
   "usage: bun run bench:sim -- --mechanism <name|all> [--shapes a,b] [--seeds N] [--tier name] [--sweep]";
@@ -85,7 +86,7 @@ export async function main(args: readonly string[]): Promise<number> {
     if (tier === undefined) return 2;
     const sweeps = [];
     for (const s of shapes) for (const m of mechanisms) sweeps.push(await sweep(s, m, { tier, seeds: flag(args, "seeds") === undefined ? 30 : seeds }));
-    console.log(`compliance sweep, tier ${tier.name} (${tier.status}); advisory, never promotes\n${formatSweeps(sweeps)}`);
+    console.log(`${formatKernelProvenance(kernelProvenance())}\ncompliance sweep, tier ${tier.name} (${tier.status}); advisory, never promotes\n${formatSweeps(sweeps)}`);
     return 0; // a sweep is advisory: only the deterministic matrix gates (exit 1 on `hurts`)
   }
 
@@ -94,7 +95,7 @@ export async function main(args: readonly string[]): Promise<number> {
     tier === undefined
       ? "deterministic (naive scripted model, compliance 1): hurts = veto-class"
       : `stochastic, tier ${tier.name} (${tier.status}), ${seeds} seeds: advisory`;
-  console.log(`${mode}\n${formatMatrix(cells)}`);
+  console.log(`${formatKernelProvenance(kernelProvenance())}\n${mode}\n${formatMatrix(cells)}`);
   return cells.some((c) => c.verdict === "hurts") ? 1 : 0;
 }
 

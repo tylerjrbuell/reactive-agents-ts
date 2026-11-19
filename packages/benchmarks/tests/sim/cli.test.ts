@@ -27,6 +27,7 @@ describe("bench:sim CLI", () => {
     expect(code).toBe(0);
     const text = out.join("\n");
     expect(text).toContain("deterministic");
+    expect(text).toMatch(/^kernel source: packages\/reasoning\/src last changed at /m);
     expect(text).toMatch(/unread-input-prose\s+leanFinalTurn\s+NEUTRAL/);
     expect(text).toMatch(/unread-input-filename\s+leanFinalTurn\s+NEUTRAL/);
   }, 30000);
