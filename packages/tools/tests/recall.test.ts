@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "bun:test";
 import { Effect, Ref } from "effect";
 import { makeRecallHandler, recallTool } from "../src/skills/recall.js";
+import { validateToolInput } from "../src/validation/input-validator.js";
 
 let storeRef: Ref.Ref<Map<string, string>>;
 let handler: ReturnType<typeof makeRecallHandler>;
@@ -12,12 +13,58 @@ beforeEach(() => Effect.runSync(Effect.gen(function* () {
 
 describe("recall tool definition", () => {
   it("has name 'recall'", () => expect(recallTool.name).toBe("recall"));
-  it("ADVERTISES only the four modes; segmentation stays runtime-only", () => {
-    // 2026-07-10: the six segmented-read params were removed from the schema
-    // the model pays for (~423 tok/request, zero observed segmented reads) —
-    // the handler still honors them, pinned below.
+  it("advertises the four modes plus the segmented-read params the handler honors", () => {
+    // 2026-11-19: the validator keeps only advertised params, so unadvertised
+    // segmented params never reached the handler and every segmented-recall
+    // hint the harness emits was dead. They are advertised again.
     const names = recallTool.parameters.map(p => p.name);
-    expect(names.sort()).toEqual(["content", "full", "key", "query"]);
+    expect(names.sort()).toEqual([
+      "arrayCount", "arrayStart", "content", "full", "key",
+      "lineCount", "lineStart", "maxChars", "query", "start",
+    ]);
+  });
+});
+
+describe("recall segmented params survive validation (execute path: validate, then handler)", () => {
+  const validateThenRun = (args: Record<string, unknown>) =>
+    Effect.runPromise(
+      Effect.flatMap(validateToolInput(recallTool, args), (validated) => handler(validated)),
+    ) as Promise<any>;
+  const body = "0123456789".repeat(100);
+  const lines = Array.from({ length: 100 }, (_, i) => `line ${i}`).join("\n");
+  const arr = JSON.stringify(Array.from({ length: 50 }, (_, i) => i));
+
+  beforeEach(() => Effect.runSync(Ref.set(storeRef, new Map([["doc", body], ["log", lines], ["arr", arr]]))));
+
+  it("start/maxChars reach the handler (char section)", async () => {
+    const r = await validateThenRun({ key: "doc", start: 500, maxChars: 30 });
+    expect(r.mode).toBe("chars");
+    expect(r.start).toBe(500);
+    expect(r.content).toBe(body.slice(500, 530));
+    expect(r.nextStart).toBe(530);
+  });
+
+  it("full: true + start: N (the recall-read hint shape) reaches the handler as a section read", async () => {
+    const r = await validateThenRun({ key: "doc", full: true, start: 900 });
+    expect(r.mode).toBe("chars");
+    expect(r.start).toBe(900);
+  });
+
+  it("stringified numbers from small models are coerced, not dropped", async () => {
+    const r = await validateThenRun({ key: "doc", start: "10", maxChars: "5" });
+    expect(r.content).toBe(body.slice(10, 15));
+  });
+
+  it("lineStart/lineCount reach the handler (line section)", async () => {
+    const r = await validateThenRun({ key: "log", lineStart: 10, lineCount: 2 });
+    expect(r.mode).toBe("lines");
+    expect(r.content).toBe("line 10\nline 11");
+  });
+
+  it("arrayStart/arrayCount reach the handler (array slice)", async () => {
+    const r = await validateThenRun({ key: "arr", arrayStart: 45, arrayCount: 3 });
+    expect(r.mode).toBe("array");
+    expect(r.items).toEqual([45, 46, 47]);
   });
 });
 

@@ -56,13 +56,19 @@ export const recallTool: ToolDefinition = {
       required: false,
       default: false,
     },
-    // Six segmented-read parameters (start/maxChars/lineStart/lineCount/
-    // arrayStart/arrayCount) were removed from the ADVERTISED schema on
-    // 2026-07-10. Measured: recall's schema alone cost ~423 tokens PER REQUEST
-    // — the largest tool on the wire — while live traces showed zero segmented
-    // reads; models use key/query/full. The handler still honors all six at
-    // runtime (back-compat for callers that learned them), but the model pays
-    // for the four modes it actually uses.
+    // Segmented reads. Removed from the advertised schema on 2026-07-10 for
+    // token cost (~423 tok/request with long descriptions); restored
+    // 2026-11-19 with terse descriptions because the input validator keeps
+    // only advertised parameters: unadvertised, these never reached the
+    // handler, so every segmented-recall hint the harness emits
+    // (`start`/`maxChars`, `lineStart`/`lineCount`, `arrayStart`/`arrayCount`)
+    // was dead. Advertise only what the handler below honors.
+    { name: "start", type: "number", description: "Char offset for a section read.", required: false },
+    { name: "maxChars", type: "number", description: "Chars to read from start.", required: false },
+    { name: "lineStart", type: "number", description: "Line offset for a section read.", required: false },
+    { name: "lineCount", type: "number", description: "Lines to read (default 40).", required: false },
+    { name: "arrayStart", type: "number", description: "Item offset into a stored JSON array.", required: false },
+    { name: "arrayCount", type: "number", description: "Items to read (default 20).", required: false },
   ],
   returnType: "object",
   riskLevel: "low",
