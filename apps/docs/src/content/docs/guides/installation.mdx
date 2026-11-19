@@ -31,7 +31,10 @@ bun add reactive-agents
 
 # Node.js 22.5+
 npm install reactive-agents
+npm pkg set type=module   # examples use top-level await
 ```
+
+Prefer a ready project? `npm create reactive-agent my-agent` scaffolds one, including an `AGENTS.md` that points coding agents (Claude Code, Cursor, Codex) at the current docs. See [create-reactive-agent](/features/create-reactive-agent/).
 
 </li>
 
@@ -86,8 +89,8 @@ console.log((await agent.run("Hello")).output);
 # Bun
 bun run src/agent.ts
 
-# Node.js (requires tsx)
-npx tsx src/agent.ts
+# Node.js (requires tsx; Node does not load .env on its own, so pass it)
+npx tsx --env-file=.env src/agent.ts
 ```
 
 </li>
@@ -205,7 +208,7 @@ The framework is modular — install only the packages you need:
 
 | Package                          | Description                                                               |
 | -------------------------------- | ------------------------------------------------------------------------- |
-| `create-reactive-agent`          | Project scaffolder: `npm create reactive-agent` (also used by `rax init`) |
+| `create-reactive-agent`          | Project scaffolder: `npm create reactive-agent` (also used by `rax init`); writes `AGENTS.md` for coding agents |
 | `@reactive-agents/cortex`        | Cortex Studio, a local UI for inspecting runs. Start it with `rax cortex` (needs Bun) |
 
 <Tabs syncKey="pkg">

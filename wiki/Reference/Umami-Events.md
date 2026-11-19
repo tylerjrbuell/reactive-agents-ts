@@ -243,6 +243,33 @@ Fires when a visitor flips the "Highlight what's new" switch (page title row, ev
 | `state` | string | `on` or `off`, the state after the click |
 | `path` | string | Page path |
 
+## Agent-ready events (added 2026-11-18)
+
+### `copy_page`
+
+Fires on any action in the "Copy page" control in the page title row (`CopyPage.astro`, every docs page). The Open in Claude / Open in ChatGPT links carry `data-ra-self-tracked`, so they do not also fire `outbound_click`: one event per click.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `action` | string | `copy` (markdown twin copied), `view` (twin opened), `claude` (Open in Claude), `chatgpt` (Open in ChatGPT) |
+| `path` | string | Page path |
+
+### `agent_prompt_open`
+
+Fires when a visitor expands the "Use this prompt with your coding agent" box on the quickstart (`AgentPrompt.astro`).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `path` | string | Page path |
+
+### `agent_prompt_copy`
+
+Fires when a visitor clicks "Copy prompt" in the same box.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `path` | string | Page path |
+
 **Funnel query:** per placement, `subscribe_view` -> `subscribe_submit` -> `subscribe_success`; `feedback_open` -> `feedback_submit`; `star_cta_click` and `quickstart_click` per `placement` against pageviews of the same page. Use `get_event_stats`/`get_event_properties` in the Umami MCP.
 
 ---

@@ -18,6 +18,9 @@ const EVENTS = [
   "subscribe_error",
   "feedback_open",
   "feedback_submit",
+  "copy_page",
+  "agent_prompt_open",
+  "agent_prompt_copy",
 ] as const;
 
 describe("conversion surfaces", () => {
@@ -25,12 +28,21 @@ describe("conversion surfaces", () => {
     read("public/umami-deep.js"),
     read("src/components/EmailSubscribe.astro"),
     read("src/components/FeedbackModal.astro"),
+    read("src/components/CopyPage.astro"),
+    read("src/components/AgentPrompt.astro"),
   ].join("\n");
   const catalog = readFileSync(resolve(REPO, "wiki/Reference/Umami-Events.md"), "utf8");
 
   it.each(EVENTS)("event %s is emitted by the docs site and catalogued", (name) => {
     expect(sources).toContain(`"${name}"`);
     expect(catalog).toMatch(new RegExp(`^### .*\`${name}\``, "m"));
+  });
+
+  it("Open in Claude / ChatGPT count once: CopyPage opts out of outbound_click", () => {
+    expect(read("src/components/CopyPage.astro")).toMatch(/data-ra-copy-page data-ra-self-tracked/);
+    const deep = read("public/umami-deep.js");
+    const outbound = deep.slice(deep.indexOf("/* ---------- Outbound links"), deep.indexOf('track("outbound_click"'));
+    expect(outbound).toContain('a.closest("[data-ra-self-tracked]")) return;');
   });
 
   it("never sends the email address to analytics", () => {

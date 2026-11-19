@@ -3,7 +3,8 @@
 // (<page>.md, src/pages/[...slug].md.ts) to the clipboard, view it, or open it
 // in Claude or ChatGPT. One split button; the menu is keyboard operable
 // (Enter/Space/ArrowDown open, arrows move, Escape closes). Every action fires
-// the Umami `copy_page` event with an `action` property.
+// the Umami `copy_page` event with an `action` property; `data-ra-self-tracked`
+// keeps umami-deep.js from also counting the Claude/ChatGPT links as outbound_click.
 import { DOCS_ORIGIN, markdownPathForSlug, slugForId } from "../agent-docs/page-markdown";
 
 interface Props {
@@ -19,7 +20,7 @@ const chatgptUrl = `https://chatgpt.com/?q=${ask}`;
 const menuId = "ra-copy-page-menu";
 ---
 
-<div class="ra-copy-page" data-ra-copy-page data-md={mdPath}>
+<div class="ra-copy-page" data-ra-copy-page data-ra-self-tracked data-md={mdPath}>
   <button type="button" class="ra-copy-page-main" data-ra-action="copy">
     <svg aria-hidden="true" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
     <span data-ra-copy-label aria-live="polite">Copy page</span>

@@ -17,6 +17,9 @@
  *                       Conversion CTAs; catalog in wiki/Reference/Umami-Events.md.
  *                       subscribe_* and feedback_* fire from EmailSubscribe.astro
  *                       and FeedbackModal.astro through window.__raTrack.
+ *   copy_page, agent_prompt_open, agent_prompt_copy
+ *                       Agent-ready surfaces; fire from CopyPage.astro and
+ *                       AgentPrompt.astro through window.__raTrack.
  *   anchor_click        In-page heading-link click (deep-share intent)
  *   scroll_depth        Reached 25% / 50% / 75% / 100% of long pages
  *
@@ -46,6 +49,9 @@
     (ev) => {
       const a = ev.target?.closest?.("a[href]");
       if (!a) return;
+      // Controls that fire their own event (CopyPage's Open in Claude/ChatGPT
+      // fire copy_page) opt out so one click counts once.
+      if (a.closest("[data-ra-self-tracked]")) return;
       const href = a.getAttribute("href") || "";
       // Skip in-page anchors and same-host links (those become anchor_click below)
       if (href.startsWith("#") || href.startsWith("/")) return;

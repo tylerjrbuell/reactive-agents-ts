@@ -14,7 +14,7 @@ related:
 
 import { Aside, Tabs, TabItem, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-`create-reactive-agent` scaffolds a ready-to-run Reactive Agents project. One command — you get a typed TypeScript starter with the right provider wired up, an `.env.example`, a `README`, and a working `start` script.
+`create-reactive-agent` scaffolds a ready-to-run Reactive Agents project. One command — you get a typed TypeScript starter with the right provider wired up, an `.env.example`, a `README`, an `AGENTS.md` for coding agents, and a working `start` script.
 
 ## Quickstart
 
@@ -61,8 +61,16 @@ The CLI detects your package manager automatically. Running without a project na
 ◆  Package manager?
 │  ● bun · npm · pnpm · yarn
 │
-└  Scaffolded my-agent/
-   Next: cd my-agent && bun install && bun run start
+└  Created 7 files in /path/to/my-agent
+
+Next steps
+  cd my-agent
+  bun install
+  cp .env.example .env   # then set ANTHROPIC_API_KEY in .env
+  bun start
+
+• Docs: https://docs.reactiveagents.dev
+• Using a coding agent? AGENTS.md points it at the current docs and skills.
 ```
 
 ## Templates
@@ -180,12 +188,15 @@ When `stdin` is not a TTY (redirected pipe, CI), the CLI automatically skips pro
 my-agent/
 ├── src/
 │   └── index.ts        ← your agent (provider + model pre-wired)
-├── package.json        ← reactive-agents dep, start script
-├── tsconfig.json       ← extends @reactive-agents/tsconfig/base
+├── package.json        ← reactive-agents dep, start + typecheck scripts
+├── tsconfig.json       ← strict, Bundler module resolution
 ├── .env.example        ← provider API key hint
 ├── .gitignore
-└── README.md
+├── README.md
+└── AGENTS.md           ← for coding agents (Claude Code, Cursor, Codex)
 ```
+
+`AGENTS.md` tells a coding agent to read the current docs instead of its training data: the [`llms.txt`](https://docs.reactiveagents.dev/llms.txt) index, the `.md` version of any page, and `npx skills add https://docs.reactiveagents.dev` for the framework's agent skills. It also lists the project's real scripts, the builder rules, and (except for `cloudflare-worker`) how to explain a failed run with `npx rax diagnose cause latest`.
 
 ## Stability
 

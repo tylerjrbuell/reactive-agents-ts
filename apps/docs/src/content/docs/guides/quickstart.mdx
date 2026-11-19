@@ -27,14 +27,14 @@ Working with a coding agent? See [Quickstart for agents](#quickstart-for-agents)
 The fastest path through this guide is the `rax` workflow (`Rax` = Reactive Agents Executable).
 
 <Aside type="tip" title="In a hurry?">
-The minimum viable agent is **3 lines**. Skip to step 3 if you've already got Bun + an API key.
+The minimum viable agent is **3 lines**. Skip to step 3 if you've already got Bun or Node + an API key.
 </Aside>
 
 <ol class="ra-steps">
 
 <li>
 
-**Create a project** — scaffold with `rax init` or `bun init` manually.
+**Create a project** — scaffold with `rax init`, or set one up manually with Bun or npm.
 
 </li>
 
@@ -52,7 +52,7 @@ The minimum viable agent is **3 lines**. Skip to step 3 if you've already got Bu
 
 <li>
 
-**Run it** — `bun run src/agent.ts`.
+**Run it** — `bun run src/agent.ts` (on Node: `npx tsx --env-file=.env src/agent.ts`).
 
 </li>
 
@@ -68,37 +68,62 @@ The minimum viable agent is **3 lines**. Skip to step 3 if you've already got Bu
 
 Using the CLI:
 
+<Tabs syncKey="pkg">
+  <TabItem label="bun">
 ```bash
 bunx reactive-agents init my-agent-app --template with-tools
 cd my-agent-app
 bun install
 ```
+  </TabItem>
+  <TabItem label="npm">
+```bash
+npx reactive-agents init my-agent-app --template with-tools
+cd my-agent-app
+npm install
+```
+  </TabItem>
+</Tabs>
 
-(Once `reactive-agents` is installed in a project, the shorter `rax` alias works: `rax init my-agent-app --template with-tools`.)
+(Once `reactive-agents` is installed in a project, the shorter `rax` alias works: `rax init my-agent-app --template with-tools`.) The scaffold follows the runner you launched it with: under `npx`, the project's `start` script runs through `tsx` on Node instead of Bun.
 
 `rax init --template with-tools` scaffolds:
 
 <FileTree>
 - my-agent-app/
   - src/
-    - **index.ts** Your agent — run it with `bun start` (`bun run src/index.ts`)
+    - **index.ts** Your agent — run it with `bun start` or `npm run start`
   - .env.example Provider API key template — copy to `.env` and fill in
   - package.json `reactive-agents` dependency + `start` / `typecheck` scripts
   - tsconfig.json strict mode + Bundler module resolution
   - .gitignore (ignores `.env`)
   - README.md
+  - AGENTS.md For coding agents (Claude Code, Cursor, Codex): points them at the current docs, `llms.txt` and skills
 </FileTree>
 
 Or manually:
 
+<Tabs syncKey="pkg">
+  <TabItem label="bun">
 ```bash
 mkdir my-agent-app && cd my-agent-app
 bun init -y
 bun add reactive-agents
 ```
+  </TabItem>
+  <TabItem label="npm">
+```bash
+mkdir my-agent-app && cd my-agent-app
+npm init -y
+npm pkg set type=module   # examples use top-level await
+npm install reactive-agents
+npm install -D tsx typescript
+```
+  </TabItem>
+</Tabs>
 
 :::note[Effect dependency]
-`reactive-agents` declares `effect` as a **peer dependency** (`"effect": "^3.10.0"`), and `@reactive-agents/core` additionally carries it as a regular dependency — so `effect` lands in your install tree via the framework anyway. If you import from `effect` directly in your own code, declare it explicitly (`bun add effect`). For hooks and custom tools, import helpers explicitly (`import { Effect } from "effect"`) and use **`Effect.succeed`**, **`Effect.fail`**, etc. — see the [Effect-TS primer](/concepts/effect-ts/).
+`reactive-agents` declares `effect` as a **peer dependency** (`"effect": "^3.10.0"`), and `@reactive-agents/core` additionally carries it as a regular dependency — so `effect` lands in your install tree via the framework anyway. If you import from `effect` directly in your own code, declare it explicitly (`bun add effect` or `npm install effect`). For hooks and custom tools, import helpers explicitly (`import { Effect } from "effect"`) and use **`Effect.succeed`**, **`Effect.fail`**, etc. — see the [Effect-TS primer](/concepts/effect-ts/).
 :::
 
 ## 2. Set Up Environment
@@ -247,9 +272,19 @@ Always dispose agents that use MCP servers or other subprocess-based tools — o
 
 ## 4. Run It
 
+<Tabs syncKey="pkg">
+  <TabItem label="bun">
 ```bash
 bun run src/agent.ts
 ```
+  </TabItem>
+  <TabItem label="npm">
+```bash
+# Node does not load .env itself; --env-file does (.env must exist)
+npx tsx --env-file=.env src/agent.ts
+```
+  </TabItem>
+</Tabs>
 
 ## 5. Add Capabilities
 
@@ -342,6 +377,8 @@ npm install
 cp .env.example .env   # then set ANTHROPIC_API_KEY in .env (skip for ollama)
 npm run start
 ```
+
+The scaffold writes an `AGENTS.md` in the project root: read it first. It lists the project's scripts, the builder rules and how to debug a failed run (`npx rax diagnose cause latest` after `.withTracing()`).
 
 Other templates: `with-tools`, `streaming`, `with-structured-output`, `with-approval-gates`, `with-memory`, `cloudflare-worker`. To add the framework to an existing project instead: `npm install reactive-agents` (or `bun add reactive-agents`).
 

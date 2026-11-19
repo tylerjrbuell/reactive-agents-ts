@@ -57,6 +57,8 @@ rax init <name> [--template minimal|with-tools|streaming|with-structured-output|
 
 Generated `src/index.ts` imports from `"reactive-agents"` and is runnable after you install dependencies (`bun install` or `npm install`) and copy `.env.example` to `.env`.
 
+Every template also writes an `AGENTS.md` for coding agents (Claude Code, Cursor, Codex): it points them at the current docs (`llms.txt`, `.md` pages, `npx skills add https://docs.reactiveagents.dev`) instead of training data. See [What gets scaffolded](/features/create-reactive-agent/#what-gets-scaffolded).
+
 ### `rax create agent`
 
 Generate an agent file from a recipe, or use `--interactive` for guided scaffolding.
