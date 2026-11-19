@@ -2,6 +2,7 @@ import { get, writable } from "svelte/store";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import type { CortexAgentToolConfig } from "$lib/types/agent-config.js";
 import { carryContext } from "../chat-context.js";
+import { hydrateTurn } from "./chat-hydrate.js";
 import { failTurn, requestTurnStopAnswer, streamAssistantTurn } from "./chat-stream.js";
 import { friendlyChatError, interruptTurn, whenInterruptIdle } from "./chat-interrupt.js";
 import { ATTACH_ACTIVE_TURN, chatStreamEndpoint, fetchActiveTurn, resumedTurns, shouldResume } from "./chat-resume.js";
@@ -184,68 +185,8 @@ export type ChatTurn = StrategyRunHolder & {
   attachments?: readonly AttachmentMeta[];
 };
 
-/** Server-persisted thinking + tool-call detail for a finished assistant turn. */
-type PersistedTrace = {
-  reasoningSteps?: ReadonlyArray<PersistedReasoningStep>;
-  toolCalls?: ReadonlyArray<Omit<ChatToolCall, "status"> & { status: "done" | "failed" }>;
-  subAgents?: ReadonlyArray<PersistedSubAgent>;
-  checklist?: ChecklistSnapshotWire;
-  /** Present only when the turn's run did not succeed (server `StoredTurnOutcome`). */
-  outcome?: { success: false } & TurnRunEnding;
-  /** Receipt deliverables, when the run listed any. */
-  deliverables?: readonly TurnDeliverable[];
-  /** Per-call usage evidence persisted by the recorder fold. */
-  usage?: TurnUsage;
-  /** Strategy the run reported. */
-  strategy?: string;
-  /** Reported run duration (ms). */
-  durationMs?: number;
-  /** Skills the run had active and why. */
-  skills?: RunSkillsView;
-  /** Memories the run recalled (`MemoryRecalled`); [] = it looked and recalled nothing. */
-  recalled?: readonly RecalledMemoryView[];
-  /** The typed object and how it was obtained, for a turn run with an output schema. */
-  structured?: TurnStructured;
-  /** Attachments of a user message (names and sizes). */
-  attachments?: readonly AttachmentMeta[];
-};
-
-/** Rebuild a ChatTurn from a server row, restoring reasoning steps + tool calls so history is inspectable after reload. */
-export function hydrateTurn(row: ChatTurn & { trace?: PersistedTrace }): ChatTurn {
-  const { trace, ...turn } = row;
-  // A stored assistant row is written when its run ends, so its `ts` is the finish time.
-  const finished = turn.role === "assistant" && turn.ts > 0 ? { finishedAt: turn.ts } : {};
-  if (!trace) return { ...turn, ...finished };
-  return {
-    ...turn,
-    ...finished,
-    ...(typeof trace.durationMs === "number" ? { durationMs: trace.durationMs } : {}),
-    ...(trace.reasoningSteps && trace.reasoningSteps.length > 0
-      ? {
-          reasoningSteps: trace.reasoningSteps.map((r) => ({
-            iteration: r.iteration,
-            maxIterations: 0,
-            thought: r.thought,
-            ...(r.narration ? { narration: r.narration } : {}),
-            ...(r.thinking ? { thinking: r.thinking } : {}),
-          })),
-        }
-      : {}),
-    ...(trace.toolCalls && trace.toolCalls.length > 0 ? { toolCalls: trace.toolCalls.map((c) => ({ ...c })) } : {}),
-    ...(trace.subAgents && trace.subAgents.length > 0 ? { subAgents: restoreSubAgents(trace.subAgents) } : {}),
-    ...(trace.checklist ? { checklist: trace.checklist } : {}),
-    ...(trace.outcome?.success === false ? { runFailed: storedRunEnding(trace.outcome) } : {}),
-    // A turn the user stopped reads as stopped after a reload, as it did live.
-    ...(trace.outcome?.ending === "interrupted" && trace.outcome.interruptedBy === "user" ? { cancelled: true } : {}),
-    ...(trace.deliverables && trace.deliverables.length > 0 ? { deliverables: trace.deliverables } : {}),
-    ...(trace.usage ? { usage: trace.usage } : {}),
-    ...(trace.strategy ? { strategy: trace.strategy } : {}),
-    ...(trace.skills && trace.skills.activations.length > 0 ? { skills: trace.skills } : {}),
-    ...(trace.recalled ? { recalled: trace.recalled } : {}),
-    ...(trace.structured ? { structured: trace.structured } : {}),
-    ...(trace.attachments && trace.attachments.length > 0 ? { attachments: trace.attachments } : {}),
-  };
-}
+// Rebuilding a turn from a server row (thinking, tool calls, strategy card) lives in chat-hydrate.ts.
+export { hydrateTurn } from "./chat-hydrate.js";
 
 export type ChatSession = {
   sessionId: string;

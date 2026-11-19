@@ -35,6 +35,7 @@ const BLUEPRINT: StrategySpec = {
   phases: [
     { id: "plan", label: "Planning" },
     { id: "verify", label: "Checking the plan" },
+    { id: "degrade", label: "Falling back to a simpler plan" },
     { id: "execute", label: "Running the plan" },
     { id: "step", label: "Running a step" },
     { id: "patch", label: "Patching the plan" },
@@ -51,12 +52,24 @@ export const STRATEGY_PHASES: Readonly<Record<string, StrategySpec>> = {
   reactive: REACTIVE,
   react: REACTIVE,
   direct: { label: "Direct", pass: "direct", phases: [] },
-  adaptive: { label: "Adaptive", pass: "adaptive", phases: [{ id: "select", label: "Choosing a strategy" }] },
+  adaptive: {
+    label: "Adaptive",
+    pass: "adaptive",
+    phases: [
+      { id: "select", label: "Choosing a strategy" },
+      { id: "heuristic", label: "Choosing a strategy" },
+      { id: "classifier-skip", label: "Choosing a strategy" },
+      { id: "cost-downgrade", label: "Switching to a cheaper strategy" },
+      { id: "fallback", label: "Falling back" },
+    ],
+  },
   reflexion: {
     label: "Reflexion",
     pass: "reflexion",
     phases: [
       { id: "generate", label: "Drafting" },
+      // The first pass runs without its own label, so the kernel stamps `reflexion:main`: the draft.
+      { id: "main", label: "Drafting" },
       { id: "critique", label: "Critiquing" },
       { id: "improve", label: "Improving" },
     ],
@@ -66,6 +79,7 @@ export const STRATEGY_PHASES: Readonly<Record<string, StrategySpec>> = {
     pass: "plan-execute",
     phases: [
       { id: "plan", label: "Planning" },
+      { id: "schedule", label: "Scheduling the steps" },
       { id: "refine", label: "Refining the plan" },
       { id: "augment", label: "Extending the plan" },
       { id: "step", label: "Running a step" },
@@ -78,6 +92,7 @@ export const STRATEGY_PHASES: Readonly<Record<string, StrategySpec>> = {
     pass: "tree-of-thought",
     phases: [
       { id: "explore", label: "Exploring options" },
+      { id: "bfs-skipped", label: "Skipping the search" },
       { id: "select", label: "Choosing the best path" },
       { id: "execute", label: "Carrying out the best path" },
     ],
@@ -164,6 +179,8 @@ const PHASE_NUMBER = /^(.*?)-(\d+)$/;
 
 /** Capitalise the first letter, spaces for dashes: the label of a phase the table does not know. */
 const titleOfId = (id: string): string => {
+  // `main` is the kernel's stamp for a pass its strategy did not label: not a name for the reader.
+  if (id === "main") return "Working";
   const text = id.replace(/[-_]+/g, " ").trim();
   return text.length === 0 ? "Working" : text[0]!.toUpperCase() + text.slice(1);
 };

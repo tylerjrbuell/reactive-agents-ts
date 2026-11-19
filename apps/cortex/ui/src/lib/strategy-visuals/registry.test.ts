@@ -42,7 +42,14 @@ describe("strategy card model", () => {
       { id: "b", depth: 2, score: 0.9 },
     ];
     const run = endStrategyRun(nodes.reduce((s, node) => foldStrategyRun(s, strategyStepOf("tree-of-thought:explore", { node })!), initialStrategyRun));
-    expect(card(run).chip).toBe("2 levels, best 0.90");
+    expect(card(run).chip).toBe("2 nodes, best 0.90");
+  });
+
+  it("a settled run's chip says how it ended: accepted critique, verified code", () => {
+    const refl = endStrategyRun(fold(["reflexion:generate", "reflexion:critique-1"], { 1: { accepted: true } }));
+    expect(card(refl).chip).toBe("1 round, accepted");
+    const code = endStrategyRun(fold(["code-action:execute:1", "code-action:verify:1"], { 1: { verify: { verdict: "PASS", summary: "ok" } } }));
+    expect(card(code).chip).toBe("1 attempt, verified");
   });
 
   it("a plan strategy adds no card while the goal-checks card draws its plan", () => {

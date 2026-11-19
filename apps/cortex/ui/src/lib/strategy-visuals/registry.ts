@@ -70,11 +70,17 @@ function summaryOf(run: StrategyRunState, visual: StrategyVisual): string {
     const levels = totTreeOf(run);
     if (levels.length === 0) return plural(run.rows.length, "phase");
     const best = Math.max(...levels.map((l) => l.best ?? 0));
-    return `${plural(levels.length, "level")}, best ${best.toFixed(2)}`;
+    return `${plural(run.nodes.length, "node")}, best ${best.toFixed(2)}`;
   }
   if (visual.kind === "attempts") {
     const rounds = attemptsOf(run).filter((a) => a.n > 0).length;
-    return rounds === 0 ? "first try" : plural(rounds, (visual.noun ?? "round").toLowerCase());
+    const base = rounds === 0 ? "first try" : plural(rounds, (visual.noun ?? "round").toLowerCase());
+    // How it ended: the last critique's verdict (reflexion) or the last check's (code action).
+    const last = (pick: (r: StrategyRunState["rows"][number]) => boolean | undefined): boolean | undefined => run.rows.map(pick).filter((v) => v !== undefined).at(-1);
+    const accepted = last((r) => r.accepted);
+    const verified = last((r) => (r.verify ? /^(pass|verified|ok)/i.test(r.verify.verdict) : undefined));
+    const end = accepted === true ? "accepted" : accepted === false ? "not accepted" : verified === true ? "verified" : verified === false ? "not verified" : undefined;
+    return end ? `${base}, ${end}` : base;
   }
   return plural(run.rows.length, "phase");
 }

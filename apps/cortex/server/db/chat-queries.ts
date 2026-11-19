@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { generateTaskId } from "@reactive-agents/core";
+import { strategyRunFromStorage } from "@reactive-agents/ui-core";
 import { readStoredAttachments, readStoredDeliverables, readStoredOutcome, type StoredTurnTrace } from "../services/chat-turn-trace.js";
 import { migrateLegacyCliToolsInConfig } from "../services/legacy-cli-tools.js";
 
@@ -278,6 +279,7 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
           const outcome = readStoredOutcome(parsed.outcome);
           const deliverables = readStoredDeliverables(parsed.deliverables);
           const attachments = readStoredAttachments(parsed.attachments);
+          const strategyRun = strategyRunFromStorage(parsed.strategyRun);
           trace = {
             reasoningSteps: parsed.reasoningSteps,
             toolCalls: parsed.toolCalls,
@@ -300,6 +302,8 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
             // What the user attached to this (user) message: names and sizes only (chat-attachments.ts).
             ...(attachments ? { attachments } : {}),
             ...(typeof parsed.continuedFrom === "string" && parsed.continuedFrom !== "" ? { continuedFrom: parsed.continuedFrom } : {}),
+            // The strategy card's folded phases (chat-turn-trace.ts); absent on older rows.
+            ...(strategyRun ? { strategyRun } : {}),
           };
         }
       } catch {

@@ -189,6 +189,12 @@ export {
   type TotLevel,
 } from "./state/strategy-phases.js";
 export {
+  DEFAULT_STRATEGY_RUN_CAPS,
+  strategyRunForStorage,
+  strategyRunFromStorage,
+  type StrategyRunCaps,
+} from "./state/strategy-run-persist.js";
+export {
   approvalGateOf,
   strategyApprovalConflictOf,
   strategyConflictLineOf,

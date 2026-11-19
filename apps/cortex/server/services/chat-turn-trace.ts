@@ -2,8 +2,13 @@ import type { AgentStreamEvent } from "@reactive-agents/runtime";
 import {
   causeLineOf,
   finishTurnTrace,
+  foldStrategyRun,
   foldTurnTrace,
+  initialStrategyRun,
   initialTurnTrace,
+  strategyRunForStorage,
+  strategyStepFromWire,
+  type StrategyRunState,
   splitUnfinished,
   turnOutcomeOf as readTurnOutcome,
   type AttachmentMeta,
@@ -102,6 +107,11 @@ export type StoredTurnTrace = Omit<TurnTrace, "outcome"> & {
   readonly attachments?: readonly AttachmentMeta[];
   /** The run this turn's run continues (`resumeRun({ newRun: true })`, Continue); absent for an ordinary turn. */
   readonly continuedFrom?: string;
+  /**
+   * The strategy's folded phases (ui-core `strategyRunForStorage`: settled, long text clipped, rows bounded),
+   * so the strategy card survives the turn ending and a reload. Absent on older rows and for a strategy that reported none.
+   */
+  readonly strategyRun?: StrategyRunState;
 };
 
 /**
@@ -240,10 +250,17 @@ export function withContinuedFrom(trace: StoredTurnTrace | undefined, parentRunI
  */
 export class TurnTraceRecorder {
   private state = initialTurnTrace();
+  private strategy = initialStrategyRun;
 
   record(event: AgentStreamEvent): void {
     // The runtime's AgentStreamEvent is the producer of the wire union ui-core consumes.
-    this.state = foldTurnTrace(this.state, event as UiStreamEvent);
+    const ui = event as UiStreamEvent;
+    this.state = foldTurnTrace(this.state, ui);
+    // StepEvent is in the ui-core wire union; the runtime's own event type does not list it.
+    if (ui._tag === "StepEvent") {
+      const step = strategyStepFromWire(ui.step);
+      if (step) this.strategy = foldStrategyRun(this.strategy, step);
+    }
   }
 
   /**
@@ -253,9 +270,11 @@ export class TurnTraceRecorder {
    */
   finish(): StoredTurnTrace | undefined {
     const trace = finishTurnTrace(this.state, { resultCap: STORED_RESULT_CAP });
-    if (trace === undefined) return undefined;
+    const strategyRun = strategyRunForStorage(this.strategy);
+    // A strategy card is worth keeping even for a turn with no thinking or tool calls.
+    if (trace === undefined) return strategyRun ? { reasoningSteps: [], toolCalls: [], strategyRun } : undefined;
     const { outcome, ...rest } = trace;
-    return { ...rest, ...(outcome?.deliverables ? { deliverables: outcome.deliverables } : {}) };
+    return { ...rest, ...(outcome?.deliverables ? { deliverables: outcome.deliverables } : {}), ...(strategyRun ? { strategyRun } : {}) };
   }
 }
 

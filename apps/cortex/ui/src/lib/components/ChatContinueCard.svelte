@@ -15,6 +15,7 @@
   import {
     startChatContinue,
     continueTarget,
+    continueKindOf,
     fetchChatResumable,
     loopStopHint,
     type ContinueBody,
@@ -61,10 +62,12 @@
 
   const target = $derived(continueTarget(turns, sending, resumable));
   const hint = $derived(loopStopHint(turns, sending, target, lookedUp));
+  // A reply the person Paused reads "Paused by you", whatever the stored stop kind says.
+  const kind = $derived(target ? continueKindOf(target.kind, turns.at(-1)) : undefined);
 
   // Publish the offered stop so the latest reply shows one card per stop, not this one and its own error note.
   $effect(() => {
-    continueOffer.set(target?.kind);
+    continueOffer.set(kind);
     return () => continueOffer.set(undefined);
   });
 
@@ -91,9 +94,9 @@
   }
 </script>
 
-{#if target}
+{#if target && kind}
   <div class="card rail rail-attention" data-testid="chat-continue" data-run-id={target.runId}>
-    <ContinueStopped kind={target.kind} stop={target.stop} busy={busyRun === target.runId} {error} onContinue={(b) => void onContinue(target.runId, b)} />
+    <ContinueStopped {kind} stop={target.stop} busy={busyRun === target.runId} {error} onContinue={(b) => void onContinue(target.runId, b)} />
   </div>
 {:else if hint}
   <p class="hint" data-testid="chat-continue-hint">{hint}</p>

@@ -6,6 +6,7 @@ import {
   continueDeskRun,
   continuedRunPath,
   continueTarget,
+  continueKindOf,
   DEFAULT_EXTRA_ITERATIONS,
   endingSupersededByContinue,
   fetchChatResumable,
@@ -125,6 +126,24 @@ describe("loopStopHint for a reply the person stopped", () => {
     expect(loopStopHint([stopped], false, undefined, true)).toContain("Durable runs with /durable");
     expect(loopStopHint([stopped], false, undefined, false)).toBeUndefined();
     expect(loopStopHint([stopped], false, run(), true)).toBeUndefined();
+  });
+});
+
+describe("continueKindOf: a Paused reply reads as paused, not stopped", () => {
+  const paused: ContinueTurn = { role: "assistant", runFailed: { ending: "interrupted", interruptedBy: "user", userInterrupt: "pause" } };
+  const stopped: ContinueTurn = { role: "assistant", runFailed: { ending: "interrupted", interruptedBy: "user" } };
+  it("maps a stored user-stopped kind to user-paused for a Paused turn only", () => {
+    expect(continueKindOf("user-stopped", paused)).toBe("user-paused");
+    expect(continueKindOf("user-stopped", stopped)).toBe("user-stopped");
+    expect(continueKindOf("user-paused", stopped)).toBe("user-paused");
+  });
+  it("leaves every other kind alone, even on a Paused turn", () => {
+    expect(continueKindOf("loop", paused)).toBe("loop");
+    expect(continueKindOf("user-stopped", undefined)).toBe("user-stopped");
+  });
+  it("the no-saved-run hint says paused for a Paused turn", () => {
+    expect(loopStopHint([paused], false, undefined, true)).toContain("You paused this reply");
+    expect(loopStopHint([stopped], false, undefined, true)).toContain("You stopped this reply");
   });
 });
 

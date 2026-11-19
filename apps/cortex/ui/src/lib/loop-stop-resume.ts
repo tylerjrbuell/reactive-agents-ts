@@ -93,7 +93,19 @@ export interface ContinueTurn {
     readonly terminatedBy?: string | undefined;
     /** Who stopped it, when the person (or a dropped connection) did. */
     readonly interruptedBy?: string | undefined;
+    /** `"pause"` when the person's stop was a Pause (absent for a Stop). */
+    readonly userInterrupt?: string | undefined;
   } | undefined;
+}
+
+/**
+ * The stop kind the Continue card words itself from. The person's own interrupt is what they asked for:
+ * a turn they Paused reads "Paused by you" even when the stored run's stop kind says `user-stopped`
+ * (the stream's abort can land after the pause and rewrite it); every other kind is the stored run's.
+ */
+export function continueKindOf(kind: RunStopKind, last: ContinueTurn | undefined): RunStopKind {
+  const paused = last?.runFailed?.interruptedBy === "user" && last.runFailed.userInterrupt === "pause";
+  return paused && kind === "user-stopped" ? "user-paused" : kind;
 }
 
 /**
@@ -114,6 +126,7 @@ export function loopStopHint(
     return "A loop guard stopped this run. To be able to continue a run like this, turn on Durable runs with /durable.";
   }
   if (last.runFailed?.interruptedBy === "user") {
+    if (last.runFailed.userInterrupt === "pause") return "You paused this reply and there is no saved run to continue from. Turn on Durable runs with /durable to pause and continue a reply.";
     return "You stopped this reply and there is no saved run to continue from. Turn on Durable runs with /durable to pause and continue a reply.";
   }
   return undefined;
