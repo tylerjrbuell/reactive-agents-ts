@@ -2,7 +2,7 @@
 // Shapes 2 and 3: honest decline after a failing tool (ab-trap-5); no-call stall (rw-7). Zero tokens.
 import { describe, expect, it } from "bun:test";
 import { armConfig, findMechanism } from "../../src/sim/mechanisms.js";
-import { honestDecline, noCallStall } from "../../src/sim/shapes/index.js";
+import { honestDecline, honestDeclineAfterOne, noCallStall } from "../../src/sim/shapes/index.js";
 import { verdictOf } from "./matrix.js";
 import { runArm } from "./run-shape.js";
 
@@ -25,6 +25,24 @@ describe("shape 2: honest decline after an always-failing required tool (ab-trap
       const on = await runArm(honestDecline, armConfig(m));
       // proactive still forces the early reads (nothing declined yet); none follows the decline
       expect(on.toolSeq).toEqual(off.toolSeq);
+      expect(on.status).toBe("abstained");
+      expect(on.turns).toBeLessThanOrEqual(off.turns);
+      expect(verdictOf(off, on)).not.toBe("hurts");
+    }
+  }, 30000);
+});
+
+describe("shape 2b: honest decline after ONE ENOENT (ab-trap-5 on gemma4:e4b)", () => {
+  // Zoo-live 2026-11-18 B2. On the kernel at 4b3c33c64 (`MIN_FAILED_CALLS = 2`) actOrAnswer forces a second
+  // read after the single-failure decline: verdict HURTS, ideal 1>0, turns 3>5, tokens +90% (measured on a
+  // detached worktree of b137fde0e). The decline already settled the outstanding read.
+  it("actOrAnswer does not force a second read after a one-failure decline", async () => {
+    const off = await runArm(honestDeclineAfterOne, armConfig());
+    expect(off.status).toBe("abstained");
+    expect(off.toolSeq).toEqual(["file-read"]);
+    for (const m of [act, proactive]) {
+      const on = await runArm(honestDeclineAfterOne, armConfig(m));
+      expect(on.toolSeq).toEqual(["file-read"]);
       expect(on.status).toBe("abstained");
       expect(on.turns).toBeLessThanOrEqual(off.turns);
       expect(verdictOf(off, on)).not.toBe("hurts");

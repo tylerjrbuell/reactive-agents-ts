@@ -2,7 +2,7 @@
 // Shape 1: partial answer with an unread input (leanFinalTurn). Zero tokens.
 import { describe, expect, it } from "bun:test";
 import { armConfig, findMechanism } from "../../src/sim/mechanisms.js";
-import { unreadInputFilename, unreadInputProse } from "../../src/sim/shapes/index.js";
+import { unreadInputAbspath, unreadInputFilename, unreadInputProse } from "../../src/sim/shapes/index.js";
 import { verdictOf } from "./matrix.js";
 import { runArm } from "./run-shape.js";
 
@@ -17,6 +17,19 @@ describe("shape 1: unread input, leanFinalTurn", () => {
     expect(on.meetsIdeal).toBe(true);
     expect(on.toolSeq).toEqual(["gather", "gather"]);
     expect(on.output).not.toContain("I still need");
+    expect(verdictOf(off, on)).not.toBe("hurts");
+  }, 30000);
+
+  // Zoo-live 2026-11-18 B1. On the kernel at 4b3c33c64 (FILE_TOKEN rejects `/.bench-run-*/`) the lean turn
+  // fires after 1 of 2 reads, the tool-less reply says "I still need to read b.json", the run ends:
+  // verdict HURTS, ideal 1>0 (measured on a detached worktree of b137fde0e). It must not.
+  it("absolute dot-directory paths (bench-realistic): the lean turn waits for both reads", async () => {
+    const off = await runArm(unreadInputAbspath, armConfig());
+    const on = await runArm(unreadInputAbspath, armConfig(lean));
+    expect(off.meetsIdeal).toBe(true);
+    expect(on.output).not.toContain("I still need");
+    expect(on.toolSeq).toEqual(["file-read", "file-read"]);
+    expect(on.meetsIdeal).toBe(true);
     expect(verdictOf(off, on)).not.toBe("hurts");
   }, 30000);
 
