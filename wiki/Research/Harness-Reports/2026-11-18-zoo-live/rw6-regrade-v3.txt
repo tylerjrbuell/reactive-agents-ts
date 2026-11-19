@@ -1,0 +1,18 @@
+f45-cogito/off.json run0 v2 solved=true acc=1.00 | v3 solved=true | fabricated=[]
+f45-cogito/off.json run1 v2 solved=true acc=1.00 | v3 solved=true | fabricated=[]
+f45-cogito/off.json run2 v2 solved=true acc=1.00 | v3 solved=false | fabricated=[22,7.7]
+f45-cogito/off.json run3 v2 solved=false acc=0.71 | v3 solved=false | fabricated=[]
+f45-cogito/off.json run4 v2 solved=false acc=0.71 | v3 solved=false | fabricated=[400]
+== f45-cogito/off.json: solved v2 3/5 -> v3 2/5
+f45-cogito/aoa.json run0 v2 solved=true acc=1.00 | v3 solved=true | fabricated=[]
+f45-cogito/aoa.json run1 v2 solved=true acc=1.00 | v3 solved=false | fabricated=[34,12,65,28]
+f45-cogito/aoa.json run2 v2 solved=true acc=1.00 | v3 solved=true | fabricated=[]
+f45-cogito/aoa.json run3 v2 solved=true acc=1.00 | v3 solved=false | fabricated=[18.3,18.4,18.5]
+f45-cogito/aoa.json run4 v2 solved=true acc=1.00 | v3 solved=false | fabricated=[16,15]
+== f45-cogito/aoa.json: solved v2 5/5 -> v3 2/5
+f5-qwen/default.json run0 v2 solved=false acc=0.86 | v3 solved=false | fabricated=[30,40,20]
+f5-qwen/default.json run1 v2 solved=false acc=0.86 | v3 solved=false | fabricated=[34]
+f5-qwen/default.json run2 v2 solved=true acc=1.00 | v3 solved=false | fabricated=[57]
+f5-qwen/default.json run3 v2 solved=true acc=1.00 | v3 solved=false | fabricated=[90]
+f5-qwen/default.json run4 v2 solved=true acc=1.00 | v3 solved=false | fabricated=[69,71]
+== f5-qwen/default.json: solved v2 3/5 -> v3 0/5

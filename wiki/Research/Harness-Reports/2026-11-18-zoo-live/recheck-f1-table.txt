@@ -1,0 +1,3 @@
+task | arm | n | solved | acc | turns | tok/run | tok/solved | causes | b(base-only) c(arm-only)
+ab-trap-5 | off | 5 | 5/5 | 1.00 | 3.6 | 2616 | 2616 | {"unexplained":2,"tool-failure":3} | -
+ab-trap-5 | aoa | 5 | 2/5 | 0.40 | 3.8 | 3457 | 8644 | {"unexplained":1,"tool-failure":4} | b=3 c=0

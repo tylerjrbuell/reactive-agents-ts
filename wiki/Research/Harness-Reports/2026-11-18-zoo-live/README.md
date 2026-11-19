@@ -87,3 +87,55 @@ D2 never fired (0/15). The live problem: invented percent benchmarks pass. Hypot
 - Net: the first live cell after the "fix" found two root causes in minutes (smoke trace, 1 cell). Zero-token verification of both is already possible (regex check above). Next step is the shape fixes, then re-run families 1 and 2 (10 cells each).
 
 Artifacts: `f123-gemma/`, `f45-cogito/`, `f5-qwen/`, `reg-cogito/` (results JSON per arm, traces, driver state), spec files, `regression-compare.ts`, ledger entries appended (6, `improvement-ledger.json`), analysis helpers `packages/benchmarks/src/spikes/zoo-live-analyze.ts` and `h3-extra-tiers.ts`.
+
+## Addendum 2 (2026-11-19): live re-check after the root-cause fixes
+
+Pre-registration: [PREDICTIONS-2.md](PREDICTIONS-2.md) (mtime before every result file). Build: kernel fix commit `917b865b7`, git SHA `c9ab8d29e` at start (tree clean); reasoning dist sha256 `0ca8c661…` contains `failedWithPermanentError` and `namedInputsExtractable`; no rebuild needed. Under `bun run` with cwd `packages/benchmarks`, `@reactive-agents/reasoning` resolves to `packages/reasoning/src/index.ts` (verified with `import.meta.resolve`), which is at the fix commit, so src and dist agree. 20 cells (2 tasks x 2 arms x k=5), gemma4:e4b, 180 s cell timeout, 0 failed units, 0 timeouts. `allowContention` dropped; `ollama ps` was empty before each drive and showed only gemma4:e4b (our own) afterwards. Tables: [recheck-f1-table.txt](recheck-f1-table.txt), [recheck-f2-table.txt](recheck-f2-table.txt); results in `recheck-f1/`, `recheck-f2/`.
+
+Driver note: running two `bench:drive` supervisors at once makes each pause on the other's connection (correct preflight behavior; I started both by mistake and stopped one). The preflight also still counted the supervisor's own socket: `countOllamaClients` compared the IPv4 client row (`0100007F:port`, /proc/net/tcp) to the server row in /proc/net/tcp6 (v4-mapped `0000000000000000FFFF00000100007F:port`), so 92168c940 never matched on a dual-stack Ollama. Fixed in `packages/benchmarks/src/preflight-provenance.ts` (normalize the mapped form) with a test using the real /proc rows; the run resumed and completed.
+
+### Prediction vs observation (gemma4:e4b, k=5 per arm)
+
+| # | Cell | Predicted off / on | Observed off / on | Proximal predicted | Proximal observed | Agree |
+| --- | --- | --- | --- | --- | --- | --- |
+| F1 | ab-trap-5, actOrAnswer | 5/5 / 4-5/5 | 5/5 / **2/5** | forced retry 0-1 of 5; no `dispatcher-early-stop` | forced retry **0/5** (was 5/5); `dispatcher-early-stop` in **3/5** on-arm runs | proximal yes, outcome NO |
+| F2 | h3-exact-value, leanFinalTurn | 5/5 / 4-5/5 | 5/5 / **5/5** | no "still need" reply; fires only after both reads or never | fired 5/5 at iteration 2, after both reads (`only-answer-outstanding`); 0 "still need" replies | YES |
+
+| Cell | Solved off > on | b,c (off-only, on-only) | McNemar exact p | Fisher p | tok/run off > on | tok/solved off > on | turns off > on |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| F1 | 5 > 2 | 3,0 | 0.25 | 0.17 | 2616 > 3457 | 2616 > 8644 | 3.6 > 3.8 |
+| F2 | 5 > 5 | 0,0 | 1.0 | 1.0 | 2440 > 2262 (-7%) | 2440 > 2262 | 3.0 > 3.0 |
+
+Decision rule (pre-registered): non-inferior = on >= off-1; hurt = on <= off-3 or p<.05 worse. F2: non-inferior. F1: on = off-3, so the **hurt rule is met**, with weak statistics (p 0.17 / 0.25; the rule's solved-count clause fires, its p clause does not).
+
+### Root cause verdict per fix
+
+- **leanFinalTurn (dot-dir extraction, fail closed): CONFIRMED.** Pre-fix 1/5 vs 5/5 (p=0.048) with 4 runs ending "I still need to read b.json"; post-fix 5/5 vs 5/5, the lean turn fires after both reads and the tool-less reply carries the right sum in all 5. Proximal and outcome both moved. Savings are small (-7% tokens on this task). Default-on status unchanged.
+- **actOrAnswer (permanent-error decline settles after 1 call): PARTIALLY CONFIRMED, outcome not fixed.** The defect the fix targeted is gone (forced retry after the one-failure decline: 5/5 > 0/5). The 2/5 solve rate is unchanged because a second mechanism ends the run: in on-arm runs 1, 2, 4 the model, after the "repeated-identical-failure" redirect nudge, emitted its honest decline text together with a third `file-read` call; the exit gate terminated `dispatcher-early-stop`, the pending batch was dropped (`pending_batch:dropped`), run status `failure`, output text "I cannot determine the total…", scored 0. `rax-diagnose cause` on all three: `tool-failure/repeated-identical-call`, attribution `harness:honest-decline-mislabeled` (decisive). The off arm had the identical sequence up to iteration 3 in runs 1, 2, 4 but the model declined without a call there and ended `abstained`.
+  - Lead (not state-replayed): `latestTextAfterEvidence` in `packages/reasoning/src/kernel/loop/honest-decline-exit.ts` skips any thought whose assistant turn carries call ids (`callIds.length > 0`), so a decline written in the same turn as a dropped call is never read by `honestDeclineOf` (`exit-gate.ts:721`). This is H-A3 from section B2, now backed by 3 more traces and the diagnose label, still unverified at state level.
+  - Open question I cannot answer from this data: why the on-arm hit this path in 3/5 and 3/5 (twice) while the off arm hit it 0/5 and 0/5, when no act-or-answer event fired in either on-arm re-check run. Sampling is not excluded (Fisher p=0.17 on this re-check; the earlier f123 run gave the same 2/5 vs 5/5, and the inert arms there scored 4/5, 4/5, so some of the same failure exists without the flag). Do not claim the flag causes it.
+
+### Scorer v3 regrade of the 15 rw-6 zoo-live traces (zero tokens)
+
+Full per-run list: [rw6-regrade-v3.txt](rw6-regrade-v3.txt) (`src/spikes/zoo-live-rw6-regrade.ts`: v2 solved AND no `fabricatedFigures` over `runEvidenceOf`). `regradeCell` cannot be used here: live-graded traces already hold an `eval-graded` event, so it returns `already-graded`.
+
+| Arm | solved at v2 | solved at v3 | runs flipped (invented figures) |
+| --- | --- | --- | --- |
+| cogito:8b actOrAnswer off | 3/5 | 2/5 | r2 (22%, 7.7%) |
+| cogito:8b actOrAnswer on | 5/5 | 2/5 | r1 (34,12,65,28), r3 (18.3-18.5), r4 (15,16) |
+| qwen3:4b default | 3/5 | 0/5 | r2 (57), r3 (90), r4 (69,71) |
+
+Seven of 15 v2 solves were fabricated. The actOrAnswer rw-6 "+40pp" (3/5 > 5/5 at v2) is entirely grader blindness: at v3 it is 2/5 vs 2/5. Prediction in PREDICTIONS-2 (off about 1/5, on about 2/5, qwen about 1/5) was off by one in the off and qwen arms: off kept r1 (its "1234ms/256MB" are not percent figures, so v3 does not flag them) and qwen ended at 0/5. Residual blind spot: non-percent invented measurements (ms, MB) pass v3.
+
+### Sim provenance
+
+`bench:sim` now prints a header line before the matrix: `kernel source: packages/reasoning/src last changed at <sha> (HEAD <sha>), clean|DIRTY|dirty=unknown; resolves to <module url>` (`tests/sim/provenance.ts`, tests in `provenance.test.ts` and `cli.test.ts`). Resolution is unchanged. The header exposed that a plain relative pathspec matches nothing from cwd `packages/benchmarks`; it uses a repo-root pathspec.
+
+### What k=5 can and cannot decide
+
+F2 5/5 vs 5/5 means "not catastrophically worse than off" (the pre-fix failure was a 4-run collapse, which this would have caught), not equal; the confirmation rests on the traces (fires after both reads, correct sums), not on the solve count. F1 2/5 vs 5/5 is p=0.17 on this re-check; the verdict "hurt" comes from the pre-registered solved-count rule and the failure's mechanism is visible in 3 traces, but whether the flag raises the rate of the dropped-batch mislabel needs either the kernel-warden fix (then the question disappears) or n >= 20 per arm. Arms are independent Bernoulli draws (no seeded sampling), so b,c are descriptive. One model (gemma4:e4b), one task per family: cross-tier verification is NOT done; KEEP/adopt claims remain out of reach by the harness-warden's own rule.
+
+### Next (kernel-warden, not done here)
+
+1. `honest-decline-exit.ts` `latestTextAfterEvidence`: read the decline text of a turn whose call batch was dropped when the run ends by a guard (H-A3). Zero-token proof first: replay the three traces `recheck-f1/traces/aoa/gemma4_e4b/ra-default/ab-trap-5/run{1,2,4}` to check `honestDeclineOf` returns undefined for them, then add a zoo shape `decline-after-ignored-nudge` (decline plus call in one turn after a redirect nudge).
+2. Then re-run F1 (10 cells, about 2 minutes) before reading any actOrAnswer verdict again.

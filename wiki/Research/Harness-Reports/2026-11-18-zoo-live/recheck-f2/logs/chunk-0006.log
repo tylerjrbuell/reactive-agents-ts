@@ -1,0 +1,3 @@
+H3: results file was started at 01c1cef0921faad67ec90e0310571782a114038d, HEAD is 96e162e34a1ef885241a98a867ec8cacb89cfe70 (baseline must stay on one SHA)
+[h3] gemma4:e4b|h3-exact-value|2 solved=true acc=1.00 pass cause=none it=3 2391tok 6s elapsed=10s
+[h3] ran=1 remaining=0

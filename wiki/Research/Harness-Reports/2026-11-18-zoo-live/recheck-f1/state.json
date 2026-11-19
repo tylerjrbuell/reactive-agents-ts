@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "spec": {
+    "outDir": "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/wiki/Research/Harness-Reports/2026-11-18-zoo-live/recheck-f1",
+    "tiers": [
+      "gemma4:e4b"
+    ],
+    "arms": [
+      {
+        "id": "off"
+      },
+      {
+        "id": "aoa",
+        "env": {
+          "RA_ACT_OR_ANSWER": "1"
+        }
+      }
+    ],
+    "k": 5,
+    "tasks": [
+      "ab-trap-5"
+    ],
+    "suite": "h3",
+    "cellTimeoutSec": 180,
+    "env": {
+      "RA_ACT_OR_ANSWER": "0"
+    },
+    "runnerCmd": [
+      "bun",
+      "run",
+      "/home/tylerbuell/Documents/AIProjects/reactive-agents-ts/packages/benchmarks/src/spikes/h3-extra-tiers.ts"
+    ]
+  },
+  "order": [
+    "0|gemma4:e4b|ab-trap-5|off",
+    "0|gemma4:e4b|ab-trap-5|aoa",
+    "1|gemma4:e4b|ab-trap-5|off",
+    "1|gemma4:e4b|ab-trap-5|aoa",
+    "2|gemma4:e4b|ab-trap-5|off",
+    "2|gemma4:e4b|ab-trap-5|aoa",
+    "3|gemma4:e4b|ab-trap-5|off",
+    "3|gemma4:e4b|ab-trap-5|aoa",
+    "4|gemma4:e4b|ab-trap-5|off",
+    "4|gemma4:e4b|ab-trap-5|aoa"
+  ],
+  "status": "completed",
+  "pid": null,
+  "startedAt": "2026-11-19T00:53:42.140Z",
+  "updatedAt": "2026-11-19T00:58:59.016Z",
+  "units": {
+    "0|gemma4:e4b|ab-trap-5|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 12
+    },
+    "0|gemma4:e4b|ab-trap-5|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 10
+    },
+    "1|gemma4:e4b|ab-trap-5|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 11
+    },
+    "1|gemma4:e4b|ab-trap-5|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 12
+    },
+    "2|gemma4:e4b|ab-trap-5|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 12
+    },
+    "2|gemma4:e4b|ab-trap-5|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 14
+    },
+    "3|gemma4:e4b|ab-trap-5|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 11
+    },
+    "3|gemma4:e4b|ab-trap-5|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    },
+    "4|gemma4:e4b|ab-trap-5|off": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 12
+    },
+    "4|gemma4:e4b|ab-trap-5|aoa": {
+      "status": "done",
+      "attempts": 0,
+      "wallSec": 13
+    }
+  },
+  "current": null,
+  "chunks": 10,
+  "pauses": [
+    {
+      "at": "2026-11-19T00:53:42.180Z",
+      "unit": "0|gemma4:e4b|ab-trap-5|off",
+      "findings": [
+        "1 established client connection(s) on :11434 (another Ollama client is active)"
+      ],
+      "waitSec": 30
+    },
+    {
+      "at": "2026-11-19T00:54:12.186Z",
+      "unit": "0|gemma4:e4b|ab-trap-5|off",
+      "findings": [
+        "2 established client connection(s) on :11434 (another Ollama client is active)"
+      ],
+      "waitSec": 60
+    },
+    {
+      "at": "2026-11-19T00:55:12.197Z",
+      "unit": "0|gemma4:e4b|ab-trap-5|off",
+      "findings": [
+        "1 established client connection(s) on :11434 (another Ollama client is active)"
+      ],
+      "waitSec": 120
+    }
+  ],
+  "pausedSec": 90,
+  "lastError": null,
+  "driftWarnings": []
+}

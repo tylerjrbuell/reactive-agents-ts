@@ -1,0 +1,3 @@
+H3: results file was started at c9ab8d29e4c59e3e79d72f1ce0cdfdc77fdb2a89, HEAD is 01c1cef0921faad67ec90e0310571782a114038d (baseline must stay on one SHA)
+[h3] gemma4:e4b|ab-trap-5|4 solved=false acc=0.00 pass cause=tool-failure it=4 4078tok 9s elapsed=12s
+[h3] ran=1 remaining=0

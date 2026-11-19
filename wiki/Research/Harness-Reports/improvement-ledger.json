@@ -1325,6 +1325,48 @@
       "tokenOverheadPct": -9,
       "rationale": "12 tasks k=5: 27/60 solved (0.725 acc) vs 57/120 (0.743 acc) at scorer v2; tokens/run 5623 vs 6180; within ~9pp SE. No regression detectable.",
       "status": "baseline"
+    },
+    {
+      "id": "6c0f4f7e-3b1a-4d52-9d6e-0a1b7c2e9f01",
+      "createdAt": "2026-11-19T01:10:00.000Z",
+      "weaknessRef": "wiki/Research/Harness-Reports/2026-11-18-zoo-live/README.md#addendum-2",
+      "weakness": "leanFinalTurn took a tool-less turn after one of two named reads (dot-dir path not extracted, fail-open)",
+      "hypothesis": "917b865b7 (dot-dir extraction, fail closed) restores the off solve rate; lean fires only after both reads.",
+      "baselineVariantId": "off",
+      "candidateVariantId": "lft@917b865b7",
+      "decision": "opt-in",
+      "liftPp": 0,
+      "tokenOverheadPct": -7.3,
+      "rationale": "gemma4:e4b h3-exact-value k=5: 5/5 vs 5/5 (was 1/5 vs 5/5 pre-fix, p=0.048); lean fired 5/5 at iteration 2 after both reads, 0 'still need to read' replies; tokens/run 2440 > 2262. Root cause CONFIRMED. Non-inferior at k=5 (not equivalence). Default-on status unchanged.",
+      "status": "opt-in"
+    },
+    {
+      "id": "b2e4a1d0-5f6c-4a8b-8e37-9c1d2f3a4b02",
+      "createdAt": "2026-11-19T01:10:00.000Z",
+      "weaknessRef": "wiki/Research/Harness-Reports/2026-11-18-zoo-live/README.md#addendum-2",
+      "weakness": "actOrAnswer forced a call after a one-failure honest decline on ab-trap-5",
+      "hypothesis": "917b865b7 (permanent-error decline settles after 1 call) removes the forced retry and the hurt.",
+      "baselineVariantId": "off",
+      "candidateVariantId": "aoa@917b865b7",
+      "decision": "regressed",
+      "liftPp": -60,
+      "tokenOverheadPct": 32,
+      "rationale": "Pre-registered hurt rule met, statistical support weak (p=0.17). gemma4:e4b ab-trap-5 k=5: 2/5 vs 5/5 (pre-fix 2/5 vs 5/5). Forced retry fired 0/5 (was 5/5): proximal fix CONFIRMED. Hurt rule (on <= off-3) still met: 3/5 on-arm runs ended dispatcher-early-stop with the honest decline text as output (rax-diagnose: harness:honest-decline-mislabeled); Fisher p=0.17, McNemar b=3 c=0 p=0.25. Second root cause (decline text in a turn whose call batch was dropped is skipped by honest-decline-exit.ts latestTextAfterEvidence) lead, not state-replayed. Why the on-arm hits it more than off is unexplained (sampling not excluded).",
+      "status": "rejected"
+    },
+    {
+      "id": "d7f3c9b2-1e4a-4c60-b5a8-2d9e8f7a6c03",
+      "createdAt": "2026-11-19T01:10:00.000Z",
+      "weaknessRef": "wiki/Research/Harness-Reports/2026-11-18-zoo-live/rw6-regrade-v3.txt",
+      "weakness": "rw-6 solved counted invented percent figures (grader blind to the trace)",
+      "hypothesis": "scorer v3 fabrication check (c2e49fdab) removes the fabricated solves.",
+      "baselineVariantId": "v2",
+      "candidateVariantId": "v3",
+      "decision": "baseline",
+      "liftPp": 0,
+      "tokenOverheadPct": 0,
+      "rationale": "Zero-token regrade of 15 zoo-live rw-6 traces: cogito off 3/5 > 2/5, cogito actOrAnswer 5/5 > 2/5, qwen3:4b default 3/5 > 0/5. 7 of 15 v2 solves carried invented figures. The actOrAnswer rw-6 'lift' (+40pp at v2) is gone at v3 (2/5 vs 2/5). Comparability break: rw-6 v3 rates are not comparable with v1/v2.",
+      "status": "baseline"
     }
   ]
 }
