@@ -1,0 +1,24 @@
+[
+  {
+    "model": "cogito:14b",
+    "strategy": "tree-of-thought",
+    "task": "b",
+    "run": 0,
+    "success": true,
+    "outcome": "success",
+    "terminatedBy": "end_turn",
+    "error": null,
+    "correct": true,
+    "checkDetail": "pops=6/6 total=true",
+    "tokens": 8283,
+    "durationMs": 166215,
+    "outputHead": "Here are the populations for each city:\n\n- Tokyo: 3,141,592\n- Paris: 2,718,281\n- Lagos: 1,618,033\n- Lima: 1,414,213\n- Oslo: 1,732,050\n- Cairo: 2,236,067\n\nTotal population of all six cities: 12,860,236",
+    "receiptVerdict": "tool-grounded",
+    "toolCalls": {
+      "city-population": 6
+    },
+    "toolErrors": 0,
+    "llmCalls": 16,
+    "traceFile": "/tmp/claude-1000/-home-tylerbuell-Documents-AIProjects-reactive-agents-ts/8fcaeb92-8010-4d43-b317-9fd60f2491b5/scratchpad/traces-iso/cogito_14b/b/tree-of-thought/run0/01M7T5ESNCGJ02Q0TMN7DP354Y.jsonl"
+  }
+]
