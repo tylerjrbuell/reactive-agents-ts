@@ -1,7 +1,7 @@
 ---
 title: Benchmarks
 description: >-
-  Internal benchmark harness — 20 tasks across 5 complexity tiers for
+  Internal benchmark harness: a fixed task set across 5 complexity tiers for
   evaluating your own agents against a real LLM.
 sidebar:
   order: 17
@@ -11,49 +11,45 @@ related:
   - features/eval
 ---
 
-import { CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-The `@reactive-agents/benchmarks` package is an **internal evaluation harness**: 20 tasks spanning 5 complexity tiers that you run against a real LLM to measure correctness, latency, token usage, and cost for *your* provider and model choices — not just framework overhead.
+The `@reactive-agents/benchmarks` package is an **internal evaluation harness**: a fixed set of tasks spanning 5 complexity tiers (trivial, simple, moderate, complex, expert) that you run against a real LLM to measure pass rate, latency, token usage, and cost for *your* provider and model choices.
 
-We use it as development tooling to catch regressions; we don't publish its scores as marketing claims. Run it yourself against your own stack — the numbers that matter are the ones from your provider, your model, and your tasks.
+We use it as development tooling to catch regressions; we don't publish its scores as marketing claims. Run it yourself against your own stack: the numbers that matter are the ones from your provider, your model, and your tasks.
 
-## Benchmark Methodology
+The package is private (not published to npm), so you run it from a clone of the repository.
 
-### Industry Standard Alignment
+## What the Tasks Are
 
-Each task tier maps to a recognized benchmark standard:
+The tasks are hand-written prompts in `packages/benchmarks/src/task-registry.ts`. Some are modeled on the kinds of problems found in public benchmarks such as HumanEval, BIG-Bench Hard, SWE-bench, GAIA, and AgentBench. They are **not** samples from those benchmarks, and their scores are not comparable to published results on them.
 
-| Tier | Strategy | Aligned With |
-|------|----------|--------------|
-| **Trivial** | Single-shot | MMLU-CS · MATH baseline · AgentEval |
-| **Simple** | Single-shot | HumanEval Easy · BIG-Bench Hard CS · MMLU-Pro SE |
-| **Moderate** | ReAct (reactive) | HumanEval Medium · BIG-Bench Hard · SWE-bench lite |
-| **Complex** | Plan-Execute-Reflect | AgentBench · SWE-bench Security · TestEval |
-| **Expert** | Tree-of-Thought | BIG-Bench Hard algorithms · GAIA Level 3 · MMLU-Pro CS |
+Each task pins its reasoning strategy: trivial and simple tasks run single-shot, and moderate, complex, and expert tasks run `reactive`, `plan-execute-reflect`, or `tree-of-thought` depending on the task.
 
-### What Each Benchmark Standard Covers
+## Scoring
 
-- **[HumanEval](https://github.com/openai/human-eval)** (OpenAI) — 164 handcrafted code generation tasks evaluated by functional correctness. Our tasks include function implementation, algorithm design, and test generation.
-- **[SWE-bench](https://www.swebench.com/)** (Princeton) — Resolving real GitHub issues. We use SWE-bench patterns for bug identification, security vulnerability analysis, and multi-file code review.
-- **[BIG-Bench Hard](https://github.com/suzgunmirac/BIG-Bench-Hard)** (Google) — 23 challenging tasks where chain-of-thought is required. We include: algorithmic optimization, logic/fallacy analysis, multi-step word problems, and Big-O complexity reasoning.
-- **[GAIA](https://huggingface.co/datasets/gaiabenchmark/gaia)** (Meta) — Multi-step tasks requiring tool use and reasoning. Our Level 3 equivalent task tests production incident response requiring multi-domain knowledge synthesis.
-- **[AgentBench](https://github.com/THUDM/AgentBench)** (THUDM) — 8-environment agent evaluation. We use AgentBench patterns for system design, database decomposition, and migration planning tasks.
-- **[MMLU-Pro](https://github.com/TIGER-AI-Lab/MMLU-Pro)** — Professional knowledge across 14 domains. Tasks cover CS theory (CRDTs, design patterns), software engineering, and architecture decision-making.
-
-### Scoring
-
-A task **passes** if the LLM's output contains the expected pattern (case-insensitive regex). Patterns are crafted to require substantive, correct answers — they cannot be satisfied by generic responses:
+Most tasks are scored by a keyword check: a task **passes** if the output matches any one alternative of a case-insensitive regex. For example:
 
 ```
-SQL injection fix expected: "parameteriz|prepared|placeholder|$1|?"
-CRDT design expected: "CRDT|vector.?clock|logical.?time|merge|commutative|converge"
+SQL injection fix expected: "parameteriz|prepared|placeholder|\$1|\?|injection|sanitiz"
 ```
+
+This is a coarse smoke check. A loosely related answer can match one alternative, so treat a pass as "on topic", not "correct".
+
+Five code tasks are instead graded by a hidden check that imports and runs the agent's code. That grading runs only in session mode (`--session`).
+
+<Aside type="caution" title="Quick mode does not grade the code tasks">
+In quick mode (`--provider` without `--session`), the five hidden-check tasks currently report pass without being checked. Treat quick-mode pass rates as a smoke test, not a measurement.
+</Aside>
 
 ## Running Benchmarks
 
 ```bash
-# Run with Anthropic (recommended for real-world results)
+git clone https://github.com/tylerjrbuell/reactive-agents-ts
+cd reactive-agents-ts
+bun install
 cd packages/benchmarks
+
+# Quick mode: run the task set against one provider
 bun run src/run.ts --provider anthropic --output report.json
 
 # Run with a specific model
@@ -69,27 +65,35 @@ bun run src/run.ts --provider openai --model gpt-4o --output report.json
 bun run src/run.ts --provider gemini --model gemini-2.5-flash --output report.json
 ```
 
+Named sessions (multiple models, harness variants, repeated runs, graded scoring) live in `packages/benchmarks/src/sessions/` and run with `--session <id>`.
+
 ### CLI Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--provider` | LLM provider (`anthropic`, `openai`, `gemini`, `groq`, `xai`, `ollama`, `litellm`) | `test` |
+| `--provider` | LLM provider (`anthropic`, `openai`, `gemini`, `groq`, `xai`, `ollama`, `litellm`, `test`) | `anthropic` |
 | `--model` | Model name (uses provider default if omitted) | Provider default |
 | `--tier` | Comma-separated tier filter | All tiers |
+| `--task` | Comma-separated task IDs | All tasks |
 | `--output` | Path to save JSON report | _(none)_ |
+| `--session` | Run a named session instead of quick mode | _(none)_ |
 
 ### Provider Defaults
 
-| Provider | Default Model | Rationale |
-|----------|--------------|-----------|
-| `anthropic` | `claude-haiku-4-5` | Fast, cost-efficient, strong reasoning |
-| `openai` | `gpt-4o-mini` | Cost-efficient with strong benchmark performance |
-| `gemini` | `gemini-2.5-flash` | Fast inference, competitive pricing |
-| `ollama` | `llama3.2` | Local inference, no API cost |
+| Provider | Default Model |
+|----------|--------------|
+| `anthropic` | `claude-haiku-4-5` |
+| `openai` | `gpt-4o-mini` |
+| `gemini` | `gemini-2.5-flash` |
+| `ollama` | `llama3.2` |
 
 ## Reading the Report
 
 Pass `--output report.json` to persist a full JSON report (per-task pass/fail, latency, token usage, and cost) for your own analysis. Without `--output`, results print to the console and nothing is persisted.
+
+## Where Our Own Measurements Live
+
+The project's own measurements (ablations, harness reports, and the model and task counts behind them) are committed to the repository under [`wiki/Research/`](https://github.com/tylerjrbuell/reactive-agents-ts/tree/main/wiki/Research). One example: the [strategy-switching ablation](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/wiki/Research/Ablations/2026-11-05-strategy-switching-ablation.md) that turned that feature off by default.
 
 ## What's Next
 
@@ -101,8 +105,7 @@ Pass `--output report.json` to persist a full JSON report (per-task pass/fail, l
   />
   <LinkCard
     title="Reactive Agents vs LangGraph"
-    description="An honest, sourced comparison — not a benchmark leaderboard."
+    description="An honest, sourced comparison, not a benchmark leaderboard."
     href="/guides/reactive-agents-vs-langgraph/"
   />
 </CardGrid>
-

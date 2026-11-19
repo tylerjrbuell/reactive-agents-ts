@@ -18,6 +18,19 @@ Use it to scaffold projects, generate agents, run and stream tasks, inspect runt
 
 For workflow-first onboarding, start with [Rax CLI](/guides/cli-artisan/).
 
+## Runtime
+
+`rax` runs on **Bun (recommended) or Node.js 22.5+**. On older Node versions it exits with a message naming the required version.
+
+A few commands need Bun itself. On Node, if Bun is installed, `rax` re-runs the command under Bun; if not, it prints one line asking you to install Bun:
+
+| Command | Needs Bun because |
+|---------|-------------------|
+| `rax cortex` | The Cortex server runs on Bun |
+| `rax examples suite`, `rax examples demo` | They run TypeScript example sources directly (`rax examples list` works on Node) |
+
+`rax dev` uses Bun when it is installed and otherwise falls back to the project's local `tsx` (`npm install -D tsx`).
+
 ## Commands
 
 ### `rax init`
@@ -42,7 +55,7 @@ rax init <name> [--template minimal|with-tools|streaming|with-structured-output|
 | `with-memory`             | Cross-session memory (SQLite) - the agent remembers across runs             |
 | `cloudflare-worker`       | Deployable Cloudflare Worker (edge) agent on OpenAI, with wrangler config   |
 
-Generated `src/index.ts` imports from `"reactive-agents"` and is runnable immediately after `bun install && cp .env.example .env`.
+Generated `src/index.ts` imports from `"reactive-agents"` and is runnable after you install dependencies (`bun install` or `npm install`) and copy `.env.example` to `.env`.
 
 ### `rax create agent`
 
@@ -129,6 +142,8 @@ rax examples list
 rax examples demo <name> [--provider <provider>] [--model <model>] [--port <port>]
 ```
 
+`suite` and `demo` need Bun (see [Runtime](#runtime)). `suite` runs from a repository checkout: the published CLI does not ship the example sources.
+
 - `suite --offline` runs examples that need no provider credentials. `--filter` selects a category; numeric arguments run selected numbered examples.
 - `list` prints available standalone demos.
 - `demo island-sim` starts the survival simulation UI. `--provider`, `--model`, and `--port` pass through to demos that support them.
@@ -142,7 +157,7 @@ See the [Examples Catalog](/guides/examples/) for the runnable examples and demo
 
 ### Cortex (companion studio)
 
-Cortex is available as a public npm package and from source. 
+Cortex is available as a public npm package and from source. `rax cortex` needs Bun (see [Runtime](#runtime)).
 
 **From npm (recommended for users):**
 ```bash
@@ -169,7 +184,9 @@ rax run "Research topic" --cortex --provider anthropic
 | Variable | Purpose |
 |----------|---------|
 | `CORTEX_PORT` | API listen port (default `4321`) |
-| `CORTEX_HOST` | Listen address (default `127.0.0.1`; same as `rax cortex --host <addr>`). Any other address exposes Cortex, which has no authentication, to the network |
+| `CORTEX_HOST` | Listen address (default `127.0.0.1`; same as `rax cortex --host <addr>`). Cortex can run code and read files, so any non-loopback address requires `CORTEX_TOKEN`: without it, Cortex refuses to start |
+| `CORTEX_TOKEN` | Access token for `/api/*` and `/ws/*`. Required for a non-loopback `CORTEX_HOST`. Clients send `Authorization: Bearer <token>`; in a browser, open `/?token=<token>` once to store it in a cookie |
+| `CORTEX_ALLOWED_HOSTS` | Comma-separated extra host names Cortex accepts in `Host`/`Origin` (for a public URL or reverse proxy). Requests naming any other host get 403 |
 | `CORTEX_NO_OPEN` | Set to `1` to skip opening a browser |
 | `CORTEX_URL` | Base URL the agent uses to reach Cortex ingest |
 
@@ -297,6 +314,8 @@ rax dev [--entry src/index.ts] [--no-watch]
 ```
 
 Default entrypoint is `src/index.ts`. Use `--entry` if your project uses a different file.
+
+`rax dev` runs the entry with Bun (`bun --watch run`) when Bun is installed. Without Bun, it uses the project's local `tsx` (`tsx watch`); install it with `npm install -D tsx`. With neither, it exits with a message.
 
 ### `rax eval`
 

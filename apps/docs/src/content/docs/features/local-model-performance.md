@@ -11,29 +11,32 @@ related:
   - cookbook/local-agent-ollama
 ---
 
-Reactive Agents automatically adapts its behavior based on the model tier. Local models (Ollama, LiteLLM) have different entropy distributions, latency profiles, and capability envelopes compared to frontier models (OpenAI, Anthropic, Google). The framework accounts for these differences at every level.
+Reactive Agents adjusts parts of its behavior to the model it runs on. Local models (Ollama) have different entropy distributions, latency profiles, and context windows than frontier models (OpenAI, Anthropic, Google). This page lists what changes by tier and what stays the same.
 
 ## Model Tier Detection
 
-The tier is inferred from the provider configuration:
+The reactive-intelligence layer resolves a tier (`local`, `frontier`, or `unknown`) for each model in this order:
 
-| Provider | Tier | Detection |
-|----------|------|-----------|
-| Ollama | `local` | Provider name |
-| LiteLLM | `local` | Provider name |
-| OpenAI | `frontier` | Provider name |
-| Anthropic | `frontier` | Provider name |
-| Google | `frontier` | Provider name |
-| Groq | `frontier` | Provider name |
+1. A built-in registry entry for the model ID (exact match, then prefix match). See [Model-Specific Considerations](#model-specific-considerations).
+2. Your own entries in `.withReactiveIntelligence({ models: { ... } })`.
+3. The provider name:
 
-The tier affects entropy scoring weights, controller thresholds, and meta-tool behavior.
+| Provider | Tier when the model is not in the registry |
+|----------|------|
+| Ollama | `local` |
+| OpenAI | `frontier` |
+| Anthropic | `frontier` |
+| Google Gemini | `frontier` |
+| LiteLLM, Groq, xAI, others | `unknown` (LiteLLM proxies many providers, so the tier cannot be inferred) |
+
+Before calibration data exists, the tier sets the fallback entropy floor the intervention dispatcher uses: `0.12` for `local`, `0.45` for `frontier`, `0.25` for `unknown`. Once a model has 20 or more calibration samples, the floor is derived from that model's own calibrated threshold instead.
 
 ## Entropy Calibration for Local Models
 
-Local models exhibit higher baseline entropy and wider score distributions. The conformal calibration system accounts for this:
+Local models exhibit higher baseline entropy and wider score distributions. The conformal calibration system measures each model rather than assuming a fixed range:
 
-- **Uncalibrated defaults** use conservative thresholds (convergence: 0.4, high-entropy: 0.8) suitable for both tiers.
-- **Calibrated thresholds** adapt automatically after 20+ scored iterations. Local models typically produce higher thresholds (convergence: ~0.5, high-entropy: ~0.85) reflecting their noisier output.
+- **Uncalibrated defaults**: convergence `0.4`, high-entropy `0.8`, used for every tier until a model has enough data.
+- **Calibrated thresholds**: computed per model once it has 20 or more scored iterations.
 
 ### Building Calibration Data
 
@@ -53,53 +56,53 @@ To persist calibration across runs, provide a database path:
 
 ### Monitoring Calibration Health
 
-When a model's behavior shifts (e.g., after updating model weights), the system detects calibration drift:
+When a model's behavior shifts (e.g., after updating model weights), the system detects calibration drift and publishes a `CalibrationDrift` event:
 
+<!-- docs-skip-typecheck -->
 ```typescript
-eventBus.subscribe("CalibrationDrift", (event) => {
+const unsubscribe = await agent.subscribe("CalibrationDrift", (event) => {
   // event.modelId, event.expectedMean, event.observedMean, event.deviationSigma
-  console.warn(`Calibration drift on ${event.modelId} — consider resetting calibration data`);
+  console.warn(`Calibration drift on ${event.modelId}: consider resetting calibration data`);
 });
 ```
 
 ## Controller Behavior by Tier
 
-The reactive controller adapts its strategy based on the model tier:
-
 ### Early Stop
 
-| Aspect | Local | Frontier |
+Early stop uses the same rule on every tier. It fires when the entropy trajectory has been converging for 2 consecutive iterations and the latest score is at or below the model's convergence threshold. It never fires before iteration 2, and it waits while the run has produced no output (except on the last allowed iteration). Within 2 iterations of the iteration cap, it also stops a run whose trajectory is flat, oscillating, or converging, unless that pass produced new evidence. The tier matters only through calibration: a noisier local model gets its own, measured convergence threshold.
+
+### Context Pressure and Auto-Checkpoint
+
+Local models often have smaller context windows than frontier models. The kernel uses the model's context-profile tier to decide when to save a checkpoint (soft threshold) and when to offer only the final-answer tool (hard threshold), as a fraction of the context window:
+
+| Context-profile tier | Auto-checkpoint (soft) | Final answer only (hard) |
 |--------|-------|----------|
-| Min iterations before stopping | Higher (models need more steps) | Lower |
-| Convergence threshold | Higher (noisier output) | Lower |
-| Confidence required | Medium | High |
-
-### Context Compression
-
-Local models typically have smaller context windows (4K–32K vs 128K–200K). The context pressure sensor triggers compression earlier:
-
-| Aspect | Local | Frontier |
-|--------|-------|----------|
-| Compression trigger | ~60% utilization | ~80% utilization |
-| Auto-checkpoint threshold | 0.75 soft / 0.80 hard | 0.80 soft / 0.85 hard |
+| `local` | 0.75 | 0.80 |
+| `mid` | 0.80 | 0.85 |
+| `large` | 0.85 | 0.90 |
+| `frontier` | 0.90 | 0.95 |
 
 ### Strategy Switching
 
-When entropy trajectory is flat (no improvement), the controller may recommend switching strategies. Local models get more patience before triggering a switch. The switch only happens when you set `.withReasoning({ enableStrategySwitching: true })`. It is off by default: on qwen3:4b and cogito:8b it showed no accuracy lift and added 28% more billed tokens (2026-11-05 ablation). Details: [Automatic Strategy Switching](/guides/choosing-strategies/#automatic-strategy-switching).
+When the entropy trajectory stays flat for 3 iterations with a high loop score, the controller may recommend switching strategies. The rule is the same on every tier. The switch only happens when you set `.withReasoning({ enableStrategySwitching: true })`. It is off by default. In a [2026-11-05 ablation](https://github.com/tylerjrbuell/reactive-agents-ts/blob/main/wiki/Research/Ablations/2026-11-05-strategy-switching-ablation.md) on cogito:8b (2 tasks, 8 runs per task per arm, 32 runs), switching showed no accuracy lift (-6.2pp, within noise) and cost 28.1% more billed tokens. A first pass on qwen3:4b and cogito:8b (5 tasks, 3 runs each) was too small to decide. Details: [Automatic Strategy Switching](/guides/choosing-strategies/#automatic-strategy-switching).
 
 ## Performance Tuning Tips
 
-### Reduce Token Waste
+### Keep Early Stop On
+
+Early stop is on by default when reactive intelligence is enabled. It ends a run once entropy has converged instead of spending the remaining iterations:
 
 <!-- docs-skip-typecheck -->
 ```typescript
 .withReactiveIntelligence({
   controller: {
-    earlyStop: true,          // Critical for local models — saves 30-50% of iterations
-    contextCompression: true, // Prevent context overflow on small-window models
+    earlyStop: true, // default; stops once entropy converges
   },
 })
 ```
+
+`controller.contextCompression` is deprecated and has no effect of its own: the evaluator behind it was removed. Context pressure is handled by the auto-checkpoint thresholds above.
 
 ### Use Appropriate Reasoning Strategies
 
@@ -107,22 +110,28 @@ Start with `reactive` (the default). Heavier strategies cost more tokens and tim
 
 ### Model-Specific Considerations
 
-| Model | Context | Logprob Support | Notes |
-|-------|---------|-----------------|-------|
-| Ollama (Llama 3.x) | 8K–128K | Yes | Good all-around; enable token entropy |
-| Ollama (Mistral) | 32K | Yes | Strong at structured output; lower entropy variance |
-| Ollama (Cogito) | 8K–32K | Yes | Reasoning-focused; benefits from early-stop |
-| Ollama (Gemma) | 8K | Partial | Smaller context needs aggressive compression |
+The built-in registry covers these local models. Any other model gets a 32,768-token context limit, no logprob support, and a tier from its provider (see above). Add your own entries with `.withReactiveIntelligence({ models: { ... } })`.
+
+| Model | Context limit | Logprob support |
+|-------|---------|-----------------|
+| `gemma4:e4b` | 32,768 | No |
+| `qwen3:4b` | 32,768 | No |
+| `qwen3:14b` | 32,768 | Yes |
+| `qwen3.5:14b` | 32,768 | Yes |
+| `cogito:14b` | 32,768 | Yes |
+| `llama3.3:70b` | 131,072 | Yes |
+
+Logprob support enables the token-entropy signal. Without it, the token signal gets zero weight in the composite score and the other signals carry it.
 
 ### Native Function Calling
 
-The harness automatically detects whether a model supports native function calling. When unavailable, it falls back to text-based JSON tool call parsing. This is transparent to the agent but affects latency:
+The harness detects whether a model supports native function calling. When it does not, the harness falls back to parsing tool calls from the model's text output. The agent code is the same either way:
 
-- **Native FC** (supported models): Direct tool calls via provider API — lower latency, more reliable
-- **Text FC fallback**: Tool calls parsed from LLM text output — higher latency, may need retry
+- **Native FC** (supported models): direct tool calls through the provider API
+- **Text FC fallback**: tool calls parsed from the model's text, which can need a retry when the text is malformed
 
 ## Related
 
-- [Harness Control Flow](/features/harness-control-flow/) — Full entropy → controller → decision pipeline
-- [LLM Providers](/features/llm-providers/) — Provider configuration and adapter hooks
-- [Reactive Intelligence](/features/reactive-intelligence/) — Entropy sensor and learning engine internals
+- [Harness Control Flow](/features/harness-control-flow/): full entropy, controller, and decision pipeline
+- [LLM Providers](/features/llm-providers/): provider configuration and adapter hooks
+- [Reactive Intelligence](/features/reactive-intelligence/): entropy sensor and learning engine internals
