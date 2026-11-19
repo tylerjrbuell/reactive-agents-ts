@@ -94,6 +94,7 @@ import { contextOverflowOf } from "./context-overflow-retry.js";
 import { callThinkWithRecovery, type ThinkCallParams } from "./think-call-recovery.js";
 import { provenanceBySanitizedName } from "./wire-facts.js";
 import { addActOrAnswerTally, type ActOrAnswerTallyDelta } from "./act-or-answer-tally.js";
+import { sumCosts, type CostSum } from "@reactive-agents/core";
 import { addKnown, contributedHalf } from "../../utils/known-count.js";
 
 /** Actor / guard name on every act-or-answer record. */
@@ -248,8 +249,12 @@ const sumUsage = (
   inputTokens: addKnown(contributedHalf(a.inputTokens, a.totalTokens), contributedHalf(b.inputTokens, b.totalTokens)),
   outputTokens: addKnown(contributedHalf(a.outputTokens, a.totalTokens), contributedHalf(b.outputTokens, b.totalTokens)),
   totalTokens: a.totalTokens + b.totalTokens,
-  estimatedCost: a.estimatedCost + b.estimatedCost,
+  // An exchange with an unknown price makes the sum's cost unknown (absent).
+  ...costOfBoth(sumCosts([a.estimatedCost, b.estimatedCost])),
 });
+
+const costOfBoth = (sum: CostSum): { readonly estimatedCost?: number } =>
+  sum.complete ? { estimatedCost: sum.usd } : {};
 
 const finalAnswerWire = sanitizeToolName(FINAL_ANSWER);
 

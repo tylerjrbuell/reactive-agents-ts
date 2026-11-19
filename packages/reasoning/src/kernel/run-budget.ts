@@ -28,6 +28,8 @@
  * it at fork time).
  */
 import { Effect, FiberRef } from "effect";
+import { EMPTY_COST_SUM, addCost } from "@reactive-agents/core";
+import type { CostSum } from "@reactive-agents/core";
 import { addKnown, contributedHalf } from "./utils/known-count.js";
 
 /**
@@ -51,13 +53,43 @@ export interface RunBudgetSpend extends TokenSpend {
  */
 export interface TokenSpend {
   readonly tokens: number;
+  /** Known USD cost. A lower bound when `costComplete` is false. Never NaN. */
   readonly cost: number;
+  /**
+   * `false` when at least one call in this spend had no known price (provider
+   * usage without `estimatedCost`), so `cost` understates it. Absent = complete.
+   */
+  readonly costComplete?: boolean;
   readonly inputTokens?: number;
   readonly outputTokens?: number;
 }
 
 /** Spend of no LLM work. */
 export const NO_TOKEN_SPEND: TokenSpend = { tokens: 0, cost: 0 };
+
+/**
+ * The cost fields of one call's spend from its reported `estimatedCost`
+ * (core {@link addCost}): absent or non-finite = unknown price, so `cost: 0`
+ * with `costComplete: false`, never a silent $0.
+ */
+export const callCost = (estimatedCost: number | undefined): Pick<TokenSpend, "cost" | "costComplete"> =>
+  costFields(addCost(EMPTY_COST_SUM, estimatedCost));
+
+/** {@link TokenSpend} cost fields from a core {@link CostSum}; `costComplete` only when false. */
+const costFields = (sum: CostSum): Pick<TokenSpend, "cost" | "costComplete"> =>
+  sum.complete ? { cost: sum.usd } : { cost: sum.usd, costComplete: false };
+
+/** A spend's (or meter's) cost as a core {@link CostSum}; absent `costComplete` = complete. */
+export const costSumOf = (s: { readonly cost: number; readonly costComplete?: boolean }): CostSum => ({
+  usd: s.cost,
+  complete: s.costComplete !== false,
+});
+
+/** Sum two cost readings that are each a (possibly partial) total. */
+const addCostSums = (a: CostSum, b: CostSum): CostSum => {
+  const sum = addCost(a, b.usd);
+  return b.complete ? sum : { usd: sum.usd, complete: false };
+};
 
 /** The usage fields {@link usageSpend} reads (TokenUsage, or a partial stand-in). */
 export interface UsageLike {
@@ -70,10 +102,11 @@ export interface UsageLike {
 /**
  * One LLM response's spend from its reported usage. A half the provider did
  * not report stays absent (unknown), never 0. Missing usage is no spend.
+ * Usage without `estimatedCost` is an unknown price (`costComplete: false`).
  */
 export const usageSpend = (usage: UsageLike | undefined): TokenSpend => ({
   tokens: usage?.totalTokens ?? 0,
-  cost: usage?.estimatedCost ?? 0,
+  ...(usage === undefined ? { cost: 0 } : callCost(usage.estimatedCost)),
   ...(usage?.inputTokens !== undefined ? { inputTokens: usage.inputTokens } : {}),
   ...(usage?.outputTokens !== undefined ? { outputTokens: usage.outputTokens } : {}),
 });
@@ -87,7 +120,7 @@ export const addTokenSpend = (a: TokenSpend, b: TokenSpend): TokenSpend => {
   const outputTokens = addKnown(contributedHalf(a.outputTokens, a.tokens), contributedHalf(b.outputTokens, b.tokens));
   return {
     tokens: a.tokens + b.tokens,
-    cost: a.cost + b.cost,
+    ...costFields(addCostSums(costSumOf(a), costSumOf(b))),
     ...(inputTokens !== undefined ? { inputTokens } : {}),
     ...(outputTokens !== undefined ? { outputTokens } : {}),
   };
@@ -97,6 +130,7 @@ export const addTokenSpend = (a: TokenSpend, b: TokenSpend): TokenSpend => {
 export const tokenSpendOf = (r: TokenSpend): TokenSpend => ({
   tokens: r.tokens,
   cost: r.cost,
+  ...(r.costComplete === false ? { costComplete: false } : {}),
   ...(r.inputTokens !== undefined ? { inputTokens: r.inputTokens } : {}),
   ...(r.outputTokens !== undefined ? { outputTokens: r.outputTokens } : {}),
 });
@@ -115,7 +149,15 @@ export const tokenSpendOf = (r: TokenSpend): TokenSpend => ({
  */
 export interface RunBudgetMeter {
   tokens: number;
+  /** Known USD spend; a lower bound when `costComplete` is false. */
   cost: number;
+  /**
+   * Run-cost completeness: `false` once any metered call had no known price,
+   * so `cost` understates the run's spend (core `CostSum.complete`). Sticky
+   * for the run. Absent = complete (only `false` is ever written); read it
+   * as a core `CostSum` with {@link costSumOf}.
+   */
+  costComplete?: boolean;
   inputTokens?: number;
   outputTokens?: number;
   llmCalls?: number;
@@ -174,7 +216,11 @@ export const makeRunBudgetMeter = (): RunBudgetMeter => ({
 export const applyRunSpend = (meter: RunBudgetMeter, spend: RunBudgetSpend): void => {
   if (meter.settled === true) return;
   meter.tokens += spend.tokens;
-  meter.cost += spend.cost;
+  const cost = addCostSums(costSumOf(meter), costSumOf(spend));
+  meter.cost = cost.usd;
+  // Only `false` is ever written: absent = complete, so a meter (and the
+  // spend snapshots spread from it) stay byte-identical on fully priced runs.
+  if (!cost.complete) meter.costComplete = false;
   meter.inputTokens = addKnown(meter.inputTokens, contributedHalf(spend.inputTokens, spend.tokens));
   meter.outputTokens = addKnown(meter.outputTokens, contributedHalf(spend.outputTokens, spend.tokens));
   meter.llmCalls = (meter.llmCalls ?? 0) + (spend.llmCalls ?? 0);

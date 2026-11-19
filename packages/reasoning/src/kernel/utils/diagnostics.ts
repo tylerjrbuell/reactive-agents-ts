@@ -21,7 +21,7 @@ import type { RunContract } from "../contract/run-contract.js";
 import { contentHash } from "../state/signal-ledger.js";
 import { emitThinking } from "./emit-thinking.js";
 import { EventBus, emitErrorSwallowed, errorTag } from "@reactive-agents/core";
-import type { Rationale, LlmCallPurpose, ContentPartSummary, StructuredAttemptReport } from "@reactive-agents/core";
+import type { Rationale, LlmCallPurpose, ContentPartSummary, StructuredAttemptReport, PriceSource } from "@reactive-agents/core";
 import {
   truncateExchangeText,
   EXCHANGE_SYSTEM_PROMPT_MAX,
@@ -573,7 +573,10 @@ export function emitLLMExchange(args: {
     readonly cacheReadTokensIn?: number;
     /** Hidden-reasoning tokens, a SUBSET of `tokensOut` (OpenAI-style breakdown). */
     readonly reasoningTokens?: number;
+    /** Cost in USD. Absent = price unknown (never read as $0). */
     readonly costUsd?: number;
+    /** Provenance of `costUsd` (provider usage `priceSource`). */
+    readonly priceSource?: PriceSource;
     readonly durationMs?: number;
     /**
      * Streamed calls only: ms from request start to the first streamed output
@@ -746,7 +749,16 @@ export function emitLLMExchange(args: {
         ...(typeof args.response.reasoningTokens === "number"
           ? { reasoningTokens: args.response.reasoningTokens }
           : {}),
-        estimatedCost: args.response.costUsd ?? 0,
+        // Unknown price stays unknown: no estimatedCost, priceSource "unknown"
+        // (core contract), so no consumer can sum it as $0.
+        ...(typeof args.response.costUsd === "number" && Number.isFinite(args.response.costUsd)
+          ? {
+              estimatedCost: args.response.costUsd,
+              ...(args.response.priceSource !== undefined && args.response.priceSource !== "unknown"
+                ? { priceSource: args.response.priceSource }
+                : {}),
+            }
+          : { priceSource: "unknown" as const }),
       })
       .pipe(
         Effect.catchAll((err) =>

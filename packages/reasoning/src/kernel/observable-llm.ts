@@ -53,6 +53,7 @@ import {
   runTaskId,
   summarizeWireContent,
   type ContentPartSummary,
+  type PriceSource,
   type StructuredAttemptReport,
 } from "@reactive-agents/core";
 import {
@@ -62,7 +63,7 @@ import {
   hasReportedUsage,
 } from "./utils/structured-call-report.js";
 import { currentRunContext } from "@reactive-agents/core/internal/run-scope";
-import { CurrentRunBudget, addRunSpend, applyRunSpend } from "./run-budget.js";
+import { CurrentRunBudget, addRunSpend, applyRunSpend, callCost } from "./run-budget.js";
 import { describeLlmFailure, IN_BAND_STREAM_ERROR_CLASS, type LlmFailure } from "./utils/llm-failure.js";
 
 // Placeholder correlation values. The wrapper sits below the kernel/strategy
@@ -111,7 +112,10 @@ type PartialCompletion = {
     readonly outputTokens?: number;
     /** Provider total; authoritative when the input/output split is unreported. */
     readonly totalTokens?: number;
+    /** Cost in USD. Absent = price unknown, never $0. */
     readonly estimatedCost?: number;
+    /** Where `estimatedCost` came from (provider usage). */
+    readonly priceSource?: PriceSource;
     /** Anthropic prompt-caching: tokens that wrote new cache entries (Lever 1). */
     readonly cacheCreationInputTokens?: number;
     /** Anthropic prompt-caching: tokens served from cache hits. */
@@ -288,6 +292,7 @@ function emitForRequestWith(
         ? { reasoningTokens: fullResponse.usage.reasoningTokens }
         : {}),
       costUsd: fullResponse?.usage?.estimatedCost,
+      ...(fullResponse?.usage?.priceSource !== undefined ? { priceSource: fullResponse.usage.priceSource } : {}),
       durationMs,
       ...(typeof fullResponse?.firstTokenMs === "number" ? { firstTokenMs: fullResponse.firstTokenMs } : {}),
       // W1.4 forensics: raw accumulated reasoning handed to emitLLMExchange,
@@ -439,7 +444,8 @@ export const makeObservableLLM = (
               tokens:
                 response.usage?.totalTokens ??
                 ((response.usage?.inputTokens ?? 0) + (response.usage?.outputTokens ?? 0)),
-              cost: response.usage?.estimatedCost ?? 0,
+              // Unknown price marks the run cost incomplete, never adds a $0.
+              ...callCost(response.usage?.estimatedCost),
               inputTokens: response.usage?.inputTokens,
               outputTokens: response.usage?.outputTokens,
               llmCalls: 1,
@@ -604,6 +610,7 @@ export const makeObservableLLM = (
                           outputTokens: event.usage.outputTokens,
                           totalTokens: event.usage.totalTokens,
                           estimatedCost: event.usage.estimatedCost,
+                          ...(event.usage.priceSource !== undefined ? { priceSource: event.usage.priceSource } : {}),
                           // Lever 1: carry Anthropic prompt-cache stats off the
                           // usage event so emitForRequest can surface them on the
                           // streamed exchange (the complete() path already does).
@@ -642,14 +649,17 @@ export const makeObservableLLM = (
                     // absent (unknown), never a 0.
                     const inputTokens = s.usage?.inputTokens;
                     const outputTokens = s.usage?.outputTokens;
+                    const failedHard = Exit.isFailure(exit) && !Cause.isInterruptedOnly(exit.cause);
                     applyRunSpend(ambientMeter, {
                       tokens: s.usage?.totalTokens ?? ((inputTokens ?? 0) + (outputTokens ?? 0)),
-                      cost: s.usage?.estimatedCost ?? 0,
+                      // A hard-failed stream with no usage is no metered spend
+                      // (as complete()); otherwise an absent price is unknown.
+                      ...(failedHard && s.usage === undefined ? { cost: 0 } : callCost(s.usage?.estimatedCost)),
                       inputTokens,
                       outputTokens,
                       // Same rule as complete(): a call that failed hard is not
                       // counted; an early-stop interrupt still billed, so counts.
-                      llmCalls: Exit.isFailure(exit) && !Cause.isInterruptedOnly(exit.cause) ? 0 : 1,
+                      llmCalls: failedHard ? 0 : 1,
                     });
                   }
                   // Parse each call's accumulated JSON argument chunks.

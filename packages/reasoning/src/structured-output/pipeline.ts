@@ -17,7 +17,8 @@
  */
 import { Effect, Either, FiberRef, JSONSchema, Option, Schema } from "effect";
 import { LLMService, StructuredUsageRef } from "@reactive-agents/llm-provider";
-import { EventBus } from "@reactive-agents/core";
+import { EMPTY_COST_SUM, EventBus, addCost } from "@reactive-agents/core";
+import type { CostSum } from "@reactive-agents/core";
 import { extractJsonBlock, repairJsonSteps } from "./json-repair.js";
 import {
   fieldErrorsFromParseError,
@@ -85,8 +86,16 @@ export interface StructuredOutputUsage {
   readonly inputTokens: number | undefined;
   readonly outputTokens: number | undefined;
   readonly totalTokens: number;
-  readonly estimatedCost: number;
+  /**
+   * Known USD cost summed over the attempts. ABSENT when any attempt's price
+   * was unknown (provider usage without `estimatedCost`): unknown, not $0.
+   */
+  readonly estimatedCost?: number;
 }
+
+/** `estimatedCost` field of a {@link StructuredOutputUsage} from a core cost total. */
+const costField = (cost: CostSum): { readonly estimatedCost?: number } =>
+  cost.complete ? { estimatedCost: cost.usd } : {};
 
 const ZERO_USAGE: StructuredOutputUsage = {
   inputTokens: 0,
@@ -126,7 +135,7 @@ const toPipelineUsage = (usage: StructuredCallReport["usage"]): StructuredOutput
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
         totalTokens: usage.totalTokens,
-        estimatedCost: usage.estimatedCost,
+        ...(usage.estimatedCost !== undefined ? { estimatedCost: usage.estimatedCost } : {}),
       };
 
 /**
@@ -365,7 +374,14 @@ const runExtraction = <T>(
     // too, and hiding them is how the 6,370-vs-18,448 lie happened. Seeded
     // with the native call's usage when it ran and was discarded (failed, or
     // rejected by the contract): those attempts were billed as well.
-    const usageAcc = { ...native.usage };
+    const usageAcc = {
+      inputTokens: native.usage.inputTokens,
+      outputTokens: native.usage.outputTokens,
+      totalTokens: native.usage.totalTokens,
+    };
+    // Cost via core addCost: an attempt with no known price leaves the total
+    // incomplete (estimatedCost absent on the result), never adds a $0.
+    let costAcc: CostSum = addCost(EMPTY_COST_SUM, native.usage.estimatedCost);
 
     // Provenance of the deciding prompt-mode attempt; read by `failWith`.
     let lastRepairs: readonly JsonRepairStep[] = [];
@@ -428,7 +444,7 @@ const runExtraction = <T>(
       usageAcc.inputTokens = addKnown(usageAcc.inputTokens, contributedHalf(attemptUsage?.inputTokens, attemptUsage?.totalTokens));
       usageAcc.outputTokens = addKnown(usageAcc.outputTokens, contributedHalf(attemptUsage?.outputTokens, attemptUsage?.totalTokens));
       usageAcc.totalTokens += attemptUsage?.totalTokens ?? 0;
-      usageAcc.estimatedCost += attemptUsage?.estimatedCost ?? 0;
+      costAcc = addCost(costAcc, attemptUsage?.estimatedCost);
 
       // Emit model IO event for logModelIO observability
       if (eb) {
@@ -509,7 +525,7 @@ const runExtraction = <T>(
             budgetEscalated,
             fieldErrors: [],
           };
-          return { data: checked.value, raw, attempts: attempt + 1, repaired, nativeMode: false, report, usage: { ...usageAcc } };
+          return { data: checked.value, raw, attempts: attempt + 1, repaired, nativeMode: false, report, usage: { ...usageAcc, ...costField(costAcc) } };
         }
         lastError = checked.message;
         lastFieldErrors = checked.fieldErrors;

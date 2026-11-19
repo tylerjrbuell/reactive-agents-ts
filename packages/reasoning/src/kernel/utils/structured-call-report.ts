@@ -18,7 +18,7 @@
 import { Effect, FiberRef } from "effect";
 import { StructuredUsageRef, type StructuredCallUsage, type TokenUsage } from "@reactive-agents/llm-provider";
 import type { StructuredAttemptReport } from "@reactive-agents/core";
-import type { RunBudgetSpend } from "../run-budget.js";
+import { callCost, type RunBudgetSpend } from "../run-budget.js";
 
 /** The usage and per-attempt detail one structured call left on the fiber. */
 export type StructuredCallReport = {
@@ -81,8 +81,9 @@ export type StructuredSpendEstimate = { readonly prompt: string; readonly raw: s
  * The one spend rule for a structured call, used by the run meter (observable
  * wrapper) and by strategy spend alike. Counts as one LLM call. Tokens and cost
  * are the provider-reported usage when there is any; otherwise the explicit
- * `estimate` fallback (chars / 4 of the prompt and the raw output, no cost);
- * otherwise zero. The meter passes no estimate: it records only what was billed.
+ * `estimate` fallback (chars / 4 of the prompt and the raw output);
+ * otherwise zero tokens. Without a reported price the cost is unknown
+ * (`costComplete: false`), never $0. The meter passes no estimate: it records only what was billed.
  * The wrapper meters a FAILED call only when {@link hasReportedUsage} (its
  * attempts ran and were billed even though no schema-valid value came back).
  */
@@ -90,7 +91,7 @@ export function structuredCallSpend(usage: TokenUsage | null, estimate?: Structu
   if (hasReportedUsage(usage)) {
     return {
       tokens: usage.totalTokens,
-      cost: usage.estimatedCost,
+      ...callCost(usage.estimatedCost),
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       llmCalls: 1,
@@ -98,5 +99,6 @@ export function structuredCallSpend(usage: TokenUsage | null, estimate?: Structu
   }
   const inputTokens = estimate === undefined ? 0 : Math.ceil(estimate.prompt.length / 4);
   const outputTokens = estimate === undefined ? 0 : Math.ceil(estimate.raw.length / 4);
-  return { tokens: inputTokens + outputTokens, cost: 0, inputTokens, outputTokens, llmCalls: 1 };
+  // No reported usage = no reported price: the cost is unknown, not $0.
+  return { tokens: inputTokens + outputTokens, ...callCost(undefined), inputTokens, outputTokens, llmCalls: 1 };
 }

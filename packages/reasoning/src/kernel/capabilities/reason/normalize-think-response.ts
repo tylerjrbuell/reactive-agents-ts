@@ -26,6 +26,7 @@ import { authorityOf } from "../decide/authority.js";
 import { surfaceAssumptions } from "./assumption-surfacing.js";
 import { emitAssistantTurn, resolveAssistantTurn } from "./assistant-turn.js";
 import { isThinkingRunaway, recoverThinkingRunaway } from "./thinking-runaway.js";
+import { addCost } from "@reactive-agents/core";
 import { addKnown, contributedHalf } from "../../utils/known-count.js";
 
 /**
@@ -56,7 +57,7 @@ export interface NormalizeThinkResponseParams {
   readonly deniedToolNames: readonly string[]
   readonly accumulatedContent: string
   readonly accumulatedThinking: string
-  readonly accumulatedUsage: { readonly inputTokens?: number; readonly outputTokens?: number; readonly totalTokens: number; readonly estimatedCost: number }
+  readonly accumulatedUsage: { readonly inputTokens?: number; readonly outputTokens?: number; readonly totalTokens: number; readonly estimatedCost?: number }
   readonly accumulatedLogprobs: readonly { readonly token: string; readonly logprob: number; readonly topLogprobs?: readonly { readonly token: string; readonly logprob: number }[] }[]
   readonly accumulatedToolCalls: { id: string; name: string; input: string }[]
   readonly accumulatedStopReason: string
@@ -209,7 +210,9 @@ export function normalizeThinkResponse(params: NormalizeThinkResponseParams) {
     const newTokens = state.tokens + thoughtResponse.usage.totalTokens;
     const newInputTokens = addKnown(state.inputTokens, contributedHalf(thoughtResponse.usage.inputTokens, thoughtResponse.usage.totalTokens));
     const newOutputTokens = addKnown(state.outputTokens, contributedHalf(thoughtResponse.usage.outputTokens, thoughtResponse.usage.totalTokens));
-    const newCost = state.cost + thoughtResponse.usage.estimatedCost;
+    // core addCost: an unknown price adds nothing, so state.cost never goes NaN.
+    // Completeness is tracked by the run meter (observable-llm), not here.
+    const newCost = addCost({ usd: state.cost, complete: true }, thoughtResponse.usage.estimatedCost).usd;
 
     // Strip <think>...</think> blocks before parsing
     const { thinking: extractedThinking, content: cleanContent } = extractThinking(rawThought);

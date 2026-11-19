@@ -74,7 +74,7 @@ export interface ThinkTurnParams {
       readonly inputTokens?: number
       readonly outputTokens?: number
       readonly totalTokens: number
-      readonly estimatedCost: number
+      readonly estimatedCost?: number
     }
     readonly model: string
     readonly thinking?: string

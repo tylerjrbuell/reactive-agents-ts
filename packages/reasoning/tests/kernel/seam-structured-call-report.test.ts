@@ -175,9 +175,10 @@ describe("structured call report — pipeline and planner spend", () => {
     const reported = { inputTokens: 1, outputTokens: 2, totalTokens: 3, estimatedCost: 0.5 };
     const unreported = { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedCost: 0 };
     expect(structuredCallSpend(reported, estimate)).toEqual({ tokens: 3, cost: 0.5, inputTokens: 1, outputTokens: 2, llmCalls: 1 });
-    expect(structuredCallSpend(unreported, estimate)).toEqual({ tokens: 20, cost: 0, inputTokens: 10, outputTokens: 10, llmCalls: 1 });
+    // No reported usage = no reported price: cost unknown (costComplete false), not $0.
+    expect(structuredCallSpend(unreported, estimate)).toEqual({ tokens: 20, cost: 0, costComplete: false, inputTokens: 10, outputTokens: 10, llmCalls: 1 });
     // The meter passes no estimate: an unreported call counts as one call, zero tokens.
-    expect(structuredCallSpend(null)).toEqual({ tokens: 0, cost: 0, inputTokens: 0, outputTokens: 0, llmCalls: 1 });
+    expect(structuredCallSpend(null)).toEqual({ tokens: 0, cost: 0, costComplete: false, inputTokens: 0, outputTokens: 0, llmCalls: 1 });
     expect(hasReportedUsage(null)).toBe(false);
     expect(hasReportedUsage(unreported)).toBe(false);
     expect(hasReportedUsage(reported)).toBe(true);

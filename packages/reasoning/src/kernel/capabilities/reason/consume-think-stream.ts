@@ -104,11 +104,11 @@ export function consumeThinkStream(params: ConsumeThinkStreamParams) {
     // rescueFromThinking / lastThinking machinery below consumes it.
     let accumulatedThinking = "";
     // Halves are optional on a provider usage event (absent = unsplit, unknown).
-    let accumulatedUsage: { inputTokens?: number; outputTokens?: number; totalTokens: number; estimatedCost: number } = {
+    // estimatedCost absent = price unknown (no usage event, or an unpriced model).
+    let accumulatedUsage: { inputTokens?: number; outputTokens?: number; totalTokens: number; estimatedCost?: number } = {
       inputTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
-      estimatedCost: 0,
     };
     let accumulatedLogprobs: { token: string; logprob: number; topLogprobs?: readonly { token: string; logprob: number }[] }[] = [];
     // Native FC: accumulate tool_use blocks from stream events
