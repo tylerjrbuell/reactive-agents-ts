@@ -210,7 +210,7 @@ describe("GeminiProviderLive", () => {
     expect(offCfg.maxOutputTokens).toBe(4000);
   });
 
-  it("complete() sets thinkingBudget=0 for non-thinking models (best-effort disable)", async () => {
+  it("complete() omits thinkingConfig for non-thinking models (the API rejects it on some)", async () => {
     await run(
       Effect.gen(function* () {
         const llm = yield* LLMService;
@@ -227,8 +227,9 @@ describe("GeminiProviderLive", () => {
         config: { thinkingConfig?: { thinkingBudget?: number }; maxOutputTokens?: number };
       }
     ).config;
-    // Always emit thinkingConfig; budget=0 is best-effort disable (no-op on non-thinking models).
-    expect(cfg.thinkingConfig?.thinkingBudget).toBe(0);
+    // Non-thinking models get no thinkingConfig: Gemma models answer even
+    // thinkingBudget 0 with HTTP 400 (Cortex trace 01M7T8MNTKB5BHP9100MBPY9GT).
+    expect(cfg.thinkingConfig).toBeUndefined();
     expect(cfg.maxOutputTokens).toBe(4000);
   });
 
@@ -435,5 +436,72 @@ describe("Gemini image parts — adapter wiring pin", () => {
     expect(callArgs.contents).toEqual([
       { role: "user", parts: [{ text: "describe" }, { inlineData: { mimeType: "image/png", data: "iVBORw0KGgo=" } }] },
     ]);
+  }, 15000);
+});
+
+// Cortex trace 01M7T8MNTKB5BHP9100MBPY9GT: gemma-4-26b-a4b-it failed with
+// "Thinking budget is not supported for this model." because thinkingConfig
+// was always sent. Gemma requests carry no thinkingConfig; a model the table
+// gets wrong is retried once without it (gemini-thinking-fallback.ts).
+describe("Gemini thinkingConfig gate — adapter wiring pin", () => {
+  // Shape of the SDK's ApiError message for this rejection (live, 2026-11-19).
+  const thinkingRejection = {
+    status: 400,
+    message:
+      '{"error":{"code":400,"message":"Thinking budget is not supported for this model.","status":"INVALID_ARGUMENT"}}',
+  };
+  type Sent = { config: { thinkingConfig?: unknown } };
+
+  it("complete() on gemma-4-26b-a4b-it sends no thinkingConfig", async () => {
+    await run(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          model: { provider: "gemini", model: "gemma-4-26b-a4b-it" },
+          messages: [{ role: "user", content: "Hi" }],
+        });
+      }),
+    );
+    const sent = mockGenerateContent.mock.calls.at(-1)?.[0] as Sent;
+    expect(sent.config.thinkingConfig).toBeUndefined();
+  }, 15000);
+
+  it("complete() retries once without thinkingConfig when the API rejects it", async () => {
+    const before = mockGenerateContent.mock.calls.length;
+    mockGenerateContent.mockImplementationOnce(() => Promise.reject(thinkingRejection));
+    const result = await run(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        return yield* llm.complete({
+          model: { provider: "gemini", model: "gemini-2.5-pro" },
+          messages: [{ role: "user", content: "Hi" }],
+        });
+      }),
+    );
+    expect(result.content).toBe("Gemini mock response");
+    const calls = mockGenerateContent.mock.calls.slice(before).map((c) => c[0] as Sent);
+    expect(calls.length).toBe(2);
+    expect(calls[0]?.config.thinkingConfig).toBeDefined();
+    expect(calls[1]?.config.thinkingConfig).toBeUndefined();
+  }, 15000);
+
+  it("stream() retries once without thinkingConfig when the API rejects it", async () => {
+    const before = mockGenerateContentStream.mock.calls.length;
+    mockGenerateContentStream.mockImplementationOnce(() => Promise.reject(thinkingRejection));
+    const events = await run(
+      Effect.gen(function* () {
+        const llm = yield* LLMService;
+        const stream = yield* llm.stream({
+          model: { provider: "gemini", model: "gemini-2.5-pro" },
+          messages: [{ role: "user", content: "Hi" }],
+        });
+        return yield* Stream.runCollect(stream);
+      }),
+    );
+    expect(Array.from(events).some((e) => e.type === "content_complete")).toBe(true);
+    const calls = mockGenerateContentStream.mock.calls.slice(before).map((c) => c[0] as Sent);
+    expect(calls.length).toBe(2);
+    expect(calls[0]?.config.thinkingConfig).toBeDefined();
+    expect(calls[1]?.config.thinkingConfig).toBeUndefined();
   }, 15000);
 });

@@ -26,6 +26,7 @@ import {
   type ThinkingOptions,
 } from "../thinking/index.js";
 import { makeThoughtMarkerStripper, stripLeadingThoughtMarker } from "./gemini-thought-marker.js";
+import { makeThinkingConfigFallback, warnThinkingConfigRetryOnce } from "./gemini-thinking-fallback.js";
 import { clampOutputBudget } from "../params/output-budget.js";
 import { resolveCloudTimeoutMs } from "../params/cloud-timeout.js";
 import { mapStopReason, reportedStopReason } from "../params/stop-reason.js";
@@ -271,9 +272,10 @@ export const buildGenerationConfig = (
     temperature: opts.temperature,
   };
 
-  // Always send thinkingConfig so callers can rely on consistent shape.
-  // budget=0 is best-effort disable; for non-thinking models it is a no-op.
-  cfg.thinkingConfig = { thinkingBudget: reserve ?? 0 };
+  // thinkingConfig only for thinking-capable models (budget 0 = best-effort
+  // disable). Models without thinking support (Gemma, image/TTS) reject the
+  // field with HTTP 400, so it is omitted (gemini-thinking-fallback.ts).
+  if (cap.supportsThinkingMode) cfg.thinkingConfig = { thinkingBudget: reserve ?? 0 };
 
   if (opts.systemPrompt) cfg.systemInstruction = opts.systemPrompt;
   if (opts.stopSequences?.length) cfg.stopSequences = [...opts.stopSequences];
@@ -300,6 +302,7 @@ export const GeminiProviderLive = Layer.effect(
     // Thought signatures Gemini returned, keyed by the tool-call ids this
     // instance generated; replayed on later requests (gemini-thought-signatures.ts).
     const signatures = makeThoughtSignatureStore();
+    const thinkingFallback = makeThinkingConfigFallback(warnThinkingConfigRetryOnce);
 
     // ─── Lazy-load the SDK via dynamic import (interceptable by mock.module) ───
 
@@ -375,10 +378,9 @@ export const GeminiProviderLive = Layer.effect(
 
           const response = yield* Effect.tryPromise({
             try: () =>
-              client.models.generateContent({
+              thinkingFallback.run(
                 model,
-                contents,
-                config: buildGeminiConfig({
+                buildGeminiConfig({
                   model,
                   maxTokens: request.maxTokens,
                   temperature: request.temperature,
@@ -388,7 +390,8 @@ export const GeminiProviderLive = Layer.effect(
                   toolChoice: request.toolChoice,
                   thinking: request.thinking,
                 }),
-              }),
+                (cfg) => client.models.generateContent({ model, contents, config: cfg }),
+              ),
             catch: toEffectError,
           });
 
@@ -485,11 +488,9 @@ export const GeminiProviderLive = Layer.effect(
                 if (process.env.RA_GEMINI_DEBUG === "1") {
                   process.stderr.write(`[gemini-debug] req model=${model} contents=${JSON.stringify(contents).slice(0,300)} sysLen=${cfg.systemInstruction ? String(cfg.systemInstruction).length : 0} maxOut=${cfg.maxOutputTokens} hasTools=${!!((cfg.tools as unknown[] | undefined)?.length)}\n`);
                 }
-                const stream = await client.models.generateContentStream({
-                  model,
-                  contents,
-                  config: cfg,
-                });
+                const stream = await thinkingFallback.run(model, cfg, (c) =>
+                  client.models.generateContentStream({ model, contents, config: c }),
+                );
 
                 let fullContent = "";
                 let accumulatedThinking = "";
@@ -776,10 +777,9 @@ export const GeminiProviderLive = Layer.effect(
                 yield* emitContentDegradations("gemini", model, wire.degraded);
                 const response = yield* Effect.tryPromise({
                   try: () =>
-                    client.models.generateContent({
+                    thinkingFallback.run(
                       model,
-                      contents: wire.contents,
-                      config: buildGeminiConfig({
+                      buildGeminiConfig({
                         model,
                         maxTokens: request.maxTokens,
                         temperature: request.temperature,
@@ -788,7 +788,8 @@ export const GeminiProviderLive = Layer.effect(
                         responseSchema: schemaObj,
                         thinking: request.thinking,
                       }),
-                    }),
+                      (cfg) => client.models.generateContent({ model, contents: wire.contents, config: cfg }),
+                    ),
                   catch: toEffectError,
                 });
 

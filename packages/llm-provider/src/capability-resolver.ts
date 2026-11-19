@@ -43,7 +43,7 @@ import {
 } from "./capability.js";
 import { chatToolsRequireNoReasoning, chatToolsRequireResponses } from "./capability-chat-tools.js";
 import { capabilityFromReported, reportedModelMetadataFor } from "./capability-reported.js";
-import { geminiFamilyCapability } from "./capability-gemini-family.js";
+import { geminiFamilyCapability, isGemmaId } from "./capability-gemini-family.js";
 import { resolveOllamaEndpoint } from "./ollama-endpoint.js";
 
 /**
@@ -179,7 +179,18 @@ export function resolveCapability(
     cap.requiresMaxCompletionTokens !== true
       ? { ...cap, requiresMaxCompletionTokens: true }
       : cap;
-  return withChatToolRules(provider, model, withMaxCompletion);
+  return withGemmaThinkingRule(provider, model, withChatToolRules(provider, model, withMaxCompletion));
+}
+
+/**
+ * Gemma ids on the Gemini API reject `thinkingConfig` (see `gemmaCapability`),
+ * so `supportsThinkingMode` is false on every tier, including provider-reported
+ * metadata (the listing says `thinking: true`). A user-declared row is kept.
+ */
+function withGemmaThinkingRule(provider: string, model: string, cap: Capability): Capability {
+  if (provider !== "gemini" || !isGemmaId(model)) return cap;
+  if (cap.source === "user" || !cap.supportsThinkingMode) return cap;
+  return { ...cap, supportsThinkingMode: false };
 }
 
 /**

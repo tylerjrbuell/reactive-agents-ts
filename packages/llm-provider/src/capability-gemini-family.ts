@@ -49,13 +49,60 @@ export const parseGeminiId = (model: string): GeminiId | undefined => {
 };
 
 /**
+ * True for Gemma ids served by the Gemini API (`gemma-4-26b-a4b-it`,
+ * `models/gemma-3-27b-it`).
+ *
+ * @param model — model id, with or without the `models/` prefix
+ */
+export const isGemmaId = (model: string): boolean =>
+  /^gemma-/.test(model.toLowerCase().replace(/^models\//, ""));
+
+/**
+ * Capability for a Gemma id served by the Gemini API.
+ *
+ * Gemma models reject `thinkingConfig.thinkingBudget` with HTTP 400
+ * ("Thinking budget is not supported for this model.", verified live on
+ * gemma-4-26b-a4b-it 2026-11-19), even though the model listing reports
+ * `thinking: true`. `supportsThinkingMode` gates that field, so it is false
+ * here. Windows: gemma-4 uses the listing's 262144 input / 32768 output
+ * (models.get, 2026-11-19). Other Gemma generations get a conservative
+ * 32768 / 8192 (not measured); provider-reported metadata, when discovery
+ * fetched it, ranks above this rule.
+ *
+ * @param model — Gemma model id
+ * @returns an inferred Capability, or undefined when the id is not a Gemma id
+ */
+export const gemmaCapability = (model: string): Capability | undefined => {
+  if (!isGemmaId(model)) return undefined;
+  const gemma4 = /^gemma-4(?:-|$)/.test(model.toLowerCase().replace(/^models\//, ""));
+  const window = gemma4 ? 262_144 : 32_768;
+  return {
+    provider: "gemini",
+    model,
+    tier: "mid",
+    maxContextTokens: window,
+    recommendedNumCtx: window,
+    maxOutputTokens: gemma4 ? 32_768 : 8_192,
+    tokenizerFamily: "gemini",
+    supportsPromptCaching: false,
+    supportsVision: false,
+    supportsThinkingMode: false,
+    supportsStreamingToolCalls: true,
+    toolCallDialect: "native-fc",
+    source: "inferred",
+  };
+};
+
+/**
  * Capability for a Gemini id that has no static row, borrowed from the
- * nearest static row of the same variant.
+ * nearest static row of the same variant. Gemma ids take `gemmaCapability`.
  *
  * @param model — Gemini model id
  * @returns an inferred Capability, or undefined when the family is not recognized
  */
 export const geminiFamilyCapability = (model: string): Capability | undefined => {
+  const gemma = gemmaCapability(model);
+  if (gemma !== undefined) return gemma;
   const wanted = parseGeminiId(model);
   if (wanted === undefined) return undefined;
 
