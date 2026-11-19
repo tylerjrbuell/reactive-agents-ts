@@ -13,6 +13,7 @@
  * required-tool floor when `input.requiredTools` is empty (HS-115 anti-scaffold closure
  * for F4/F5 — every emit has a same-commit consumer per North Star §9).
  */
+import { META_TOOLS } from "../../state/kernel-constants.js";
 
 // ── Output Format Types ──────────────────────────────────────────────────────
 
@@ -349,9 +350,13 @@ export function nominateRequiredTools(
     }
     if (matchedCues.length === 0) continue;
 
-    // Identify available tools matching ANY of the rule's tool patterns.
+    // Identify available tools matching ANY of the rule's tool patterns. A
+    // harness meta tool is never a task requirement: discover-tools' description
+    // ("search web") made it a nominated "web-search" tool, and the repetition
+    // guard then told runs with no required tools "You still need to call:
+    // discover-tools".
     const candidateTools = availableTools.filter((tool) =>
-      rule.toolPatterns.some((p) => toolMatchesPattern(tool, p)),
+      !META_TOOLS.has(tool.name) && rule.toolPatterns.some((p) => toolMatchesPattern(tool, p)),
     );
     if (candidateTools.length === 0) continue; // phantom-name guard
 

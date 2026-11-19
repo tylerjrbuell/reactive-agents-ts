@@ -125,8 +125,11 @@ describe("reflexion: the batch of a pass's last think runs while the run has bud
       (s) => s.type === "observation" && s.metadata?.observationResult?.toolName === "web-search",
     );
     expect(observed.length).toBe(6);
-    // Drained by one act: no think call was added for it (generate 2 + critique 1 + improve 2).
-    expect(result.metadata.llmCalls).toBe(5);
+    // Drained by one act: no think call was added for it (generate 2 + critique 1
+    // + improve 2). The one call after it is the terminal synthesis that reads the
+    // drained results (final-pass-unread-results.test.ts).
+    expect(result.metadata.llmCalls).toBe(6);
+    expect((result.metadata as { unreadResultsSynthesis?: { outcome?: string } }).unreadResultsSynthesis?.outcome).toBeDefined();
   }, 20000);
 
   it("at the RUN cap the batch is still dropped, and the record names run-budget-exhausted", async () => {

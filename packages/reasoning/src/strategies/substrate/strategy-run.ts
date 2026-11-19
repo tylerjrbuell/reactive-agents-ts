@@ -78,6 +78,7 @@ import { settleChecklist, withChecklistReconciliation } from "./checklist-termin
 import { answerPassErrorClaim, applyAnswerPassError } from "./answer-pass-error.js";
 import { PLAN_INCOMPLETE_GUARD, planIncompleteReason, settlePlan, type PlanStepLike } from "../../kernel/policy/plan-completion.js";
 import { emitGuardFired } from "../../kernel/utils/diagnostics.js";
+import { synthesizeUnreadResults } from "./unread-results.js";
 
 /**
  * What a strategy run has spent so far, across kernel passes, direct calls and
@@ -659,6 +660,11 @@ export function runStrategy<E, R>(
     let kernelIterations: number | undefined;
     // Whether any kernel pass offered a domain tool; undefined until a pass runs.
     let toolsVisible: boolean | undefined;
+    // Every pass in order (the unread-results rule reads the passes before the answering one).
+    const passes: { readonly pass: PassResult; readonly task: string }[] = [];
+    // Set by the unread-results rule (unread-results.ts): the output that replaces the draft, and its record.
+    let freshOutput: string | undefined;
+    let unreadRecord: Readonly<Record<string, unknown>> | undefined;
 
     const add = (s: Partial<StrategySpend>): void => {
       spend = {
@@ -693,6 +699,7 @@ export function runStrategy<E, R>(
           toolsVisible = toolsVisible === true || reachesDomainTool(seeded);
           const result = yield* runPass(kernel, seeded, withRunBudget(options, spec.iterationBudget, iterationsSpent));
           runContract = runContract ?? result.state.meta.runContract;
+          passes.push({ pass: result, task: options.taskDescription ?? seeded.task });
           actOrAnswerTallies.push(actOrAnswerTally(result.state));
           steps.push(...(passOptions?.record === "evidence" ? result.steps.filter(isToolEvidence) : result.steps));
           add({
@@ -808,7 +815,7 @@ export function runStrategy<E, R>(
         return finalizeStrategyResult({
           strategy: spec.strategy,
           steps,
-          output: end.pass.output,
+          output: freshOutput ?? end.pass.output,
           status,
           error: end.pass.state.error,
           ...totals(),
@@ -817,6 +824,7 @@ export function runStrategy<E, R>(
           extraMetadata: {
             ...end.extraMetadata,
             ...kernelTerminalMetadata(end.pass.state, ledger, sumActOrAnswerTally(actOrAnswerTallies)),
+            ...(unreadRecord !== undefined ? { unreadResultsSynthesis: unreadRecord } : {}),
             llmCalls: spend.llmCalls,
           },
         });
@@ -869,7 +877,7 @@ export function runStrategy<E, R>(
       return finalizeStrategyResult({
         strategy: spec.strategy,
         steps,
-        output: end.output,
+        output: freshOutput ?? end.output,
         status: capped.status,
         ...(end.error !== undefined ? { error: end.error } : {}),
         ...totals(),
@@ -887,6 +895,7 @@ export function runStrategy<E, R>(
           // The relay's `extensions` replaced the strategy's own above: join them, plus the final plan.
           ...joinedExtensions(end.extraMetadata?.extensions, relayExtensions, end.corePlan),
           ...(capped.cap !== undefined ? { statusCap: capped.cap } : {}),
+          ...(unreadRecord !== undefined ? { unreadResultsSynthesis: unreadRecord } : {}),
           llmCalls: spend.llmCalls,
         },
       });
@@ -939,7 +948,31 @@ export function runStrategy<E, R>(
         return pendingPause !== undefined ? settled : yield* settleChecklist(settled, kernelIterations ?? 0, target);
       });
 
+    // Final-pass unread tool results (unread-results.ts): when the answering pass
+    // ended with results no think read and the run would ship the draft written
+    // before them, one shared terminal synthesis renders the answer over them.
+    const readFinalResults = (end: StrategyEnd) =>
+      Effect.gen(function* () {
+        const answering = end._tag === "KernelTerminal" ? end.pass : end._tag === "Result" && end.outcome === undefined ? end.basedOn : undefined;
+        const at = passes.findIndex((p) => p.pass === answering);
+        if (answering === undefined || at < 0 || pendingPause !== undefined || kernelPause(answering.state) !== undefined) return;
+        const outcome = yield* synthesizeUnreadResults({
+          llm,
+          taskDescription: passes[0]?.task ?? passes[at]?.task ?? "",
+          taskId,
+          pass: answering,
+          output: end._tag === "Result" ? end.output : answering.output,
+          earlierPasses: passes.slice(0, at).map((p) => p.pass),
+          runSpend: yield* run.runSpend(),
+        });
+        add(outcome);
+        if (outcome.step !== undefined) steps.push(outcome.step);
+        freshOutput = outcome.output;
+        unreadRecord = outcome.record;
+      });
+
     return yield* body(run).pipe(
+      Effect.tap(readFinalResults),
       Effect.flatMap((end) => terminalLedger(end).pipe(Effect.flatMap((ledger) => terminal(end, ledger).pipe(
         Effect.flatMap((result) => (pendingPause !== undefined ? Effect.succeed(result) : withChecklistReconciliation(result, ledger, taskId))),
       )))),

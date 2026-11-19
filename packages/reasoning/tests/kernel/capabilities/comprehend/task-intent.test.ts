@@ -287,4 +287,40 @@ describe("act/guard — nominator fallback when input.requiredTools is empty", (
       expect(outcome.observation).not.toContain("You still need to call: calculator");
     }
   });
+
+  // A harness meta tool is never a task requirement. discover-tools' description
+  // says "search web", so a research task nominated it (0.7, web-search category)
+  // and the repetition backstop told a run with no required tools "You still
+  // need to call: discover-tools".
+  // RED-ON-CUT: drop the `!META_TOOLS.has(tool.name)` filter in
+  // nominateRequiredTools: both assertions fail.
+  it("a meta tool (discover-tools) is never nominated, so the repetition backstop names no tool to call", () => {
+    const discoverTools = {
+      name: "discover-tools",
+      description: "List callable TOOLS. Pass `query` to filter by intent (e.g. 'read file', 'search web', 'run code').",
+    };
+    expect(nominateRequiredTools("Search the web and research the EV market", [webSearchTool, discoverTools]).map((n) => n.name))
+      .toEqual(["web-search"]);
+    // The run's nominations when discover-tools is the only cue match (web-search
+    // reached through it): none.
+    const nominated = nominateRequiredTools("Search the web and research the EV market", [discoverTools]);
+    expect(nominated).toEqual([]);
+    const repeated: ReasoningStep[] = [];
+    for (let i = 0; i < 4; i++) {
+      repeated.push(
+        makeStep("action", "search", { toolCall: { id: `call-${i}`, name: "web-search", arguments: { q: `q${i}` } } }),
+        makeStep("observation", "ok", { observationResult: makeObservationResult("web-search", true, "ok") }),
+      );
+    }
+    const outcome = repetitionGuard(
+      { id: "call-9", name: "web-search", arguments: { q: "again" } } as ToolCallSpec,
+      makeState({ steps: repeated, nominated }),
+      { task: "Search the web and research the EV market", requiredTools: [] },
+    );
+    expect(outcome.pass).toBe(false);
+    if (!outcome.pass) {
+      expect(outcome.observation).not.toContain("still need to call");
+      expect(outcome.observation).not.toContain("discover-tools");
+    }
+  });
 });

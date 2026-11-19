@@ -68,6 +68,7 @@ const AUTHORITY_BY_ACTOR: Readonly<Record<string, AuthorityClass>> = {
   "fabrication-guard": "deterministic", // fabricated-measurement check rejected the output
   "exit-gate": "deterministic", // outstanding contract items / stale answer at a proposed exit
   "pending-batch": "deterministic", // the run ended with model tool calls that never ran
+  "unread-results-synthesis": "deterministic", // the answering pass ended with tool results no think read (strategies/substrate/unread-results.ts)
   "todo-wrap-up": "deterministic", // todo rows still open at the model's final answer (one turn, todo-wrap-up.ts)
   "plan-budget": "deterministic", // the iteration budget was sized from the seeded plan at run start (plan-budget.ts)
   "bookkeeping-refund": "deterministic", // a todo-only round on a seeded plan run did not count against maxIterations (iterate-bookkeeping-refund-seam.ts)
