@@ -121,6 +121,8 @@ export interface RunSummaryDto {
   /** Delegation context persisted from AgentStarted; lets reload rebuild the hierarchy. */
   readonly parentRunId?: string;
   readonly contextRunId?: string;
+  /** The run this one continues (a Continue's new run); absent on ordinary and older runs. */
+  readonly continuedFrom?: string;
   readonly rootRunId?: string;
   readonly depth?: number;
   readonly startedAt?: number;

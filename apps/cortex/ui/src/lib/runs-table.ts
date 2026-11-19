@@ -33,6 +33,8 @@ export interface RunRow {
   /** Desk-run launch snapshot. */
   readonly launchParams?: Readonly<Record<string, unknown>>;
   readonly parentRunId?: string;
+  /** The run this one continues (a Continue's new run); absent on ordinary and older runs. */
+  readonly continuedFrom?: string;
 }
 
 /** The two endings that end `failed` by status but are not failures. */

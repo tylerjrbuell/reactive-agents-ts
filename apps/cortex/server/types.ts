@@ -102,6 +102,8 @@ export interface RunSummary {
   readonly rootRunId?: string;
   /** This run's own RunContext.runId (AgentStarted.runId); absent on root runs and rows persisted before stamping. */
   readonly contextRunId?: string;
+  /** The run this one continues (Continue = `resumeRun({ newRun: true })`, stamped on AgentStarted.config); absent on ordinary and older runs. */
+  readonly continuedFrom?: string;
   readonly depth?: number;
   /** The chat session that started this run (its own events, or its root run's, carry it); unset once the session is deleted. */
   readonly chatSessionId?: string;

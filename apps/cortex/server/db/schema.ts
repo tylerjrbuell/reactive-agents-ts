@@ -388,6 +388,8 @@ export function applySchema(db: Database): void {
   // The run's OWN RunContext.runId (stamped on AgentStarted); legacy rows stay NULL and nest by name-shape.
   if (!runCols.includes("context_run_id")) db.exec("ALTER TABLE cortex_runs ADD COLUMN context_run_id TEXT");
   if (!runCols.includes("depth")) db.exec("ALTER TABLE cortex_runs ADD COLUMN depth INTEGER");
+  // The run a Continue's new run continues (`AgentStarted.config.continuedFrom`); NULL on every older or ordinary run.
+  if (!runCols.includes("continued_from")) db.exec("ALTER TABLE cortex_runs ADD COLUMN continued_from TEXT");
   if (!runCols.includes("launch_params_json")) db.exec("ALTER TABLE cortex_runs ADD COLUMN launch_params_json TEXT");
   // How a finished run ended (abstained / partial / failed / succeeded): an abstention
   // shares the `failed` status. Filled from each stored run's last AgentCompleted once.

@@ -137,7 +137,7 @@ describe("ChatResume.resume", () => {
     const h = harness(dir);
     const out = await h.resume.resume("s1", "r1", { ok: true, options: { note: "skip the PDF", extraIterations: 12 } });
     expect(out).toEqual({ ok: true, reply: "all done", success: true, resumable: false });
-    expect(h.calls).toEqual([{ runId: "r1", options: { note: "skip the PDF", extraIterations: 12 } }]);
+    expect(h.calls).toEqual([{ runId: "r1", options: { note: "skip the PDF", extraIterations: 12, newRun: true } }]);
     expect(h.persisted).toHaveLength(1);
     expect(h.persisted[0]).toMatchObject({ sessionId: "s1", userMessage: "Continue: skip the PDF", reply: "all done" });
     expect(h.persisted[0]!.trace).toBeUndefined();

@@ -92,6 +92,8 @@ export function updateRunStats(
     depth?: number;
     /** This run's own RunContext.runId from AgentStarted; first-seen wins. */
     contextRunId?: string;
+    /** The run this one continues (a Continue's new run); first-seen wins. */
+    continuedFrom?: string;
   },
 ): void {
   const sets: string[] = [];
@@ -167,6 +169,10 @@ export function updateRunStats(
     sets.push("context_run_id = COALESCE(context_run_id, ?)");
     values.push(patch.contextRunId);
   }
+  if (patch.continuedFrom !== undefined) {
+    sets.push("continued_from = COALESCE(continued_from, ?)");
+    values.push(patch.continuedFrom);
+  }
   if (patch.depth !== undefined) {
     sets.push("depth = COALESCE(depth, ?)");
     values.push(patch.depth);
@@ -205,6 +211,7 @@ type RunRow = {
   parent_run_id: string | null;
   root_run_id: string | null;
   context_run_id: string | null;
+  continued_from: string | null;
   depth: number | null;
   /** From LEFT JOIN cortex_agents — only present on joined selects */
   agent_table_name?: string | null;
@@ -268,6 +275,7 @@ function rowToRunSummary(row: RunRow): RunSummary {
     ...(row.parent_run_id ? { parentRunId: row.parent_run_id } : {}),
     ...(row.root_run_id ? { rootRunId: row.root_run_id } : {}),
     ...(row.context_run_id ? { contextRunId: row.context_run_id } : {}),
+    ...(row.continued_from ? { continuedFrom: row.continued_from } : {}),
     ...(row.depth != null ? { depth: row.depth } : {}),
     ...(row.chat_session_id ? { chatSessionId: row.chat_session_id } : {}),
     ...(row.chat_session_id && row.chat_session_name ? { chatSessionName: row.chat_session_name } : {}),
@@ -285,7 +293,7 @@ const runSelectBase = `
     (r.debrief IS NOT NULL) AS has_debrief,
     r.provider, r.model, r.strategy, r.error_message, r.ending,
     r.display_name, r.launch_params_json,
-    r.parent_run_id, r.root_run_id, r.context_run_id, r.depth,
+    r.parent_run_id, r.root_run_id, r.context_run_id, r.continued_from, r.depth,
     a.name AS agent_table_name, a.config AS agent_table_config,
     cs.session_id AS chat_session_id, cs.name AS chat_session_name`;
 

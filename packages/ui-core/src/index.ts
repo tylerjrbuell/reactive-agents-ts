@@ -107,6 +107,7 @@ export {
   type SchemaFieldType,
   type ParsedSchemaFields,
 } from "./state/schema-fields.js";
+export { continuationsOf, continuationChainOf, type LineageRun } from "./state/run-lineage.js";
 export { foldSubAgentActivity,type SubAgentTrace, type SubAgentBlock, type SubAgentFolder } from "./state/sub-agent-fold.js";
 export { toolBadgesOf, type ToolBadge, type ToolBadges, type ToolBadgeTone } from "./state/tool-badges.js";
 export {

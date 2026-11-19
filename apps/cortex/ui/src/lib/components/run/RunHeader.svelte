@@ -12,6 +12,8 @@
   import Icon from "$lib/components/kit/Icon.svelte";
   import Status from "$lib/components/kit/Status.svelte";
   import RunMenu, { type RunMenuItem } from "./RunMenu.svelte";
+  import RunContinuation from "./RunContinuation.svelte";
+  import { continuedFromLink } from "$lib/run-continuation.js";
   import type { RunStatus } from "$lib/stores/run-store.js";
   import { safetyCountLabel, type SafetyBadgeTone } from "$lib/run-safety.js";
 
@@ -24,6 +26,8 @@
     tolerated?: string;
     chatSessionId?: string;
     chatSessionName?: string;
+    /** The run this one continues (a Continue's new run); the crumb links to it. */
+    continuedFrom?: string;
     /** The run has a launch snapshot: Edit and rerun / Rerun are offered. */
     canRerun: boolean;
     busy: { readonly chat: boolean; readonly rerun: boolean; readonly delete: boolean };
@@ -99,6 +103,7 @@
       {#if p.chatSessionId}
         <span>from chat <a href="/chat?session={encodeURIComponent(p.chatSessionId)}">{p.chatSessionName ?? "a chat"}</a></span>
       {/if}
+      <RunContinuation from={continuedFromLink(p)} />
     </nav>
     <div class="title">
       {#if p.renaming}

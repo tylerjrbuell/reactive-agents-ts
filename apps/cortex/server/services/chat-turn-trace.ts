@@ -100,6 +100,8 @@ export type StoredTurnTrace = Omit<TurnTrace, "outcome"> & {
   readonly recalled?: readonly RecalledMemoryView[];
   /** What the user attached to the message (a user row only): names and sizes, never bytes. */
   readonly attachments?: readonly AttachmentMeta[];
+  /** The run this turn's run continues (`resumeRun({ newRun: true })`, Continue); absent for an ordinary turn. */
+  readonly continuedFrom?: string;
 };
 
 /**
@@ -222,6 +224,12 @@ export function withTurnOutcome(
 ): StoredTurnTrace | undefined {
   if (!outcome) return trace;
   return { ...(trace ?? { reasoningSteps: [], toolCalls: [] }), outcome };
+}
+
+/** Mark a turn trace as the continuation of `parentRunId`'s run, creating an empty trace when the turn had none. */
+export function withContinuedFrom(trace: StoredTurnTrace | undefined, parentRunId: string | undefined): StoredTurnTrace | undefined {
+  if (parentRunId === undefined || parentRunId === "") return trace;
+  return { ...(trace ?? { reasoningSteps: [], toolCalls: [] }), continuedFrom: parentRunId };
 }
 
 /**

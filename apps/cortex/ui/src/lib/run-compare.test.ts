@@ -79,6 +79,17 @@ describe("run compare view rules", () => {
     expect(compareCandidates(runs, current.runId, "other").map((r) => r.runId)).toEqual(["NEW"]);
   });
 
+  test("picker candidates: the run's own continuation chain comes before same-name runs; unlinked lists are unchanged", () => {
+    const runs = [
+      row("PARENT", { displayName: "chat", startedAt: 1 }),
+      row("PARENT-cont-aaaaaaaa", { displayName: "chat", startedAt: 2, continuedFrom: "PARENT" }),
+      row("SAME", { displayName: "chat", startedAt: 9 }),
+      row("OTHER", { displayName: "x", startedAt: 20 }),
+    ];
+    expect(compareCandidates(runs, "PARENT-cont-aaaaaaaa").map((r) => r.runId)).toEqual(["PARENT", "SAME", "OTHER"]);
+    expect(compareCandidates(runs, "SAME").map((r) => r.runId)).toEqual(["PARENT-cont-aaaaaaaa", "PARENT", "OTHER"]);
+  });
+
   test("deltas, speed and step labels", () => {
     expect(signedDelta(0)).toBe("same");
     expect(signedDelta(-50)).toBe("−50");

@@ -13,6 +13,8 @@
   import { formatCost, formatRelativeTime, formatTurnDuration } from "@reactive-agents/ui-core";
   import { RUN_SOURCE_LABEL, runDurationMs, runNameOf, runRowStatus, runSourceOf, type RunRow } from "$lib/runs-table.js";
   import { shortRunId } from "$lib/run-view.js";
+  import RunContinuation from "$lib/components/run/RunContinuation.svelte";
+  import { continuationLinks, continuedFromLink } from "$lib/run-continuation.js";
 
   interface Props {
     pinned: readonly RunRow[];
@@ -60,6 +62,7 @@
       <div class="c-run">
         <a href="/run/{encodeURIComponent(run.runId)}" data-sveltekit-preload-data="hover" use:tooltip={run.runId}>{runNameOf(run)}</a>
         <span class="sub"><span>{RUN_SOURCE_LABEL[runSourceOf(run)]}</span><span class="data">{shortRunId(run.runId)}</span>{#if run.hasDebrief}<span>debrief</span>{/if}</span>
+        <RunContinuation from={continuedFromLink(run)} into={continuationLinks(all, run.runId)} />
       </div>
     </td>
     <td class="data c-model" use:tooltip={run.provider ? `${run.provider} / ${run.model ?? ""}` : undefined}>{run.model ?? "—"}</td>

@@ -4,7 +4,7 @@
  * framework replay `diffTraces` step diff when both runs recorded a trace).
  * Pure apart from `fetchRunCompare`.
  */
-import { formatTokensPerSecond } from "@reactive-agents/ui-core";
+import { continuationChainOf, formatTokensPerSecond } from "@reactive-agents/ui-core";
 import { CORTEX_SERVER_URL } from "$lib/constants.js";
 import { runNameOf, type RunRow } from "$lib/runs-table.js";
 
@@ -143,21 +143,20 @@ export function comparePair(selected: ReadonlySet<string>): readonly [string, st
 
 /**
  * Runs offered by the run header's "Compare with…" picker: every other run
- * that is not live, the ones with the same name first (likely the same task),
- * then newest first; `query` filters by name, model or id.
+ * that is not live: the run's own continuation chain first (a Continue and the
+ * run it picked up from, `continuationChainOf`), then the ones with the same name
+ * (likely the same task), then newest first; `query` filters by name, model or id.
  */
 export function compareCandidates(runs: readonly RunRow[], runId: string, query = "", limit = 30): RunRow[] {
   const q = query.trim().toLowerCase();
   const current = runs.find((r) => r.runId === runId);
   const name = current ? runNameOf(current) : "";
+  const chain = new Set(continuationChainOf(runs, runId));
+  const rank = (r: RunRow): number => (chain.has(r.runId) ? 0 : runNameOf(r) === name ? 1 : 2);
   return runs
     .filter((r) => r.runId !== runId && r.status !== "live")
     .filter((r) => !q || `${runNameOf(r)} ${r.model ?? ""} ${r.runId}`.toLowerCase().includes(q))
-    .sort((x, y) => {
-      const sx = runNameOf(x) === name ? 0 : 1;
-      const sy = runNameOf(y) === name ? 0 : 1;
-      return sx - sy || y.startedAt - x.startedAt;
-    })
+    .sort((x, y) => rank(x) - rank(y) || y.startedAt - x.startedAt)
     .slice(0, limit);
 }
 

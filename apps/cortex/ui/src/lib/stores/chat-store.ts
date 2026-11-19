@@ -8,8 +8,7 @@ import { ATTACH_ACTIVE_TURN, chatStreamEndpoint, fetchActiveTurn, resumedTurns, 
 import type { ChatTotals } from "./chat-cost.js";
 import { restoreSubAgents, type ChatSubAgent } from "../sub-agent-view.js";
 import { turnModelOf } from "../chat-live-config.js";
-import type { ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent, StrategyRunHolder } from "@reactive-agents/ui-core";
-import type { AttachmentMeta, RecalledMemoryView, RunSkillsView, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
+import type { AttachmentMeta, ChecklistSnapshotWire, PersistedReasoningStep, PersistedSubAgent, RecalledMemoryView, RunSkillsView, StrategyRunHolder, TurnDeliverable, TurnStructured, TurnUsage } from "@reactive-agents/ui-core";
 import { metaOf, requestOf, taggedDraftsOf, type DraftAttachment } from "../composer-attachments.js";
 import { keepThumbs } from "./composer-attachments.js";
 import { storedRunEnding, type TurnRunEnding } from "../turn-ending.js";
@@ -161,6 +160,7 @@ export type ChatTurn = StrategyRunHolder & {
   costKnown?: boolean;
   /** Framework run id of this turn (names its JSONL trace); absent for older or untraced turns. */
   runId?: string;
+  continuedFrom?: string; // the run a Continue's new run (`runId`) continues; absent on ordinary and older turns
   /**
    * Set when the turn's run did not succeed (failed, partial or abstained):
    * `content` is then empty, a partial draft, or the model's own last text,

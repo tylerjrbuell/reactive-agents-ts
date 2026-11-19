@@ -433,6 +433,7 @@
       : undefined}
     chatSessionId={$runStore.chatSessionId}
     chatSessionName={$runStore.chatSessionName}
+    continuedFrom={$runStore.continuedFrom}
     canRerun={$runStore.launchParams !== null}
     busy={{ chat: openingChat, rerun: rerunning, delete: deletingRun }}
     {exportItems}

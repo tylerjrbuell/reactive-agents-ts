@@ -49,6 +49,13 @@ const strategyPatchOf = (event: AgentEvent): { strategy?: string; strategyRank?:
   return started ? { strategy: started.strategy, strategyRank: started.rank } : {};
 };
 
+/** The run a Continue's new run continues: `AgentStarted.config.continuedFrom` (framework `resumeRun({ newRun: true })`). */
+export const continuedFromOf = (event: AgentEvent): string | undefined => {
+  const config = eventRecord(event)["config"];
+  const parent = config !== null && typeof config === "object" ? Reflect.get(config, "continuedFrom") : undefined;
+  return typeof parent === "string" && parent !== "" ? parent : undefined;
+};
+
 const deriveRunStats = (
   event: AgentEvent,
 ): Partial<{
@@ -67,12 +74,15 @@ const deriveRunStats = (
   parentRunId: string;
   rootRunId: string;
   contextRunId: string;
+  continuedFrom: string;
   depth: number;
 }> => {
   // AgentStarted fires first — definitive provider + model for the run
   if (event._tag === "AgentStarted") {
     const e = event as { provider?: string; model?: string; parentRunId?: unknown; rootRunId?: unknown; runId?: unknown; depth?: unknown };
+    const continuedFrom = continuedFromOf(event);
     return {
+      ...(continuedFrom !== undefined ? { continuedFrom } : {}),
       ...(typeof e.parentRunId === "string" && e.parentRunId ? { parentRunId: e.parentRunId } : {}),
       ...(typeof e.rootRunId === "string" && e.rootRunId ? { rootRunId: e.rootRunId } : {}),
       ...(typeof e.runId === "string" && e.runId ? { contextRunId: e.runId } : {}),

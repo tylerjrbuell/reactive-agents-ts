@@ -52,9 +52,14 @@ export function isIdLike(s: string): boolean {
  * 12 characters (the run header's breadcrumb shows the same). A ULID's first 10
  * characters are its millisecond timestamp, so 8 collide for runs started in
  * the same second.
+ *
+ * A Continue's new run is `<parent id>-cont-<8 hex>`: its first 12 characters are its
+ * parent's, so it keeps the parent's 12 and the first 4 hex of its own suffix
+ * (`01J7ABCDEFGH-cont-1a2b`), which tells the two apart in a list.
  */
 export function shortRunId(runId: string): string {
-  return runId.slice(0, 12);
+  const cont = /^(.*?)(?:-cont-[0-9a-f]{8})*-cont-([0-9a-f]{8})$/.exec(runId);
+  return cont ? `${(cont[1] ?? "").slice(0, 12)}-cont-${(cont[2] ?? "").slice(0, 4)}` : runId.slice(0, 12);
 }
 
 /**

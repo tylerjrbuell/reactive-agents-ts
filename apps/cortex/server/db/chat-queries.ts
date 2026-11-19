@@ -74,6 +74,8 @@ export type ChatTurnRow = {
   costKnown: boolean;
   /** Framework run id (names the run's JSONL trace file); absent for older or untraced turns. */
   runId?: string;
+  /** The run this turn's run continues (a Continue's new run); lifted from the stored trace. Absent for an ordinary turn and older rows. */
+  continuedFrom?: string;
   /** True when the turn stopped before completion (user cancel / mid-stream error) but spent tokens. */
   incomplete?: boolean;
   ts: number;
@@ -297,6 +299,7 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
             ...(Array.isArray(parsed.recalled) ? { recalled: parsed.recalled } : {}),
             // What the user attached to this (user) message: names and sizes only (chat-attachments.ts).
             ...(attachments ? { attachments } : {}),
+            ...(typeof parsed.continuedFrom === "string" && parsed.continuedFrom !== "" ? { continuedFrom: parsed.continuedFrom } : {}),
           };
         }
       } catch {
@@ -319,6 +322,7 @@ export function getChatTurns(db: Database, sessionId: string): ChatTurnRow[] {
       costUsd: r.cost_usd,
       costKnown: r.cost_known !== 0,
       ...(r.run_id ? { runId: r.run_id } : {}),
+      ...(trace?.continuedFrom ? { continuedFrom: trace.continuedFrom } : {}),
       ...(context ? { context } : {}),
       incomplete: r.incomplete !== 0,
       ts: r.ts,

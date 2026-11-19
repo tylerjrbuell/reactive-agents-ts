@@ -171,6 +171,8 @@ export interface RunState {
   /** The chat session that started this run (or its root run), when it still exists. */
   readonly chatSessionId?: string;
   readonly chatSessionName?: string;
+  /** The run this one continues (a Continue's new run), from the run row; absent on ordinary and older runs. */
+  readonly continuedFrom?: string;
 }
 
 const DEFAULT_VITALS: RunVitals = {
@@ -469,6 +471,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         displayName?: string;
         chatSessionId?: string;
         chatSessionName?: string;
+        continuedFrom?: string;
       };
       runStartMs = typeof run.startedAt === "number" ? run.startedAt : Date.now();
       const mapped = runStatusOfSummary(run.status);
@@ -487,6 +490,7 @@ export function createRunStore(runId: string, options?: CreateRunStoreOptions) {
         ...(run.displayName ? { displayName: run.displayName } : {}),
         ...(run.chatSessionId ? { chatSessionId: run.chatSessionId, isChat: true } : {}),
         ...(run.chatSessionName ? { chatSessionName: run.chatSessionName } : {}),
+        ...(run.continuedFrom ? { continuedFrom: run.continuedFrom } : {}),
         debrief: parsedDebrief ?? s.debrief,
         errorMessage: run.errorMessage ?? s.errorMessage,
         vitals: {

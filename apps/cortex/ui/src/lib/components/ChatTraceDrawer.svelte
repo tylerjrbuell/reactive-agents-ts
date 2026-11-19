@@ -12,6 +12,8 @@
   import { formatSessionCost as formatCost } from "$lib/stores/chat-cost.js";
   import ChatTurnTimeline from "$lib/components/ChatTurnTimeline.svelte";
   import ContextSources from "$lib/components/ContextSources.svelte";
+  import RunContinuation from "$lib/components/run/RunContinuation.svelte";
+  import { continuedFromLink } from "$lib/run-continuation.js";
   import TracePanel from "$lib/components/TracePanel.svelte";
   import { buildRunTrees, runViewHref, traceUrl, type RunTraceView } from "$lib/chat-export.js";
   import { saveTextFile } from "$lib/chat-download.js";
@@ -278,6 +280,10 @@
           />
         </div>
       </div>
+    {/if}
+    {#if (tab === "steps" || tab === "trace") && turn?.continuedFrom}
+      <!-- A Continue is its own run with its own trace file; this names the run it picked up from. -->
+      <div class="flex-shrink-0 border-b border-[color:var(--cortex-line)] px-4 py-2"><RunContinuation from={continuedFromLink(turn)} /></div>
     {/if}
     {#if tab === "context"}
       <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 space-y-4">

@@ -17,6 +17,8 @@
   import { fade } from "svelte/transition";
   import { voice } from "$lib/stores/voice.js";
   import { continueOffer } from "$lib/stores/chat-continue-offer.js";
+  import RunContinuation from "$lib/components/run/RunContinuation.svelte";
+  import { continuedFromLink } from "$lib/run-continuation.js";
 
   interface Props {
     turn: ChatTurn;
@@ -82,6 +84,7 @@
       <span class="chip data"><ModelLink provider={shownProvider} model={shownModel} /></span>
     {/if}
     {#if strategy}<span class="chip" use:tooltip={strategy.title} data-testid="turn-strategy">{strategy.label}</span>{/if}
+    <RunContinuation from={continuedFromLink(turn)} />
     {#if turn.streaming}
       <!-- The elapsed "Running 12s" sits in the action row below. -->
       <Status tone="running" label="Running" />

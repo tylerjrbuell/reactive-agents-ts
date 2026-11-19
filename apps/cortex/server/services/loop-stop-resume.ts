@@ -26,6 +26,8 @@ export interface ResumableRunWire {
   readonly kind: RunStopKind;
   /** What the run had done and what was open, when the framework recorded a stop. */
   readonly stop?: RunStopSummary;
+  /** The run this one continues, when it is itself a Continue's new run. */
+  readonly continuedFrom?: string;
 }
 
 /** Most extra iterations one Continue may grant (the framework default is 10). */
@@ -38,12 +40,16 @@ export const MAX_RESUME_NOTE_CHARS = 2_000;
  * interruption), newest first. `liveRunIds` (`agent.activeRunIds()` of the live
  * agent) are left out: a `running` row with a checkpoint reads resumable, and
  * only that list tells a crash from a run going right now. A run waiting on a
- * person or finished normally is never resumable.
+ * person or finished normally is never resumable. A run that already has a
+ * continuation (another record's `continuedFrom`, `resumeRun({ newRun: true })`)
+ * is left out too: the framework leaves the parent's record untouched, so
+ * without this a Continue would offer the parent again beside its child.
  */
 export function resumableRunsOf(records: readonly RunRecord[], liveRunIds: readonly string[] = []): ResumableRunWire[] {
+  const continued = new Set(records.flatMap((r) => (r.continuedFrom !== undefined ? [r.continuedFrom] : [])));
   return records
     .flatMap((r): ResumableRunWire[] =>
-      r.resumable === true && !liveRunIds.includes(r.runId)
+      r.resumable === true && !liveRunIds.includes(r.runId) && !continued.has(r.runId)
         ? [
             {
               runId: r.runId,
@@ -53,6 +59,7 @@ export function resumableRunsOf(records: readonly RunRecord[], liveRunIds: reado
               // A summary from before kinds existed is a loop stop; no summary at all is a crash.
               kind: r.stop === undefined ? "crash" : (r.stop.kind ?? "loop"),
               ...(r.stop !== undefined ? { stop: r.stop } : {}),
+              ...(r.continuedFrom !== undefined ? { continuedFrom: r.continuedFrom } : {}),
             },
           ]
         : [],

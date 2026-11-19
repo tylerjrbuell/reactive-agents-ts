@@ -20,13 +20,13 @@
 import { existsSync } from "node:fs";
 import { Effect } from "effect";
 import { listDurableRuns } from "@reactive-agents/runtime";
-import type { AgentResult, AgentStreamEvent, ReactiveAgent } from "@reactive-agents/runtime";
+import type { AgentResult, AgentStreamEvent, ReactiveAgent, ResumeRunOptions } from "@reactive-agents/runtime";
 import { resumeEventStream } from "./chat-resume-stream.js";
 import { durableRunsDbPath } from "./crashed-runs.js";
 import { ChatRunControl } from "./chat-run-control.js";
 import type { InterruptableAgent } from "./run-interrupt.js";
 import { replyOf } from "./chat-approvals.js";
-import { turnOutcomeOf, withTurnOutcome, type StoredTurnTrace } from "./chat-turn-trace.js";
+import { turnOutcomeOf, withContinuedFrom, withTurnOutcome, type StoredTurnTrace } from "./chat-turn-trace.js";
 import {
   continueMessage,
   errorText,
@@ -86,6 +86,12 @@ export interface ChatResumeHost {
   evict(sessionId: string): Promise<void>;
 }
 
+/**
+ * Continue is a new run linked to its parent (`newRun`): its own id and trace file, the parent's
+ * record untouched, `continuedFrom` on the result. The person's note and step grant ride along.
+ */
+export const continueOptions = (options: ResumeRunOptions): ResumeRunOptions => ({ ...options, newRun: true });
+
 /** Outcome of {@link ChatResume.resume}. */
 export type ChatResumeOutcome =
   | {
@@ -135,7 +141,7 @@ export class ChatResume {
     try {
       let result: AgentResult;
       try {
-        result = await admitted.agent.resumeRun(runId, input.options);
+        result = await admitted.agent.resumeRun(runId, continueOptions(input.options));
       } catch (e) {
         return { ok: false, ...resumeFailureOf(e) };
       }
@@ -169,7 +175,7 @@ export class ChatResume {
       let stored = false;
       try {
         // The exchange is stored before the terminal event reaches any client.
-        yield* resumeEventStream(agent, runId, input.options, (end) => {
+        yield* resumeEventStream(agent, runId, continueOptions(input.options), (end) => {
           if ("result" in end) {
             store(end.result);
             stored = true;
@@ -235,6 +241,10 @@ export class ChatResume {
   /** Store the continued run's result as the session's next exchange ("Continue" and the reply). */
   private store(sessionId: string, result: AgentResult, input: Extract<ParsedResumeInput, { ok: true }>): void {
     const outcome = result.success ? undefined : turnOutcomeOf(result);
-    this.host.persistExchange(sessionId, continueMessage(input.options.note), replyOf(result), result, [], withTurnOutcome(undefined, outcome));
+    // The continuation is its own run: the turn is stamped with its parent so the thread, the Runs list and the trace drawer link them.
+    const trace = withContinuedFrom(withTurnOutcome(undefined, outcome), result.continuedFrom);
+    // The turn stores the run's id (`taskId`); a continuation's durable `runId` is the new run's own id, so it wins.
+    const stored = result.continuedFrom !== undefined && result.runId !== undefined ? { ...result, taskId: result.runId } : result;
+    this.host.persistExchange(sessionId, continueMessage(input.options.note), replyOf(result), stored, [], trace);
   }
 }
