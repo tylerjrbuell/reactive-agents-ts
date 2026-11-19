@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { rmDbFiles, tmpDbPath } from "./helpers/tmp-db.js";
 import { openDatabase } from "../db/schema.js";
 import { ChatSessionService } from "../services/chat-session-service.js";
-import { countTodoEdits } from "../services/chat-environment.js";
+import { ChatEnvironment, countTodoEdits } from "../services/chat-environment.js";
 
 function setup() {
   const path = tmpDbPath("chat-env");
@@ -13,7 +13,7 @@ function setup() {
 const drain = async (svc: ChatSessionService, id: string, msg: string): Promise<void> => {
   for await (const e of svc.chatStream(id, msg)) void e;
 };
-type Internal = { envBaselines: Map<string, { todoUserEdits?: { added: number; removed: number } }>; todoEdits: Map<string, { added: number; removed: number }> };
+type Internal = { env: ChatEnvironment };
 type Ev = { _tag: string; changes?: ReadonlyArray<{ kind: string }> };
 
 /** Count EnvironmentChanged events the session's runtime bus publishes, via the engine's default publisher. */
@@ -44,9 +44,9 @@ describe("chat environment updates", () => {
       await svc.setTodo(id, [{ id: "1", title: "a", status: "pending" }]);
       await svc.setTodo(id, [{ id: "1", title: "a", status: "completed" }, { id: "2", title: "b", status: "pending" }]);
       await svc.setTodo(id, []);
-      expect((svc as unknown as Internal).todoEdits.get(id)).toEqual({ added: 2, removed: 2 });
+      expect((svc as unknown as Internal).env.userEdits(id)).toEqual({ added: 2, removed: 2 });
       await svc.deleteSession(id);
-      expect((svc as unknown as Internal).todoEdits.has(id)).toBe(false);
+      expect((svc as unknown as Internal).env.userEdits(id)).toEqual({ added: 0, removed: 0 });
     } finally { cleanup(); }
   });
 
@@ -80,6 +80,84 @@ describe("chat environment updates", () => {
       await drain(svc, id, "b"); await drain(svc, off, "b");
       expect(events.length).toBe(1);
       expect(events[0]!.changes!.map((c) => c.kind)).toEqual(["todo-user-edit"]);
+      await svc.disposeAll();
+    } finally { cleanup(); }
+  });
+});
+
+describe("chat environment: source and baseline (G10)", () => {
+  const row = (id: string) => ({ id, title: id, status: "pending" as const });
+
+  it("(a) an agent-originated to-do write is not a user edit and yields no notice", async () => {
+    const { svc, cleanup } = setup();
+    try {
+      const events = captureEnvEvents(svc);
+      const id = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: true } });
+      await drain(svc, id, "a");
+      await svc.setTodo(id, [row("1"), row("2")], "agent");
+      await svc.setTodo(id, [], "agent");
+      expect((svc as unknown as Internal).env.userEdits(id)).toEqual({ added: 0, removed: 0 });
+      await drain(svc, id, "b");
+      expect(events.length).toBe(0);
+      await svc.disposeAll();
+    } finally { cleanup(); }
+  });
+
+  it("(b) a user dock edit counts once and yields exactly one notice on the next turn", async () => {
+    const { svc, cleanup } = setup();
+    try {
+      const events = captureEnvEvents(svc);
+      const id = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: true } });
+      await drain(svc, id, "a");
+      await svc.setTodo(id, [row("1")]);
+      expect((svc as unknown as Internal).env.userEdits(id)).toEqual({ added: 1, removed: 0 });
+      await drain(svc, id, "b");
+      expect(events.length).toBe(1);
+      expect(events[0]!.changes!.map((c) => c.kind)).toEqual(["todo-user-edit"]);
+      await drain(svc, id, "c"); // consumed: no repeat
+      expect(events.length).toBe(1);
+      await svc.disposeAll();
+    } finally { cleanup(); }
+  });
+
+  it("(c) reading the environment does not advance the baseline; only a settled turn does", () => {
+    const env = new ChatEnvironment();
+    let model = "m1";
+    env.attach("s", () => ({ model }));
+    env.settle("s");
+    expect(env.baselineOf("s")).toEqual({ model: "m1" });
+    model = "m2";
+    // The engine can read the snapshot any number of times; the pending diff stays.
+    expect(env.baselineOf("s")).toEqual({ model: "m1" });
+    env.settle("s");
+    expect(env.baselineOf("s")).toEqual({ model: "m2" });
+    env.forget("s");
+    expect(env.baselineOf("s")).toBeUndefined();
+  });
+
+  it("(c) a rebuild before the next turn keeps the pending diff for that turn", async () => {
+    const { svc, cleanup } = setup();
+    try {
+      const events = captureEnvEvents(svc);
+      const id = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: true } });
+      await drain(svc, id, "a");
+      await svc.setTodo(id, [row("1")]); // evicts the engine
+      await svc.updateSessionConfig(id, { model: "m2" }); // rebuilds again, still no turn
+      await drain(svc, id, "b");
+      expect(events.length).toBe(1);
+      expect(events[0]!.changes!.map((c) => c.kind)).toEqual(expect.arrayContaining(["todo-user-edit", "model"]));
+      await svc.disposeAll();
+    } finally { cleanup(); }
+  });
+
+  it("(d) the first turn of a session emits no notice, even after an earlier user edit", async () => {
+    const { svc, cleanup } = setup();
+    try {
+      const events = captureEnvEvents(svc);
+      const id = await svc.createSession({ agentConfig: { provider: "test", model: "m", enableTools: true } });
+      await svc.setTodo(id, [row("1")]);
+      await drain(svc, id, "first");
+      expect(events.length).toBe(0);
       await svc.disposeAll();
     } finally { cleanup(); }
   });

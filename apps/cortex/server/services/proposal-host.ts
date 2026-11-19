@@ -68,6 +68,7 @@ export function createProposalHost(
         await sessions.setTodo(
           id,
           titles.map((title, i) => ({ id: `t${i + 1}`, title, status: "pending" as const })),
+          "agent", // an agent proposal: the model wrote it, so it is not a user edit
         );
       },
       compact: async (id, keepLast) => {

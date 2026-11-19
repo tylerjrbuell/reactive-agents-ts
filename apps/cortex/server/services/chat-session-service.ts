@@ -1,4 +1,4 @@
-import { chatEnvironmentSnapshot, countTodoEdits, type EnvironmentSnapshotInput } from "./chat-environment.js";
+import { ChatEnvironment, chatEnvironmentSnapshot, type TodoSource } from "./chat-environment.js";
 import { applyChatMode, modeSwitchNeedsRebuild } from "./chat-session-mode.js";
 import { ChatSessionPlans, persistSessionPlan, planSeedOf } from "./chat-session-plan.js";
 import { chatMetaTools } from "./chat-meta-tools.js";
@@ -316,10 +316,8 @@ export class ChatSessionService {
     await Promise.all(entries.map(disposeCachedSession));
   }
 
-  /** Per-session environment baseline (last snapshot the engine read). Survives engine eviction so a rebuild still diffs. */
-  private readonly envBaselines = new Map<string, EnvironmentSnapshotInput>();
-  /** Per-session cumulative USER to-do edits (agent edits never pass through `setTodo`). */
-  private readonly todoEdits = new Map<string, { added: number; removed: number }>();
+  /** Environment baseline + user to-do edit counters; survives engine eviction so a rebuild still diffs. */
+  private readonly env = new ChatEnvironment();
   /** Attachment metadata of the turn in flight per session, stored on its user row (chat-attachments.ts). */
   private readonly turnAttachments = new Map<string, readonly AttachmentMeta[]>();
   private goalSource: ((sessionId: string) => { status: string; objective?: string } | null) | undefined;
@@ -459,13 +457,12 @@ export class ChatSessionService {
   /**
    * Replace the conversation's to-do list (user edit). Runs under the turn guard and evicts
    * the cached engine so the next turn is rebuilt and seeded from the edited list.
+   * `source` "agent" (a session-control proposal) is not reported as a user edit.
    */
-  async setTodo(sessionId: string, items: readonly StoredTodoItem[]): Promise<StoredTodoItem[]> {
+  async setTodo(sessionId: string, items: readonly StoredTodoItem[], source: TodoSource = "user"): Promise<StoredTodoItem[]> {
     const clean = validateTodo(items);
     await this.mutateHistory(sessionId, () => {
-      const edits = countTodoEdits(getChatTodo(this.db, sessionId), clean);
-      const prev = this.todoEdits.get(sessionId) ?? { added: 0, removed: 0 };
-      this.todoEdits.set(sessionId, { added: prev.added + edits.added, removed: prev.removed + edits.removed });
+      this.env.recordTodoEdit(sessionId, getChatTodo(this.db, sessionId), clean, source);
       setChatTodo(this.db, sessionId, clean);
     });
     return clean;
@@ -618,8 +615,7 @@ export class ChatSessionService {
       this.sessions.delete(sessionId);
     }
     this.documents.clear(sessionId);
-    this.envBaselines.delete(sessionId);
-    this.todoEdits.delete(sessionId);
+    this.env.forget(sessionId);
     return deleteChatSession(this.db, sessionId);
   }
 
@@ -960,6 +956,7 @@ let tokensUsed = 0;
     split?: { inputTokens?: number | undefined; outputTokens?: number | undefined },
     incomplete?: boolean,
   ): void {
+    this.env.settle(sessionId); // the turn consumed its environment notice
     // A failed tool call emitted as text is not a conversation turn: persisting it would
     // re-poison the rebuilt history. Skip the whole exchange so alternation stays sane.
     if (isShapedAssistantReply(reply)) return;
@@ -1044,6 +1041,15 @@ let tokensUsed = 0;
     const { documents: _unresolved, ...rest } = built;
     const params = resolved && resolved.length > 0 ? { ...rest, documents: resolved } : rest;
     const agent = await buildCortexAgent(params);
+    // A pure read: the baseline advances only when a turn settles (`persistTurn`).
+    const readEnv = () =>
+      chatEnvironmentSnapshot(built, {
+        agentControl: agentConfig.agentControl === true,
+        goal: this.goalSource?.(sessionId) ?? null,
+        todoUserEdits: this.env.userEdits(sessionId),
+      });
+    this.env.attach(sessionId, readEnv);
+    const baseline = this.env.baselineOf(sessionId);
     const turns = getChatTurns(this.db, sessionId);
     const initialHistory = turnsToChatMessages(turns);
     const session = agent.session({
@@ -1052,17 +1058,9 @@ let tokensUsed = 0;
       persist: false,
       id: sessionId,
       mode: getChatSession(this.db, sessionId)?.mode ?? "execute", // stored with the session; a per-turn posture only overrides it
-      environment: () => {
-        const snap = chatEnvironmentSnapshot(built, {
-          agentControl: agentConfig.agentControl === true,
-          goal: this.goalSource?.(sessionId) ?? null,
-          todoUserEdits: this.todoEdits.get(sessionId) ?? { added: 0, removed: 0 },
-        });
-        this.envBaselines.set(sessionId, snap);
-        return snap;
-      },
+      environment: readEnv,
       environmentUpdates: agentConfig.environmentUpdates !== false,
-      ...(this.envBaselines.has(sessionId) ? { initialEnvironment: this.envBaselines.get(sessionId)! } : {}),
+      ...(baseline ? { initialEnvironment: baseline } : {}),
       ...(initialHistory.length > 0 ? { initialHistory } : {}),
       // A rebuilt session starts from the stored to-do list and the plan's recon findings.
       ...planSeedOf(this.db, sessionId),

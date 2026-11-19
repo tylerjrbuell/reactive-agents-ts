@@ -45,6 +45,61 @@ export function chatEnvironmentSnapshot(p: BuildCortexAgentParams, facts: ChatEn
   };
 }
 
+/** Who wrote a to-do list: only `user` writes are reported to the model as "edited". */
+export type TodoSource = "user" | "agent";
+
+/**
+ * Per-session environment state for chat: the cumulative USER to-do edit counters and the
+ * baseline the runtime diffs against. The baseline advances only in {@link settle} (a turn
+ * ended), never when the engine reads the snapshot, so a read cannot swallow a pending diff.
+ */
+export class ChatEnvironment {
+  private readonly baselines = new Map<string, EnvironmentSnapshotInput>();
+  private readonly edits = new Map<string, { added: number; removed: number }>();
+  private readonly readers = new Map<string, () => EnvironmentSnapshotInput>();
+
+  /** Count a to-do write. Agent writes (session-control proposals) are not user edits. */
+  recordTodoEdit(
+    sessionId: string,
+    before: readonly StoredTodoItem[],
+    after: readonly StoredTodoItem[],
+    source: TodoSource,
+  ): void {
+    if (source !== "user") return;
+    const d = countTodoEdits(before, after);
+    const prev = this.userEdits(sessionId);
+    this.edits.set(sessionId, { added: prev.added + d.added, removed: prev.removed + d.removed });
+  }
+
+  /** Cumulative user to-do edits for the session. */
+  userEdits(sessionId: string): { added: number; removed: number } {
+    return this.edits.get(sessionId) ?? { added: 0, removed: 0 };
+  }
+
+  /** Register how to read the session's live snapshot (replaced on every rebuild). */
+  attach(sessionId: string, reader: () => EnvironmentSnapshotInput): void {
+    this.readers.set(sessionId, reader);
+  }
+
+  /** The baseline a rebuilt session diffs against (absent until a turn has settled). */
+  baselineOf(sessionId: string): EnvironmentSnapshotInput | undefined {
+    return this.baselines.get(sessionId);
+  }
+
+  /** A turn ended: what the model was told is now the baseline. */
+  settle(sessionId: string): void {
+    const read = this.readers.get(sessionId);
+    if (read) this.baselines.set(sessionId, read());
+  }
+
+  /** Drop everything held for a deleted session. */
+  forget(sessionId: string): void {
+    this.baselines.delete(sessionId);
+    this.edits.delete(sessionId);
+    this.readers.delete(sessionId);
+  }
+}
+
 /** Rows the user added to / removed from the list (matched by id). Status or title edits are not counted. */
 export function countTodoEdits(
   before: readonly StoredTodoItem[],
