@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { canRetry, canStart, canStop, DEVICE_OPTIONS, isWorking, nextPollMs, parseLocalSpeechStatus, phaseLabel, phaseTone, portProblem, serverLine, type LocalSpeechStatus } from "./local-speech.js";
+import { cacheLine, formatBytes, LOW_CACHE_BYTES, canRetry, canStart, canStop, DEVICE_OPTIONS, isWorking, nextPollMs, parseLocalSpeechStatus, phaseLabel, phaseTone, portProblem, serverLine, type LocalSpeechStatus } from "./local-speech.js";
 import { voiceApi } from "./voice-api.js";
 
 const status = (over: Partial<LocalSpeechStatus> = {}): LocalSpeechStatus => ({
@@ -15,7 +15,23 @@ const status = (over: Partial<LocalSpeechStatus> = {}): LocalSpeechStatus => ({
   port: 8000,
   device: "auto",
   running: true,
+  cache: null,
   ...over,
+});
+
+describe("model cache line", () => {
+  test("parses the cache, words free space on Docker's disk, and flags under the download floor", () => {
+    expect(parseLocalSpeechStatus({ phase: "ready", cache: { freeBytes: 5e9, checkedAt: 1 } })?.cache).toEqual({ freeBytes: 5e9, checkedAt: 1 });
+    expect(parseLocalSpeechStatus({ phase: "ready", cache: { freeBytes: -1, checkedAt: 1 } })?.cache).toBeNull();
+    expect(parseLocalSpeechStatus({ phase: "ready", cache: "lots" })?.cache).toBeNull();
+    expect(cacheLine(status())).toBeNull();
+    expect(cacheLine(status({ cache: { freeBytes: 217.6e9, checkedAt: 1 } }))).toEqual({ text: "Model cache: 217.6 GB free on Docker's disk.", low: false });
+    const low = cacheLine(status({ cache: { freeBytes: 300e6, checkedAt: 1 } }));
+    expect(low?.low).toBe(true);
+    expect(low?.text).toContain("only 300 MB free on Docker's disk");
+    expect(low?.text).not.toContain("hf-hub-cache");
+    expect(formatBytes(LOW_CACHE_BYTES)).toBe("1.1 GB");
+  });
 });
 
 describe("local speech status", () => {

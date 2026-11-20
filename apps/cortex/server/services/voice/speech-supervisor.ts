@@ -23,8 +23,14 @@
  *   it is removed (`docker rm -f cortex-speaches`) and created again (models stay in the cache volume);
  * - single-flight, 3 attempts with exponential backoff, then `failed` until Retry;
  * - docker's stderr never leaves here beyond a scrubbed 300-character tail.
+ *
+ * Free space for the model cache is measured with `docker exec cortex-speaches df -Pk <cache>`, only on
+ * Cortex's own running container (rules and wording: `speech-disk.ts`). A download is refused below
+ * `MIN_FREE_FOR_DOWNLOAD_BYTES`, and a failed download or docker call that reads as ENOSPC (or a 5xx
+ * with the cache nearly full) is reported as Docker's disk being full.
  */
 import { execFile } from "node:child_process";
+import { diskFullSentence, isDiskFullText, MIN_FREE_FOR_DOWNLOAD_BYTES, parseDfAvailableBytes } from "./speech-disk.js";
 import { applyLocalSpeechConfig, type LocalSpeechConfigPatch } from "./local-speech-config.js";
 import { NO_LOCAL_ENDPOINT, resolveSpeechTarget, type SpeechTarget } from "./speech-target.js";
 import type { LocalSpeechDevice, VoiceSettings } from "./voice-settings.js";
@@ -104,6 +110,11 @@ export interface SpeechStatus {
   readonly device: LocalSpeechDevice;
   /** The server answered its health check at the last look; `null` = not looked yet. */
   readonly running: boolean | null;
+  /**
+   * Free space in the model cache as the container sees it (on Docker Desktop: Docker's VM disk, not the
+   * computer's), at the last measure; `null` = not measured (no own running container, or docker not allowed).
+   */
+  readonly cache: { readonly freeBytes: number; readonly checkedAt: number } | null;
 }
 
 /** A refusal sentence, or the status after the action started. */
@@ -117,6 +128,7 @@ export function scrubDockerText(text: string): string {
 }
 
 function dockerProblem(r: DockerResult): string {
+  if (isDiskFullText(r.stderr)) return diskFullSentence(null);
   if (r.spawnError === "not-found") return "Docker was not found on this machine. Install Docker, or start the speech server yourself.";
   if (r.spawnError === "permission" || /permission denied/i.test(r.stderr)) {
     return "Docker refused access (permission denied). Add your user to the docker group or start Docker, then press Retry.";
@@ -149,8 +161,12 @@ export type EnsureReason = "startup" | "timer" | "use" | "manual";
 /** The supervisor. One per Cortex server. */
 export interface SpeechSupervisor {
   status(): SpeechStatus;
-  /** Look whether the server answers (no docker; throttled, skipped while work runs), then the status. */
-  probe(): Promise<SpeechStatus>;
+  /**
+   * Look whether the server answers (throttled, skipped while work runs), then the status. With
+   * `measureDisk` (the caller may run docker) and the server up, also measures the model cache's free
+   * space, at most once a minute; otherwise no docker.
+   */
+  probe(opts?: { readonly measureDisk?: boolean }): Promise<SpeechStatus>;
   /** Bring the server up if it is down. Single-flight; resolves with the final status. A no-op while the opt-in is off. */
   ensure(reason: EnsureReason): Promise<SpeechStatus>;
   /** Save the opt-in and forget past failures. On: start an `ensure`. Off: stop the Cortex container (resolves after the stop). */
@@ -203,6 +219,8 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
   let policyChecked = false;
   let inflight: Promise<SpeechStatus> | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
+  let cache: { freeBytes: number; checkedAt: number } | null = null;
+  const DISK_GAP_MS = 60_000;
 
   const keepRunning = (): boolean => deps.settings.get().localSpeech.keepRunning;
 
@@ -226,6 +244,7 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
       port: target.ok ? target.port : settings.localSpeech.port,
       device: settings.localSpeech.device,
       running: serverUp,
+      cache,
     };
   }
 
@@ -393,20 +412,52 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
     }
   }
 
+  /**
+   * Free bytes in the model cache inside Cortex's own running container (`docker exec ... df -Pk`), or
+   * `null` when it cannot be measured. Never runs in a container Cortex does not own.
+   */
+  async function measureCache(): Promise<number | null> {
+    const found = await inspect();
+    if (!isInspected(found) || !ownImage(found.image) || !found.running) return null;
+    const r = await deps.docker.run(["exec", SPEECH_CONTAINER, "df", "-Pk", CACHE_MOUNT], 10_000);
+    const free = r.code === 0 ? parseDfAvailableBytes(r.stdout) : null;
+    if (free !== null) cache = { freeBytes: free, checkedAt: now() };
+    return free;
+  }
+
+  /** A download error body, capped and scrubbed (only matched against, never shown). */
+  async function errorText(res: Response): Promise<string> {
+    try {
+      return scrubDockerText((await res.text()).slice(0, 4000));
+    } catch {
+      return "";
+    }
+  }
+
   /** Download what the server lacks. Returns a problem sentence, or undefined. */
   async function ensureModels(target: Target): Promise<string | undefined> {
     const have = await installedModels(target);
     if (have === null) return "The speech server is up but did not list its models.";
     const missing = target.models.filter((m) => !have.has(m));
+    if (missing.length === 0) return undefined;
+    const before = await measureCache();
+    if (before !== null && before < MIN_FREE_FOR_DOWNLOAD_BYTES) return diskFullSentence(before);
+    /** After a failed download: ENOSPC in the text, or a server-side failure with the cache nearly full, names the cause; else `fallback`. */
+    const failed = async (fallback: string, text: string, serverSide: boolean): Promise<string> => {
+      const free = await measureCache();
+      if (isDiskFullText(text) || (serverSide && free !== null && free < MIN_FREE_FOR_DOWNLOAD_BYTES)) return diskFullSentence(free);
+      return fallback;
+    };
     for (const [i, model] of missing.entries()) {
       set("downloading", `Downloading model ${i + 1} of ${missing.length}: ${model}`);
       const url = `${target.apiBase}/models/${model.split("/").map(encodeURIComponent).join("/")}`;
       try {
         const res = await doFetch(url, { method: "POST", signal: timeoutSignal(15 * 60_000), redirect: "manual" });
+        if (!res.ok) return failed(`Downloading ${model} failed (the speech server answered HTTP ${res.status}).`, await errorText(res), res.status >= 500);
         await res.body?.cancel().catch(() => undefined);
-        if (!res.ok) return `Downloading ${model} failed (the speech server answered HTTP ${res.status}).`;
-      } catch {
-        return `Downloading ${model} failed (the speech server did not finish in time).`;
+      } catch (e) {
+        // A dropped connection or the time limit: the server may have died on a full disk.
+        return failed(`Downloading ${model} failed (the speech server did not finish in time).`, String(e), true);
       }
     }
     return undefined;
@@ -534,11 +585,12 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
 
   return {
     status,
-    async probe() {
+    async probe(opts) {
       const target = resolveSpeechTarget(deps.settings.get());
       if (!target.ok || inflight !== null || now() - lastProbeAt < PROBE_GAP_MS) return status();
       lastProbeAt = now();
       serverUp = await healthy(target);
+      if (opts?.measureDisk === true && serverUp && (cache === null || now() - cache.checkedAt >= DISK_GAP_MS)) await measureCache();
       return status();
     },
     ensure,

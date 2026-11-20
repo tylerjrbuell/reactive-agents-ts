@@ -15,6 +15,7 @@
   import Select from "$lib/components/kit/Select.svelte";
   import Switch from "$lib/components/kit/Switch.svelte";
   import {
+    cacheLine,
     canRetry,
     canStart,
     canStop,
@@ -50,6 +51,7 @@
   });
 
   const portError = $derived(portProblem(portDraft));
+  const cache = $derived(status === null ? null : cacheLine(status));
   const configDirty = $derived(status !== null && (portDraft.trim() !== String(status.port) || deviceDraft !== status.device));
 
   async function refresh() {
@@ -135,6 +137,8 @@
       {#if canRetry(status)}<Button size="sm" variant="ghost" disabled={busy} onclick={() => void retry()}>Retry</Button>{/if}
     </div>
     {#if status.phase === "failed" && status.lastError}<p class="ls-err" data-testid="local-speech-error">{status.lastError}</p>{/if}
+    <!-- A failure already names a full disk with the free space; the cache line would repeat it. -->
+    {#if cache && status.phase !== "failed"}<p class={cache.low ? "ls-err" : "ls-msg"} data-testid="local-speech-cache">{cache.text}</p>{/if}
 
     <form class="ls-grid" onsubmit={(e) => { e.preventDefault(); void applyConfig(); }}>
       <label class="ls-l" for="voice-local-port">Port</label>

@@ -29,6 +29,36 @@ export interface LocalSpeechStatus {
   readonly device: LocalSpeechDevice;
   /** The server answered at the last look; `null` = not looked yet. */
   readonly running: boolean | null;
+  /** Free space in the model cache as the container sees it (Docker's disk), at the last measure; `null` = not measured. */
+  readonly cache: { readonly freeBytes: number; readonly checkedAt: number } | null;
+}
+
+/** Below this the server refuses a model download (`MIN_FREE_FOR_DOWNLOAD_BYTES` in `server/services/voice/speech-disk.ts`). */
+export const LOW_CACHE_BYTES = 1024 ** 3;
+
+function cacheOf(v: unknown): LocalSpeechStatus["cache"] {
+  if (!isRecord(v)) return null;
+  const { freeBytes, checkedAt } = v;
+  return typeof freeBytes === "number" && Number.isFinite(freeBytes) && freeBytes >= 0 && typeof checkedAt === "number" ? { freeBytes, checkedAt } : null;
+}
+
+/** `1.2 GB`, `350 MB` (decimal units, as Docker Desktop shows them). */
+export function formatBytes(bytes: number): string {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+  return `${Math.max(0, Math.round(bytes / 1e6))} MB`;
+}
+
+/**
+ * The model cache line, or `null` when not measured. Names Docker's disk, because on Docker Desktop the
+ * models live on Docker's own fixed-size disk, not the computer's. `low` = under the download floor.
+ */
+export function cacheLine(s: LocalSpeechStatus): { readonly text: string; readonly low: boolean } | null {
+  if (s.cache === null) return null;
+  const low = s.cache.freeBytes < LOW_CACHE_BYTES;
+  const free = formatBytes(s.cache.freeBytes);
+  return low
+    ? { text: `Model cache: only ${free} free on Docker's disk, so new model downloads are refused. Raise Docker's disk limit or clear unused images (docker system prune keeps volumes).`, low }
+    : { text: `Model cache: ${free} free on Docker's disk.`, low };
 }
 
 const PHASES: readonly LocalSpeechPhase[] = ["disabled", "unavailable", "checking", "starting", "downloading", "ready", "stopping", "stopped", "failed"];
@@ -59,6 +89,7 @@ export function parseLocalSpeechStatus(v: unknown): LocalSpeechStatus | null {
     port: typeof v.port === "number" && Number.isInteger(v.port) ? v.port : 8000,
     device: isDevice(v.device) ? v.device : "auto",
     running: typeof v.running === "boolean" ? v.running : null,
+    cache: cacheOf(v.cache),
   };
 }
 

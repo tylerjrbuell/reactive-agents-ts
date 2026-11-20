@@ -27,6 +27,7 @@ import {
 import { DEFAULT_VOICE_SETTINGS, VoiceSettingsStore, type LocalSpeechDevice, type VoiceSettings } from "../services/voice/voice-settings.js";
 import { applyLocalSpeechConfig } from "../services/voice/local-speech-config.js";
 import { listSpeechModels } from "../services/voice/speech-models.js";
+import { diskFullSentence, formatBytes, isDiskFullText, MIN_FREE_FOR_DOWNLOAD_BYTES, parseDfAvailableBytes } from "../services/voice/speech-disk.js";
 
 const STT_MODEL = "Systran/faster-whisper-small";
 const TTS_MODEL = "speaches-ai/Kokoro-82M-v1.0-ONNX";
@@ -70,6 +71,11 @@ class World {
   /** Host port the speech server answers on (IPv4 loopback only, like `--publish 127.0.0.1:<port>:8000`). */
   port = 8000;
   hosts: string[] = [];
+  /** KiB free in the model cache as `df -Pk` inside the container reports it. */
+  freeKiB = 50 * 1024 * 1024;
+  /** When set, a model download answers this instead of 201 (and runs `onPost` first). */
+  postFail: (() => Response) | null = null;
+  onPost: (() => void) | null = null;
 
   readonly docker: DockerRunner = {
     run: async (args) => {
@@ -89,6 +95,13 @@ class World {
         case "update":
           if (this.container) this.container.policy = "unless-stopped";
           return { code: 0, stdout: "", stderr: "" };
+        case "exec":
+          if (this.container === null || !this.container.running) return { code: 1, stdout: "", stderr: `Error response from daemon: container ${SPEECH_CONTAINER} is not running` };
+          return {
+            code: 0,
+            stdout: `Filesystem     1024-blocks      Used Available Capacity Mounted on\n/dev/vda1         61255492  58000000 ${this.freeKiB}      99% /home/ubuntu/.cache/huggingface/hub\n`,
+            stderr: "",
+          };
         case "info":
           return { code: 0, stdout: this.nvidia ? '{"nvidia":{"path":"nvidia-container-runtime"},"runc":{"path":"runc"}}' : '{"runc":{"path":"runc"}}', stderr: "" };
         case "run": {
@@ -125,6 +138,8 @@ class World {
     if (url.pathname.startsWith("/v1/models/") && init?.method === "POST") {
       const id = decodeURIComponent(url.pathname.slice("/v1/models/".length));
       this.posted.push(id);
+      this.onPost?.();
+      if (this.postFail) return this.postFail();
       this.installed.add(id);
       return new Response(null, { status: 201 });
     }
@@ -335,6 +350,102 @@ describe("failures, backoff and the attempt cap", () => {
   });
 });
 
+describe("a full model cache (Docker's disk)", () => {
+  const GiB = 1024 ** 3;
+  const own = (): void => {
+    w.up = true;
+    w.container = { running: true, policy: "unless-stopped", image: SPEECH_IMAGES.cpu, port: 8000 };
+  };
+
+  it("an ENOSPC download body becomes the plain sentence with the free space and the fix", async () => {
+    own();
+    w.postFail = () => new Response('{"detail":"[Errno 28] No space left on device: \'/home/ubuntu/.cache/huggingface/hub/x.incomplete\'"}', { status: 500 });
+    w.onPost = () => {
+      w.freeKiB = 2 * 1024 * 1024; // the partial file used some; still above the floor
+    };
+    const st = await sup.ensure("startup");
+    expect(st.phase).toBe("failed");
+    expect(st.lastError).toBe(diskFullSentence(2 * GiB));
+    expect(st.lastError).toContain("Docker's disk is full (2.1 GB free for speech models)");
+    expect(st.lastError).toContain("not your computer's");
+    expect(st.lastError).toContain("docker system df");
+    // Never suggests removing the model cache volume.
+    expect(st.lastError).not.toContain(SPEECH_CACHE_VOLUME);
+    expect(st.lastError).not.toContain("--volumes");
+    expect(st.cache?.freeBytes).toBe(2 * GiB);
+  });
+
+  it("an HTTP 500 with a bare body reads as a full disk only when the cache is nearly full after it", async () => {
+    own();
+    w.postFail = () => new Response("Internal Server Error", { status: 500 });
+    let st = await sup.ensure("startup");
+    expect(st.lastError).toBe(`Downloading ${STT_MODEL} failed (the speech server answered HTTP 500).`);
+    w.onPost = () => {
+      w.freeKiB = 10 * 1024;
+    };
+    w.freeKiB = 50 * 1024 * 1024;
+    st = await sup.retry();
+    expect(st.lastError).toBe(diskFullSentence(10 * 1024 * 1024));
+  });
+
+  it("refuses to start a download when the cache has under the floor free (nothing is posted)", async () => {
+    own();
+    w.freeKiB = 300 * 1024;
+    const st = await sup.ensure("startup");
+    expect(st.phase).toBe("failed");
+    expect(st.lastError).toBe(diskFullSentence(300 * 1024 * 1024));
+    expect(w.posted).toEqual([]);
+    expect(MIN_FREE_FOR_DOWNLOAD_BYTES).toBe(GiB);
+  });
+
+  it("measures with docker exec df on its own running container only, argv fixed", async () => {
+    own();
+    await sup.ensure("startup");
+    expect(w.calls.find((c) => c[0] === "exec")).toEqual(["exec", SPEECH_CONTAINER, "df", "-Pk", "/home/ubuntu/.cache/huggingface/hub"]);
+    // A server that answers without a Cortex container (hand-made elsewhere): no exec, downloads still run.
+    w = new World();
+    sup = make();
+    w.up = true;
+    expect((await sup.ensure("startup")).phase).toBe("ready");
+    expect(w.dockerVerbs()).not.toContain("exec");
+    expect(w.posted.length).toBe(2);
+    // Another image under the name: never exec'd into.
+    w = new World();
+    sup = make();
+    w.up = true;
+    w.container = { running: true, policy: "no", image: "evil/image:latest", port: 8000 };
+    await sup.ensure("startup");
+    expect(w.dockerVerbs()).not.toContain("exec");
+  });
+
+  it("no measure when nothing is missing", async () => {
+    own();
+    w.installed = new Set([STT_MODEL, TTS_MODEL]);
+    await sup.ensure("startup");
+    expect(w.dockerVerbs()).not.toContain("exec");
+    expect(sup.status().cache).toBeNull();
+  });
+
+  it("a docker call that hits ENOSPC (image pull) says the same sentence", async () => {
+    w.failRun = { code: 125, stdout: "", stderr: "docker: failed to register layer: write /usr/lib/x.so: no space left on device." };
+    const st = await sup.ensure("startup");
+    expect(st.lastError).toBe(diskFullSentence(null));
+  });
+
+  it("the sentence fits the 300-character tail rule; df parsing", () => {
+    expect(diskFullSentence(999 * 1e9).length).toBeLessThanOrEqual(300);
+    expect(scrubDockerText(diskFullSentence(123 * 1e9))).toBe(diskFullSentence(123 * 1e9));
+    expect(diskFullSentence(null)).not.toContain("free for");
+    expect(parseDfAvailableBytes("Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/nvme0n1p7 975319548 750181364 217568396 78% /home/ubuntu/.cache/huggingface/hub\n")).toBe(217568396 * 1024);
+    expect(parseDfAvailableBytes("garbage")).toBeNull();
+    expect(parseDfAvailableBytes("h\n/dev/x 1 2 -3 4% /m")).toBeNull();
+    expect(isDiskFullText("OSError: [Errno 28] No space left on device")).toBe(true);
+    expect(isDiskFullText("ENOSPC: write")).toBe(true);
+    expect(isDiskFullText("Model not found")).toBe(false);
+    expect(formatBytes(350e6)).toBe("350 MB");
+  });
+});
+
 describe("what gets supervised", () => {
   it("accepts the Speaches presets on loopback", () => {
     const t = resolveSpeechTarget(local());
@@ -442,6 +553,24 @@ describe("the HTTP surface", () => {
     // The timer does not bring it back.
     await supervisor.ensure("timer");
     expect(w.container?.running).toBe(false);
+  });
+
+  it("GET status carries the model cache's free bytes, measured only where docker is allowed", async () => {
+    w.up = true;
+    w.container = { running: true, policy: "unless-stopped", image: SPEECH_IMAGES.cpu, port: 8000 };
+    w.freeKiB = 4 * 1024 * 1024;
+    const denied = build({ allowDocker: false }).app;
+    const a = (await (await denied.handle(req("/api/voice/local/status"))).json()) as { cache: unknown };
+    expect(a.cache).toBeNull();
+    expect(w.dockerVerbs()).not.toContain("exec");
+    const { app } = build();
+    const b = (await (await app.handle(req("/api/voice/local/status"))).json()) as { cache: { freeBytes: number } | null };
+    expect(b.cache?.freeBytes).toBe(4 * 1024 ** 3);
+    // Throttled: a second look within a minute runs no docker.
+    w.calls = [];
+    w.clock += 5_000;
+    await app.handle(req("/api/voice/local/status"));
+    expect(w.calls).toEqual([]);
   });
 
   it("config: a port change saves the port, moves the endpoints and re-creates the running container there", async () => {

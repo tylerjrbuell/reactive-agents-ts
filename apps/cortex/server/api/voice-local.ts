@@ -1,7 +1,8 @@
 /**
  * /api/voice/local — control of the local speech server (Speaches) that `speech-supervisor.ts` runs in docker.
  *
- * - GET  /status        the supervisor's state, after a cheap health check (no docker)
+ * - GET  /status        the supervisor's state, after a cheap health check; with docker allowed and the
+ *                        server up, the model cache's free space (`docker exec ... df`, at most once a minute)
  * - POST /ensure        Retry: run again now; answers at once with the state, the work continues
  * - POST /keep-running  { enabled } the opt-in; off stops the Cortex container (answers after the stop)
  * - POST /start         start the server now (keep-running or not); answers at once, the work continues
@@ -33,7 +34,8 @@ export function voiceLocalRouter(deps: VoiceLocalRouterDeps) {
     return { error: r.error };
   };
   return new Elysia({ prefix: "/api/voice/local" })
-    .get("/status", () => sup.probe())
+    // Free space for the model cache is measured with docker, so only where this Cortex may run docker.
+    .get("/status", () => sup.probe({ measureDisk: deps.allowDocker }))
     .post("/ensure", ({ set }) => {
       if (!deps.allowDocker) {
         set.status = 403;
