@@ -67,7 +67,14 @@ export function runSlot<A>(name: string, policy: RunSlotPolicy<A>): RunSlot<A> {
   return slot;
 }
 
-/** Names declared more than once (expected empty; asserted by tests). */
+/**
+ * Names declared more than once in this process, one entry per extra declaration.
+ *
+ * Expected empty in production. It can also list a name when one package is loaded
+ * twice in a process (e.g. from both `src` and `dist` in a single `bun test` run),
+ * which is not a real clash; source-level uniqueness is asserted by a static scan
+ * in `packages/core/tests/run-scope.test.ts`.
+ */
 export const duplicateRunSlotNames = (): readonly string[] => [...duplicateNames];
 
 /** Pair a slot with its value for a scope entry. */

@@ -1,5 +1,7 @@
 // Run: bun test packages/core/tests/run-scope.test.ts --timeout 15000
 import { describe, expect, it } from "bun:test";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Effect, Exit, Fiber } from "effect";
 import {
   bindRun,
@@ -95,7 +97,57 @@ describe("run scope", () => {
     expect(standalone?.runId).toBe("solo");
   });
 
-  it("slot names are unique", () => {
-    expect(duplicateRunSlotNames()).toEqual([]);
+  it("slot names are unique across every package's source", () => {
+    expect(duplicateDeclaredSlotNames(sourceSlotDeclarations())).toEqual([]);
+  });
+
+  it("the source scan finds the declarations and flags a repeated name", () => {
+    const fixture = [
+      'const a = runSlot<string>("x.one", { child: "inherit", initial: "" });',
+      'const b = runSlot<Map<string, number> | null>(\n  "x.one",\n  { child: "reset", fresh: () => null },\n);',
+      'const c = runSlot("x.two", { child: "inherit", initial: 0 });',
+      "export function runSlot<A>(name: string, policy: RunSlotPolicy<A>) {}",
+    ].join("\n");
+    expect(declaredSlotNames(fixture)).toEqual(["x.one", "x.one", "x.two"]);
+    expect(duplicateDeclaredSlotNames([{ file: "f.ts", names: declaredSlotNames(fixture) }])).toEqual(["x.one"]);
+    expect(sourceSlotDeclarations().flatMap((d) => d.names)).toContain("core.streamSink");
+  });
+
+  it("the process registry records a name declared twice", () => {
+    const before = duplicateRunSlotNames().length;
+    runSlot<number>("test.dup", { child: "inherit", initial: 0 });
+    runSlot<number>("test.dup", { child: "inherit", initial: 0 });
+    expect(duplicateRunSlotNames().slice(before)).toEqual(["test.dup"]);
   });
 });
+
+// Slot-name uniqueness is checked on source text, not on the process registry:
+// in a single-process `bun test` a package can load from both src and dist,
+// which declares each of its slots twice in the registry without any real clash.
+const SLOT_DECLARATION = /\brunSlot\s*(?:<[^()]*?>)?\s*\(\s*["'`]([^"'`]+)["'`]/g;
+
+/** Every slot name declared by `runSlot(...)` calls in `source`, in order. */
+function declaredSlotNames(source: string): string[] {
+  return [...source.matchAll(SLOT_DECLARATION)].map((m) => m[1] as string);
+}
+
+/** Slot declarations in `packages/<pkg>/src/**\/*.ts`, skipping dist, tests and node_modules. */
+function sourceSlotDeclarations(): { file: string; names: string[] }[] {
+  const packagesDir = join(import.meta.dir, "..", "..");
+  return readdirSync(packagesDir).flatMap((pkg) => {
+    const src = join(packagesDir, pkg, "src");
+    if (!existsSync(src)) return [];
+    return (readdirSync(src, { recursive: true }) as string[])
+      .filter((f) => f.endsWith(".ts") && !/(^|[\\/])(node_modules|dist|tests?|__tests__)([\\/]|$)/.test(f))
+      .map((f) => ({ file: join(pkg, "src", f), names: declaredSlotNames(readFileSync(join(src, f), "utf8")) }))
+      .filter((d) => d.names.length > 0);
+  });
+}
+
+/** Names declared more than once across `decls` (each repeated name listed once). */
+function duplicateDeclaredSlotNames(decls: readonly { names: readonly string[] }[]): string[] {
+  const seen = new Set<string>();
+  const dup = new Set<string>();
+  for (const name of decls.flatMap((d) => d.names)) (seen.has(name) ? dup : seen).add(name);
+  return [...dup];
+}
