@@ -1,6 +1,20 @@
 import { describe, it, expect } from "bun:test";
 import { Effect, Fiber } from "effect";
-import { runInSandbox } from "../sandbox.js";
+import { runInSandbox, sandboxWorkerUrl } from "../sandbox.js";
+
+// Incident 2026-11-20: the published bundle asked for dist/sandbox-worker.ts.
+// The end-to-end pin over the built package is tests/strategies/code-action-dist-worker.test.ts.
+describe("sandboxWorkerUrl", () => {
+  it("names the .ts worker beside a source module", () => {
+    const url = sandboxWorkerUrl("file:///pkg/src/strategies/code-action/sandbox.ts");
+    expect(url.href).toBe("file:///pkg/src/strategies/code-action/sandbox-worker.ts");
+  });
+
+  it("names the built .js worker beside a bundled module (dist/index.js or a chunk)", () => {
+    expect(sandboxWorkerUrl("file:///pkg/dist/index.js").href).toBe("file:///pkg/dist/sandbox-worker.js");
+    expect(sandboxWorkerUrl("file:///pkg/dist/chunk-AB12.js?v=1").href).toBe("file:///pkg/dist/sandbox-worker.js");
+  });
+});
 
 /** Test-only convenience: run the sandbox Effect to a Promise, matching the
  * pre-refactor call shape these tests were written against. */

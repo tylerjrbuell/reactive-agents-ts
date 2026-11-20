@@ -34,6 +34,22 @@ interface WorkerToolCallMessage {
 type WorkerMessage = WorkerDoneMessage | WorkerErrorMessage | WorkerToolCallMessage;
 
 /**
+ * URL of the sandbox worker next to the module that is running this code.
+ * From src (repo tests, tsconfig paths) this module is `sandbox.ts` and the
+ * worker is `./sandbox-worker.ts`. From the published package this code is
+ * bundled into `dist/index.js` and the worker is the separate tsup entry
+ * `dist/sandbox-worker.js`; Node cannot load a `.ts` worker at all.
+ * Incident 2026-11-20 (published 0.19.0): the URL always named
+ * `./sandbox-worker.ts`, dist shipped no worker, and every Code Action run
+ * from an npm install failed with `ModuleNotFound ... dist/sandbox-worker.ts`.
+ * Pinned by tests/strategies/code-action-dist-worker.test.ts (imports dist).
+ */
+export function sandboxWorkerUrl(moduleUrl: string = import.meta.url): URL {
+  const fromSource = new URL(moduleUrl).pathname.endsWith(".ts");
+  return new URL(fromSource ? "./sandbox-worker.ts" : "./sandbox-worker.js", moduleUrl);
+}
+
+/**
  * Run generated code in a `node:worker_threads` sandbox, dispatching its
  * `tool-call` messages through `toolHandlers` (each closure captures the
  * live `ToolService` directly — the runtime execute call, not the sandboxed
@@ -65,7 +81,7 @@ export function runInSandbox(
   timeoutMs = 30_000,
 ): Effect.Effect<SandboxResult, Error> {
   return Effect.async<SandboxResult, Error>((resume) => {
-    const worker = new Worker(new URL("./sandbox-worker.ts", import.meta.url));
+    const worker = new Worker(sandboxWorkerUrl());
     const toolCalls: ToolCallRecord[] = [];
     // `worker.on("message", ...)` is a Node EventEmitter listener — Node
     // neither awaits nor catches the promise it returns. Once the Worker has
