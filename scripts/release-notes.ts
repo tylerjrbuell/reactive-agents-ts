@@ -107,6 +107,13 @@ if (import.meta.main) {
   const changelog = readFileSync(resolve(root, "CHANGELOG.md"), "utf8")
   const repo = process.env.GITHUB_REPOSITORY ?? "tylerjrbuell/reactive-agents-ts"
   const notes = buildReleaseNotes({ version, changelog, repo })
+  // Belt and braces: buildReleaseNotes cuts to the budget, so this only fires
+  // if that logic regresses. It fails here (and nightly in release-rehearsal.yml)
+  // instead of as an HTTP 422 at the tag.
+  if (notes.length > GITHUB_BODY_LIMIT) {
+    console.error(`release notes: ${notes.length} chars, over GitHub's ${GITHUB_BODY_LIMIT}-char release body limit`)
+    process.exit(1)
+  }
   writeFileSync(outFile, notes)
   const existing = existingFile ? readFileSync(existingFile, "utf8") : undefined
   console.error(`release notes: ${notes.length} chars (limit ${GITHUB_BODY_LIMIT})`)

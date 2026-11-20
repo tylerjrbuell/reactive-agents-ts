@@ -1,0 +1,111 @@
+name: Release Rehearsal
+
+# Runs the release path on dev before a tag relies on it: publish.yml's
+# pre-publish steps (the shared ./.github/actions/release-preflight action),
+# then release.ts without the publish loop (changelog aggregation, version
+# stamp, lockfile resync, build), the GitHub release body from the would-be
+# CHANGELOG section with its size check, and the docs build at the would-be
+# version. Publishes nothing, pushes nothing, creates no tag or release.
+#
+# v0.18/v0.19 release-only failures this exists for: the release body over
+# GitHub's 125000-char limit (first ran at the tag) and the docs tag deploy
+# rejected by the github-pages environment (first ran at the tag).
+#
+# When: nightly against dev, on dev pushes that touch the release path, and by
+# hand. Not on every dev push: ci.yml already runs build, typecheck and the
+# full test suite per push, and this job repeats them (~15 min) because the
+# preflight must stay byte-identical to publish.yml. Scheduled runs use main's
+# copy of this file (GitHub runs schedules from the default branch) and check
+# out dev, the branch the next release comes from.
+on:
+  schedule:
+    - cron: "30 5 * * *"
+  push:
+    branches: [dev]
+    paths:
+      - ".github/workflows/publish.yml"
+      - ".github/workflows/release-rehearsal.yml"
+      - ".github/workflows/docs.yml"
+      - ".github/actions/**"
+      - "scripts/release.ts"
+      - "scripts/release-notes.ts"
+      - "scripts/test-clean-install.ts"
+      - ".changeset/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rehearse:
+    name: Rehearse release (no publish)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'dev' || '' }}
+          # Docs version derivation reads reachable v* tags.
+          fetch-depth: 0
+          fetch-tags: true
+
+      # The next patch after VERSION (npm @latest). release.ts needs an
+      # unpublished version so its plan lists every package as "publish".
+      - name: Resolve rehearsal version
+        id: ver
+        run: |
+          set -euo pipefail
+          CURRENT="$(tr -d '[:space:]' < VERSION)"
+          if ! echo "$CURRENT" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::VERSION '$CURRENT' is not X.Y.Z"
+            exit 1
+          fi
+          IFS=. read -r MAJOR MINOR PATCH <<< "$CURRENT"
+          VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Rehearsing $VERSION (VERSION reads $CURRENT)"
+
+      - name: Release preflight (shared with publish.yml)
+        uses: ./.github/actions/release-preflight
+        with:
+          version: ${{ steps.ver.outputs.version }}
+
+      # publish.yml's "Release" step minus the npm publish loop: aggregate the
+      # changesets into CHANGELOG.md, stamp every package, resync bun.lock,
+      # build. Mutates only this runner's checkout. No npm token is present.
+      - name: Release without publish
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: bun scripts/release.ts "$VERSION" --no-publish
+
+      # publish.yml's "Create consolidated GitHub release" body, from the
+      # section release.ts just wrote. release-notes.ts exits 1 over the
+      # 125000-char limit.
+      - name: Release notes (size check)
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          if ! grep -Eq "^## \[?${VERSION//./\\.}\]?([[:space:]]|$)" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no ## [$VERSION] section after release.ts"
+            exit 1
+          fi
+          ACTION=$(bun scripts/release-notes.ts "$VERSION" "$RUNNER_TEMP/release-notes.md")
+          echo "release-notes.ts: $ACTION, $(wc -c < "$RUNNER_TEMP/release-notes.md") bytes"
+          [ "$ACTION" = "create" ]
+
+      # docs.yml's build at the version publish.yml dispatches it with.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          # Astro 7 needs Node >=22.23.4; same pin as docs.yml.
+          node-version: '22.23'
+
+      - name: Docs build at the release version
+        working-directory: apps/docs
+        env:
+          RA_DOCS_VERSION: ${{ steps.ver.outputs.version }}
+        run: bun run build

@@ -18,6 +18,8 @@ on:
 permissions:
   contents: write
   id-token: write
+  # `gh workflow run docs.yml` in "Deploy docs for this release".
+  actions: write
 
 # One release at a time. A second tag push waits rather than racing npm.
 concurrency:
@@ -32,27 +34,6 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
-
-      # No `registry-url:` — it makes setup-node write a placeholder
-      # $RUNNER_TEMP/.npmrc and export NPM_CONFIG_USERCONFIG pointing at it.
-      # bun honors NPM_CONFIG_USERCONFIG but does NOT expand the
-      # ${NODE_AUTH_TOKEN} placeholder, so `bun publish` fails auth. Omitting
-      # registry-url leaves $HOME/.npmrc as the sole npm/bun config path.
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: '22'
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
-        with:
-          bun-version: "1.3.10"
-
-      - name: Cache Bun install
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: ~/.bun/install/cache
-          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
-          restore-keys: |
-            bun-${{ runner.os }}-
 
       # Resolve the target version from the tag (push) or the manual input.
       # `release.ts` requires an explicit semver — this is its single source.
@@ -92,34 +73,14 @@ jobs:
           fi
           echo "OK: origin/main is caught up with the release commit."
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
-      - name: Build
-        run: bun run build
-
-      # Type gate: full workspace tsc. Catches type debt that esbuild/tsup
-      # transpile-only builds skip. Must stay green before any release —
-      # this is the gate that blocked v0.11.0 until the TS5103-masked
-      # errors were fixed.
-      - name: Typecheck
-        run: bun run typecheck
-
-      - name: Test
-        run: bun test
-
-      # Pre-publish gate: pack every workspace package as a tarball, install
-      # into a clean project, smoke-test the artifacts that actually ship.
-      # Catches the v0.10.4 class of bug (import declared `external` in tsup
-      # but missing from `dependencies`).
-      - name: Clean-install smoke test
-        run: bun run scripts/test-clean-install.ts
-
-      # Dry-run gate: validates package discovery, topological publish order,
-      # and already-published classification. Mutates nothing, publishes
-      # nothing. Fails the run before any release if the plan is broken.
-      - name: Release plan (dry-run gate)
-        run: bun scripts/release.ts ${{ steps.ver.outputs.version }} --dry-run
+      # Toolchain, frozen install, build, typecheck, test, clean-install smoke
+      # and the release.ts dry-run plan. The same action runs nightly and on
+      # release-path pushes to dev in release-rehearsal.yml, so these steps
+      # have run on dev before a tag relies on them. Edit them there, not here.
+      - name: Release preflight (shared with release-rehearsal.yml)
+        uses: ./.github/actions/release-preflight
+        with:
+          version: ${{ steps.ver.outputs.version }}
 
       # release.ts shells `bun publish`. Write the literal token (NOT a
       # ${VAR} placeholder — bun does not interpolate .npmrc the way npm
@@ -169,6 +130,7 @@ jobs:
       # Known tradeoff: if main's CHANGELOG gained edits between the tagged
       # commit and this step, the release-generated copy wins.
       - name: Sync VERSION + CHANGELOG + consumed changesets to main
+        id: sync
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
@@ -237,3 +199,19 @@ jobs:
               echo "release-notes.ts printed an unknown action: ${ACTION}" >&2
               exit 1 ;;
           esac
+
+      # Redeploy the docs so the version chip, What's New badge and New/Updated
+      # window move to this release. docs.yml deploys from main only (the
+      # github-pages environment admits branch main and rejects tags; the
+      # v0.19.1 tag trigger failed there), and the sync commit above carries
+      # [skip ci], so nothing else redeploys. A GITHUB_TOKEN-created
+      # workflow_dispatch does start a run (GitHub's exception to the
+      # no-recursive-runs rule). The explicit version makes the deploy
+      # independent of whether the tag is reachable from main. Runs after a
+      # successful sync even if the release-notes step failed.
+      - name: Deploy docs for this release
+        if: ${{ !cancelled() && steps.sync.outcome == 'success' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: gh workflow run docs.yml --ref main -f version="$VERSION"
