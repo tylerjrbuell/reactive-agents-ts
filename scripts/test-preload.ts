@@ -34,6 +34,7 @@ process.env.REACTIVE_AGENTS_DISABLE_STATUS_MODE ??= "true";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { installDnsGuard } from "../tools/repo/src/lib/dns-guard.ts";
 import { testHomeEnv } from "../tools/repo/src/lib/test-home.ts";
 import { pidAlive } from "../tools/repo/src/lib/test-slots.ts";
 import { makeTestRoot, realFs, sweep, TEST_ROOT_ENV, testTmpBase } from "../tools/repo/src/lib/tmp-janitor.ts";
@@ -103,6 +104,19 @@ if (!process.env.REACTIVE_AGENTS_RUNS_DIR) {
       // best-effort cleanup
     }
   });
+}
+
+/**
+ * Hermetic DNS (2026-11-20): a test that let a made-up host (`gpu-box`) reach the system resolver
+ * waited ~4 s for ENOTFOUND and timed out in CI. Lookups of anything but localhost, *.localhost and
+ * IP literals now fail at once, naming the host and the fix (inject a resolver or a fetch stub).
+ * Deliberate live tests opt out with REPO_TEST_ALLOW_DNS=1; REPO_TEST_DNS_ALLOW=a,b allows names.
+ * Coverage and gaps: tools/repo/src/lib/dns-guard.ts.
+ */
+try {
+  installDnsGuard();
+} catch {
+  // preloads fail open: tests still run, with real DNS
 }
 
 /**
