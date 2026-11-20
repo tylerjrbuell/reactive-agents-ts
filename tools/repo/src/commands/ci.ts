@@ -178,7 +178,7 @@ export const ciCommand: Command = {
     "--fast: install, build, typecheck, check --all and bun test for changed packages only. WEAKER than CI: no root suite, no docs gates",
     "--run <cmd>: install, then only <cmd> in the CI-like clone (reproduce one failure: --run 'bun test path/x.test.ts')",
     "--rev <rev>: commit to mirror (default HEAD); --max-seconds <n>: per-step limit (default 1800); --dry-run: print the plan",
-    `A full passing run records the commit in ${VERIFIED_LOG}; the pre-push hook skips commits already recorded.`,
+    `A full passing run records the commit in ${VERIFIED_LOG}; the pre-push hook skips commits already recorded, and runs only check --all for commits that change only wiki/**, .agents/** or root *.md since one (not tag pushes).`,
     "Memory is re-checked before each step: when the guard refuses, no further step starts and the run fails (not recorded as verified).",
     "Logs: .repo-logs/ci-<time>/ (one per step). Takes a machine-wide test slot. Run it in a terminal or a background task: a full run exceeds 10 min.",
   ],
