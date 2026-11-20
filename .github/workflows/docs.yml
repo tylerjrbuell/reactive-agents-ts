@@ -3,6 +3,14 @@ name: Deploy Docs
 on:
   push:
     branches: [main]
+    # The release tag moves the docs version (header chip, What's New badge,
+    # New/Updated window; deriveCurrentVersion reads the highest v* tag).
+    # Release order is push main, then tag, so the main deploy runs before the
+    # tag exists; this trigger redeploys once it does. GitHub does not evaluate
+    # `paths` for tag pushes, so the filter below only gates main pushes.
+    # Strict X.Y.Z: v0.19.0 matches, v0.19.0-rc.1 does not. Pinned by
+    # tools/repo/tests/docs-workflow.test.ts.
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
     paths:
       - "apps/docs/**"
       - ".github/workflows/docs.yml"
