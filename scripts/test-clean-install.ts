@@ -311,8 +311,19 @@ console.log("scaffold import OK");
   log("✓ all clean-install smoke tests passed");
 }
 
-main().catch((err) => {
-  console.error("✗ clean-install test failed");
-  console.error(err);
-  process.exit(1);
-});
+// Remove the scratch dir on both paths: it holds every packed tarball plus several
+// node_modules trees, and a RAM-backed /tmp keeps them in memory until removed.
+const removeTestDir = (): void => rmSync(testDir, { recursive: true, force: true });
+
+main().then(
+  () => {
+    removeTestDir();
+    process.exit(0);
+  },
+  (err) => {
+    console.error("✗ clean-install test failed");
+    console.error(err);
+    removeTestDir();
+    process.exit(1);
+  },
+);

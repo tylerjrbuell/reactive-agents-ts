@@ -210,30 +210,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           VERSION="${{ steps.ver.outputs.version }}"
+          NOTES="$RUNNER_TEMP/release-notes.md"
+          EXISTING="$RUNNER_TEMP/release-existing.md"
 
-          # Extract this version's section from root CHANGELOG.md (written by
-          # release.ts as `## <version>`). Fall back to first version section.
-          node -e "
-            const fs = require('fs');
-            const version = '${VERSION}';
-            const log = fs.readFileSync('./CHANGELOG.md', 'utf8');
-            const escaped = version.replace(/\./g, '\\\\.');
-            const exact = log.match(new RegExp('## \\\\[?' + escaped + '\\\\]?[^\\n]*\\n([\\s\\S]*?)(?=\\n## \\\\[?\\d+\\\\.\\d+\\\\.\\d+|\$)'));
-            if (exact) {
-              fs.writeFileSync('/tmp/release-notes.md', exact[0].trim());
-            } else {
-              const first = log.match(/## \[?\d+\.\d+\.\d+\]?[^\n]*\n([\s\S]*?)(?=\n## \[?\d+\.\d+\.\d+|\$)/);
-              fs.writeFileSync('/tmp/release-notes.md', first ? first[0].trim() : 'See CHANGELOG.md for details.');
-            }
-          "
+          # scripts/release-notes.ts builds the body from this version's
+          # CHANGELOG.md section, cut under GitHub's 125000-char limit (v0.18.0
+          # and v0.19.0 failed here with HTTP 422 body too long), and prints one
+          # action: create (no release), edit (empty or script-written body) or
+          # keep (hand-written body, never overwritten).
+          if gh release view "v${VERSION}" --json body --jq .body > "$EXISTING" 2>/dev/null; then
+            ACTION=$(bun scripts/release-notes.ts "$VERSION" "$NOTES" "$EXISTING")
+          else
+            ACTION=$(bun scripts/release-notes.ts "$VERSION" "$NOTES")
+          fi
 
-          # Idempotent: a backfilled or previously-created release is updated
-          # rather than failing the whole workflow on `already exists`.
-          gh release create "v${VERSION}" \
-            --title "v${VERSION}" \
-            --notes-file /tmp/release-notes.md \
-            --target main \
-          || gh release edit "v${VERSION}" \
-            --title "v${VERSION}" \
-            --notes-file /tmp/release-notes.md
+          case "$ACTION" in
+            create)
+              gh release create "v${VERSION}" --title "v${VERSION}" --notes-file "$NOTES" --target main ;;
+            edit)
+              gh release edit "v${VERSION}" --title "v${VERSION}" --notes-file "$NOTES" ;;
+            keep)
+              echo "release v${VERSION} has a hand-written body; left unchanged" ;;
+            *)
+              echo "release-notes.ts printed an unknown action: ${ACTION}" >&2
+              exit 1 ;;
+          esac
