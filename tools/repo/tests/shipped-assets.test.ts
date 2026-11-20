@@ -90,6 +90,36 @@ describe("shipped-assets: join(<module dir>, ...) and fallbacks", () => {
   })
 })
 
+describe("shipped-assets: build-time copies (tsup onSuccess cpSync/copyFileSync)", () => {
+  const src = `import { dirname, join } from "node:path";\nimport { fileURLToPath } from "node:url";\nconst here = dirname(fileURLToPath(import.meta.url));\nexport const profile = () => join(here, "sandbox-image", "seccomp.json");\nexport const ctx = () => join(here, "sandbox-image");\n`
+  const cfg = (onSuccess: string) =>
+    `import { cpSync, copyFileSync } from "node:fs";\nimport { defineConfig } from "tsup";\nimport baseConfig from "../../tsup.config.base.js";\nexport default defineConfig({ ...baseConfig, entry: { index: "src/index.ts" }, onSuccess: async () => { ${onSuccess} } });\n`
+  const image = { "packages/r/src/execution/sandbox-image/seccomp.json": "{}", "packages/r/src/execution/sandbox-image/Dockerfile": "FROM x\n" }
+  const RED = ["packages/r/src/sandbox.ts:4 dist/sandbox-image/seccomp.json", "packages/r/src/sandbox.ts:5 dist/sandbox-image"]
+
+  test("a recursive directory copy ships the dir and files under it (the packages/tools fix)", () => {
+    const fixed = reasoning(src, cfg(`cpSync("src/execution/sandbox-image", "dist/sandbox-image", { recursive: true });`), pkg(), image)
+    expect(files(fixed)).toEqual([])
+  })
+  test("cutting the copy turns it red", () => {
+    expect(files(reasoning(src, cfg(""), pkg(), image))).toEqual(RED)
+  })
+  test("a single-file copy ships only that file", () => {
+    const one = reasoning(src, cfg(`copyFileSync("./src/execution/sandbox-image/seccomp.json", "dist/sandbox-image/seccomp.json");`), pkg(), image)
+    expect(files(one)).toEqual(["packages/r/src/sandbox.ts:5 dist/sandbox-image"])
+  })
+  test("a copy whose source does not exist is still red", () => {
+    expect(files(reasoning(src, cfg(`cpSync("src/missing-image", "dist/sandbox-image", { recursive: true });`), pkg(), image))).toEqual(RED)
+  })
+  test("a directory copy without recursive: true is red (cpSync throws on a dir)", () => {
+    expect(files(reasoning(src, cfg(`cpSync("src/execution/sandbox-image", "dist/sandbox-image");`), pkg(), image))).toEqual(RED)
+  })
+  test("a non-literal copy is ignored", () => {
+    const dyn = cfg(`const from = "src/execution/sandbox-image"; cpSync(from, \`dist/\${"sandbox-image"}\`, { recursive: true });`)
+    expect(files(reasoning(src, dyn, pkg(), image))).toEqual(RED)
+  })
+})
+
 describe("buildEntries", () => {
   test("reads tsup config entries through spreads, --config files and CLI entries", () => {
     const root = reasoning(perLayout, withWorker, pkg(), {
@@ -119,6 +149,8 @@ describe("real repo", () => {
     expect(r?.ok).toBe(true)
     const { loads } = unshippedLoads(REPO)
     expect(loads.some((l) => l.file.includes("code-action/sandbox.ts"))).toBe(false)
+    // packages/tools copies src/execution/sandbox-image to dist/ in tsup onSuccess.
+    expect(loads.some((l) => l.file.includes("execution/docker-sandbox.ts"))).toBe(false)
     expect(triage(loads, "2026-11-20").fresh).toEqual([])
     expect(KNOWN_UNSHIPPED.length).toBeGreaterThan(0)
   })

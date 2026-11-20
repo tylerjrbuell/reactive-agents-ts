@@ -18,7 +18,9 @@ import ts from "typescript"
  * Relative paths come from string literals, conditionals, `const` arrays and `for..of` over them. A load is
  * fine when ANY of its candidates (one call, or sibling calls in one array/argument list, e.g. a
  * dist-then-src fallback list) resolves from `dist/` to something shipped: a tsup entry output
- * (`dist/<entry>.js`), a path under a non-`dist` `files` entry that exists in the repo, or `package.json`.
+ * (`dist/<entry>.js`), a path under a literal `cpSync`/`copyFileSync(src, dest)` in the tsup config whose
+ * source exists in the repo (`onSuccess` asset copies), a path under a non-`dist` `files` entry that exists in
+ * the repo, or `package.json`.
  */
 
 /** One module-relative load site that the dist layout cannot satisfy. */
@@ -47,20 +49,6 @@ export interface KnownUnshipped {
 
 /** Pre-existing violations found when the gate landed (2026-11-20). Remove an entry when its fix lands. */
 export const KNOWN_UNSHIPPED: readonly KnownUnshipped[] = [
-  {
-    file: "packages/tools/src/execution/docker-sandbox.ts",
-    target: "dist/sandbox-image/seccomp-sandbox.json",
-    owner: "tools-warden",
-    until: "2026-12-20",
-    why: "npm installs lack the seccomp profile; the Docker sandbox silently runs without seccomp",
-  },
-  {
-    file: "packages/tools/src/execution/docker-sandbox.ts",
-    target: "dist/sandbox-image",
-    owner: "tools-warden",
-    until: "2026-12-20",
-    why: "npm installs lack the Dockerfiles; buildSandboxImage() returns false",
-  },
   {
     file: "packages/testing/src/gate/registry.ts",
     target: "dist/scenarios",
@@ -277,9 +265,53 @@ export function configEntries(cfgPath: string, seen = new Set<string>()): string
   return undefined
 }
 
-/** `dist/` entry names a package's `build` script emits (each `tsup` invocation; config file or CLI entries). */
-export function buildEntries(pkgDir: string, buildScript: string): Set<string> {
-  const out = new Set<string>()
+/** One file or directory copy a tsup config performs at build time, package-relative (`cpSync(src, dest)`). */
+export interface BuildCopy {
+  src: string
+  dest: string
+  /** `cpSync(..., { recursive: true })`: a directory copy is possible. */
+  recursive: boolean
+}
+
+const COPY_FNS = new Set(["cpSync", "copyFileSync"])
+
+function relPath(p: string): string {
+  return posix.normalize(p.replace(/\\/g, "/")).replace(/\/$/, "")
+}
+
+/**
+ * Literal `cpSync(src, dest[, opts])` / `copyFileSync(src, dest)` calls anywhere in a tsup config file
+ * (in practice inside `onSuccess`). tsup runs from the package dir, so the paths are package-relative.
+ * Calls with a non-literal path are ignored: the gate cannot know what they copy.
+ */
+export function configCopies(cfgPath: string): BuildCopy[] {
+  const sf = parseTs(cfgPath)
+  const out: BuildCopy[] = []
+  const visit = (n: ts.Node): void => {
+    if (ts.isCallExpression(n)) {
+      const name = calleeName(n.expression)
+      const [src, dest, opts] = n.arguments.map((a) => unwrap(a))
+      const lit = (e: ts.Expression | undefined): e is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral =>
+        e !== undefined && (ts.isStringLiteral(e) || ts.isNoSubstitutionTemplateLiteral(e))
+      if (name !== undefined && COPY_FNS.has(name) && lit(src) && lit(dest)) {
+        const recursive =
+          name === "cpSync" &&
+          opts !== undefined &&
+          ts.isObjectLiteralExpression(opts) &&
+          opts.properties.some((p) => ts.isPropertyAssignment(p) && p.name.getText() === "recursive" && p.initializer.kind === ts.SyntaxKind.TrueKeyword)
+        out.push({ src: relPath(src.text), dest: relPath(dest.text), recursive })
+      }
+    }
+    ts.forEachChild(n, visit)
+  }
+  visit(sf)
+  return out
+}
+
+/** What a package's `build` script emits into `dist/` (each `tsup` invocation; config file or CLI entries). */
+export function buildOutputs(pkgDir: string, buildScript: string): { entries: Set<string>; copies: BuildCopy[] } {
+  const entries = new Set<string>()
+  const copies: BuildCopy[] = []
   for (const part of buildScript.split(/&&|;/)) {
     const words = part.trim().split(/\s+/)
     const at = words.indexOf("tsup")
@@ -289,27 +321,49 @@ export function buildEntries(pkgDir: string, buildScript: string): Set<string> {
     if (outDir !== "dist") continue
     const positional = args.filter((a, i) => /\.[mc]?[jt]sx?$/.test(a) && args[i - 1] !== "--config")
     if (positional.length > 0) {
-      for (const p of positional) out.add(basename(p, extname(p)))
+      for (const p of positional) entries.add(basename(p, extname(p)))
       continue
     }
     const ci = args.indexOf("--config")
     const cfg = ci >= 0 ? join(pkgDir, args[ci + 1] ?? "") : ["tsup.config.ts", "tsup.config.js", "tsup.config.mjs"].map((f) => join(pkgDir, f)).find(existsSync)
     if (cfg === undefined || !existsSync(cfg)) continue
-    for (const k of configEntries(cfg) ?? []) out.add(k)
+    for (const k of configEntries(cfg) ?? []) entries.add(k)
+    copies.push(...configCopies(cfg))
   }
-  return out
+  return { entries, copies }
+}
+
+/** `dist/` entry names a package's `build` script emits (each `tsup` invocation; config file or CLI entries). */
+export function buildEntries(pkgDir: string, buildScript: string): Set<string> {
+  return buildOutputs(pkgDir, buildScript).entries
 }
 
 interface Shipping {
   entries: Set<string>
+  /** Build-time copies into the package (`onSuccess: cpSync(...)`). */
+  copies: BuildCopy[]
   /** `files` entries other than `dist`, or undefined when the manifest has no `files` (npm ships everything). */
   files: string[] | undefined
+}
+
+/** True when a build copy puts `target` (package-relative, under `dist/`) in place: its source exists in the repo. */
+function copied(pkgAbs: string, target: string, copies: readonly BuildCopy[]): boolean {
+  for (const c of copies) {
+    if (target !== c.dest && !target.startsWith(`${c.dest}/`)) continue
+    const srcAbs = join(pkgAbs, c.src)
+    if (!existsSync(srcAbs)) continue
+    // A directory source copies only with `cpSync(..., { recursive: true })`; anything else throws at build.
+    if (statSync(srcAbs).isDirectory() && !c.recursive) continue
+    if (existsSync(join(pkgAbs, c.src, target.slice(c.dest.length)))) return true
+  }
+  return false
 }
 
 function ships(pkgAbs: string, target: string, prefix: boolean, s: Shipping): boolean {
   if (target.startsWith("..")) return false
   if (target === "package.json" || /^(README|LICENSE|LICENCE)(\.|$)/i.test(target)) return true
   if (target === "dist" || target.startsWith("dist/")) {
+    if (copied(pkgAbs, target, s.copies)) return true
     const rest = target.slice("dist/".length)
     if (prefix) return [...s.entries].some((k) => k.startsWith(`${rest}/`))
     const m = /^(.*)\.(m?js)$/.exec(rest)
@@ -345,7 +399,7 @@ export function unshippedLoads(root: string): { loads: UnshippedLoad[]; scanned:
     if (json.private === true || typeof build !== "string") continue
     packages++
     const shipping: Shipping = {
-      entries: buildEntries(pkgAbs, build),
+      ...buildOutputs(pkgAbs, build),
       files: Array.isArray(json.files) ? json.files.filter((f): f is string => typeof f === "string" && f !== "dist") : undefined,
     }
     for (const file of srcFiles(join(pkgAbs, "src"))) {
