@@ -38,7 +38,16 @@ The server engines work with anything that copies the OpenAI audio API, so one s
 
 ## Speaches setup
 
- Run the container (`ghcr.io/speaches-ai/speaches:latest-cuda`, or the CPU image) on port 8000, then download the models you use; Speaches does not preload any, and an undownloaded model answers 404 "Model … is not installed locally":
+When the listening or reading endpoint points at a local Speaches server (a `localhost` or `127.0.0.1` URL ending in `/v1`, with a Hugging Face model id such as `Systran/faster-whisper-small`), Settings · Voice shows controls for that server. Cortex runs it in Docker on the machine where the Cortex server runs.
+
+- **Keep the local speech server running** (off by default). On, Cortex checks the server at startup, when voice is used, and every minute, and starts its Docker container when it is down, creating it and downloading the configured models if needed. Switching it off stops the container (kept for a fast restart).
+- **Start server**, **Stop server** and **Retry** work by hand with keep-running off. Stop also switches keep-running off, so Cortex does not start the server again. After three failed attempts the status shows the error and waits for Retry.
+- **Port** (default 8000) and **Hardware**: **Auto** (the GPU image when Docker has an NVIDIA runtime, else CPU), **CPU**, or **GPU (NVIDIA)**, which needs the NVIDIA Container Toolkit. **Apply** saves them. A port change moves the listening and reading endpoints to `http://127.0.0.1:<port>/v1`. A running server is re-created on the new port or hardware; downloaded models are kept.
+- **Models.** The listening (Whisper) and reading (TTS) model fields list the models the server has installed and the ones it can download. Picking one that is not installed downloads it when you save. **Other model id…** takes any id as free text.
+
+Cortex manages only its own container, `cortex-speaches`, published on `127.0.0.1` only. A Speaches container you made yourself is never started, stopped or removed. When Cortex is reachable from other machines without an access token, these controls are refused.
+
+To run Speaches by hand instead, start the container (`ghcr.io/speaches-ai/speaches:latest-cuda`, or the CPU image `latest-cpu`) on port 8000, then download the models you use; Speaches does not preload any, and an undownloaded model answers 404 "Model … is not installed locally":
 
 ```bash
 curl -X POST http://127.0.0.1:8000/v1/models/Systran/faster-whisper-small
