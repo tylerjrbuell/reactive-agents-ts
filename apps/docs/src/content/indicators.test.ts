@@ -34,7 +34,7 @@ import {
   upcomingRelease,
   validateVersions,
 } from "./indicators.js";
-import { parseLastCommits } from "./last-commit.js";
+import { commitLink, loadLastCommits, parseLastCommits } from "./last-commit.js";
 
 const at = (v: string) => parseMinor(v)!;
 
@@ -299,6 +299,23 @@ describe("path + git helpers", () => {
     expect(m.get("a/x.md")).toEqual({ hash: "aaa1111", date: "2026-11-10" });
     expect(m.get("a/z.md")).toEqual({ hash: "bbb2222", date: "2026-11-01" });
     expect(m.size).toBe(3);
+  });
+
+  it("links the full 40-char SHA and displays a short one", () => {
+    const hash = "1361f2db4a0b2c3d4e5f60718293a4b5c6d7e8f9";
+    const { url, label } = commitLink({ hash, date: "2026-11-20" });
+    expect(url).toMatch(/\/commit\/[0-9a-f]{40}$/);
+    expect(label).toBe("1361f2db4");
+  });
+
+  it("reads full SHAs from the real git log (the 7-char short SHA 404'd on GitHub)", () => {
+    const docsDir = join(import.meta.dir, "docs");
+    const repoRoot = join(import.meta.dir, "../../../..");
+    const commits = loadLastCommits(repoRoot, docsDir);
+    if (commits.size === 0) return; // no git (tarball checkout)
+    for (const c of commits.values()) {
+      expect(commitLink(c).url).toMatch(/\/commit\/[0-9a-f]{40}$/);
+    }
   });
 });
 

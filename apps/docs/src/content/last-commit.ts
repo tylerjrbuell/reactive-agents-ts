@@ -8,13 +8,20 @@ import { execFileSync } from "node:child_process";
 import { relative } from "node:path";
 
 export interface LastCommit {
+  /** Full 40-char SHA. Short SHAs can be ambiguous on GitHub and 404 (dev 1361f2db4: `/commit/1361f2d`). */
   readonly hash: string;
   readonly date: string;
 }
 
 const MARK = "\u0001";
+const REPO_COMMIT_BASE = "https://github.com/tylerjrbuell/reactive-agents-ts/commit/";
 
-/** Parse `git log --name-only --format=\u0001%h|%ad` output (newest first); first sighting wins. */
+/** Link target (full SHA) and display label (short SHA) for a page's last commit. */
+export function commitLink(commit: LastCommit): { readonly url: string; readonly label: string } {
+  return { url: `${REPO_COMMIT_BASE}${commit.hash}`, label: commit.hash.slice(0, 9) };
+}
+
+/** Parse `git log --name-only --format=\u0001%H|%ad` output (newest first); first sighting wins. */
 export function parseLastCommits(log: string): Map<string, LastCommit> {
   const out = new Map<string, LastCommit>();
   let current: LastCommit | null = null;
@@ -38,7 +45,7 @@ export function loadLastCommits(repoRoot: string, contentDir: string): Map<strin
   try {
     const log = execFileSync(
       "git",
-      ["log", `--format=${MARK}%h|%ad`, "--date=short", "--name-only", "--", relative(repoRoot, contentDir)],
+      ["log", `--format=${MARK}%H|%ad`, "--date=short", "--name-only", "--", relative(repoRoot, contentDir)],
       { cwd: repoRoot, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] },
     );
     map = parseLastCommits(log);

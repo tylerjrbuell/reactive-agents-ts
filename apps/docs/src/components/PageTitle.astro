@@ -2,6 +2,7 @@
 import TryIt from "./TryIt.astro";
 import CopyPage from "./CopyPage.astro";
 import { shouldShowTryIt } from "../content/try-it";
+import { commitLink } from "../content/last-commit";
 import MarkerIcon from "./MarkerIcon.astro";
 import StabilityBadge from "./StabilityBadge.astro";
 import WhatsNewToggle from "./WhatsNewToggle.astro";
@@ -29,9 +30,7 @@ const pageMark = pageMarkFor(
   CURRENT_RELEASE,
 );
 
-const commitUrl = lastCommit
-  ? `https://github.com/tylerjrbuell/reactive-agents-ts/commit/${lastCommit.hash}`
-  : undefined;
+const commit = lastCommit ? commitLink(lastCommit) : undefined;
 
 const id = route?.entry?.id ?? "";
 
@@ -60,7 +59,7 @@ const { sections: changed } = tocMarks(
     <span class="ra-last-updated">
       Last updated {lastCommit.date}
       {" · "}
-      <a href={commitUrl} target="_blank" rel="noopener noreferrer">{lastCommit.hash}</a>
+      <a href={commit?.url} target="_blank" rel="noopener noreferrer">{commit?.label}</a>
     </span>
   )}
   <WhatsNewToggle />
