@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { appendObservation, BanditStore, CalibrationStore, type RunObservation } from "@reactive-agents/reactive-intelligence";
 import { openDatabase } from "../db/schema.js";
-import { makeModelCalibrationReader, summarizeObservations } from "../services/model-calibration.js";
+import { makeModelCalibrationReader, strategyLearningOf, summarizeObservations } from "../services/model-calibration.js";
 import { modelInsightsRouter } from "../api/model-insights.js";
 
 // qwen3:4b ships a prior (llm-provider calibrations/qwen3-4b.json): parallelCallCapability "reliable".
@@ -119,8 +119,30 @@ describe("model calibration (framework readers)", () => {
     expect(research.arms.map((a) => [a.strategy, a.trials])).toEqual([["reactive", 4], ["plan-execute-reflect", 3]]);
     expect(research.arms[0]!.meanReward).toBeCloseTo(4 / 6, 6);
     expect(research.arms[0]!.updatedAt).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
-    expect(research.lastUpdated).toBe(research.arms[0]!.updatedAt);
+    // The reader's contract is the newest arm write, not arm 0 (rows saved across a second boundary differ).
+    const newest = research.arms.map((a) => a.updatedAt).reduce((m, t) => (t > m ? t : m));
+    expect(research.lastUpdated).toBe(newest);
     expect(makeModelCalibrationReader({ observationsDir: join(dir, "obs-b"), calibrationDbPath: dbPath }).read(NO_PRIOR_MODEL).bandit).toBeNull();
+  });
+
+  it("a category's lastUpdated is the newest arm write when arms were saved a second apart", () => {
+    const arm = (armId: string, pulls: number, updatedAt: string) => ({
+      contextBucket: `${PRIOR_MODEL}:research`,
+      modelId: PRIOR_MODEL,
+      taskCategory: "research",
+      armId,
+      alpha: 2,
+      beta: 2,
+      pulls,
+      meanReward: 0.5,
+      updatedAt,
+    });
+    const learning = strategyLearningOf([
+      arm("reactive", 4, "2026-11-20T03:53:09Z"),
+      arm("plan-execute-reflect", 3, "2026-11-20T03:53:10Z"),
+    ]);
+    expect(learning?.categories[0]?.lastUpdated).toBe("2026-11-20T03:53:10Z");
+    expect(learning?.categories[0]?.arms[0]?.updatedAt).toBe("2026-11-20T03:53:09Z");
   });
 
   it("sums act-or-answer counts only over runs that recorded them", () => {
