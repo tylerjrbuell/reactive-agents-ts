@@ -1,3 +1,13 @@
+## [0.19.1] — 2026-11-20
+
+Settings · Voice now controls the local speech server (Speaches) fully: Start and Stop buttons, a port field and a CPU / GPU (NVIDIA) / Auto hardware choice, and switching "Keep the local speech server running" off now stops the container. Changing the port moves the listening and reading endpoints to it and re-creates the Cortex container there (downloaded models are kept). The model fields list what the speech server has installed and what it can download (searchable, with a free-text option); saving a model that is not installed downloads it. The local server is always called on `127.0.0.1`, so an endpoint saved as `localhost` or `[::1]` no longer fails where `localhost` resolves to IPv6 first.
+
+Pin `@opentelemetry/api` to `~1.9.0`. `^1.9.0` resolved the new 1.10.0, which every stable OpenTelemetry SDK 2.x package still rejects (`<1.10.0` peer), so installing under Bun printed repeated `incorrect peer dependency "@opentelemetry/api@1.10.0"` warnings. Installs no longer warn.
+
+The Code Action strategy now runs from an npm install. 0.19.0 shipped without the sandbox worker and asked for `dist/sandbox-worker.ts`, so every Code Action run failed with `ModuleNotFound`. The worker is now built to `dist/sandbox-worker.js`, and the sandbox loads it on Bun and on Node 22.5+.
+
+npm installs now apply the Docker sandbox seccomp profile. The published package shipped without `sandbox-image/` (the seccomp profile and hardened-image Dockerfiles), so every npm install ran the Docker sandbox without syscall filtering, silently, and `buildSandboxImage()` always returned `false`. The build now copies them to `dist/sandbox-image/`. A missing seccomp profile now fails the sandbox run with a `ToolExecutionError` naming the expected path instead of running unfiltered; set `useSeccomp: false` to opt out explicitly.
+
 ## [0.19.0] — 2026-11-20
 
 Gateway and deploy hardening. **Breaking:** `allowedSenders` / `blockedSenders` entries must now carry a platform prefix (`signal:+1555…`, `telegram:123…`); bare entries no longer match, so existing allowlists fail closed until migrated. Cloud Run deploys are authenticated by default (`--allow-unauthenticated` to opt out).
