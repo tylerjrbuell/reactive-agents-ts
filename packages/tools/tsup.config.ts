@@ -1,3 +1,4 @@
+import { cpSync } from "node:fs";
 import { defineConfig } from "tsup";
 import baseConfig from "../../tsup.config.base.js";
 
@@ -14,4 +15,11 @@ export default defineConfig({
     "internal/run-slots": "src/internal/run-slots.ts",
   },
   splitting: true,
+  // docker-sandbox.ts resolves its seccomp profile and Dockerfiles next to the
+  // module (`<module dir>/sandbox-image/`). The bundle lands in dist/, so the
+  // assets must be copied to dist/sandbox-image/ (0.19.0 shipped without them and
+  // every npm install ran the Docker sandbox without seccomp).
+  onSuccess: async () => {
+    cpSync("src/execution/sandbox-image", "dist/sandbox-image", { recursive: true });
+  },
 });

@@ -119,6 +119,30 @@ export type RunnerLanguage = keyof typeof RUNNER_IMAGES;
 export const getSeccompProfilePath = (): string =>
   join(dirname(new URL(import.meta.url).pathname), "sandbox-image", "seccomp-sandbox.json");
 
+/**
+ * Resolve the seccomp profile a sandbox run applies. Fails closed: when
+ * `useSeccomp` is on and the profile file is missing, the run fails with a
+ * `ToolExecutionError` naming the expected path instead of silently running
+ * without syscall filtering. `useSeccomp: false` is the explicit opt-out
+ * (resolves to `null`, no profile applied).
+ */
+export const resolveSeccompProfile = (
+  useSeccomp: boolean,
+  profilePath: string = getSeccompProfilePath(),
+): Effect.Effect<string | null, ToolExecutionError> => {
+  if (!useSeccomp) return Effect.succeed(null);
+  if (existsSync(profilePath)) return Effect.succeed(profilePath);
+  return Effect.fail(
+    new ToolExecutionError({
+      message:
+        `Seccomp profile not found at ${profilePath}; refusing to run the Docker sandbox without syscall filtering. ` +
+        "Reinstall @reactive-agents/tools, or set useSeccomp: false to opt out explicitly.",
+      toolName: "docker-execute",
+      cause: undefined,
+    }),
+  );
+};
+
 // ─── Docker Availability & Image Checks ───
 
 /** Check if Docker daemon is reachable. */
@@ -318,8 +342,7 @@ export const makeDockerSandbox = (
       }
 
       const containerName = `rax-sandbox-${randomUUID().slice(0, 12)}`;
-      const seccompPath =
-        config.useSeccomp && existsSync(getSeccompProfilePath()) ? getSeccompProfilePath() : null;
+      const seccompPath = yield* resolveSeccompProfile(config.useSeccomp);
 
       const createArgs = buildSandboxCreateArgs({
         name: containerName,
