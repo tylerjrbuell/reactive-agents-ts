@@ -92,16 +92,16 @@ export interface MCPServerConfig {
    */
   headers?: Record<string, string>;
   /**
-   * OAuth configuration for connecting to a protected MCP server. See
-   * `@reactive-agents/tools`'s `MCPAuthConfig` for the discriminated-union
-   * shape (`client_credentials`, `private_key_jwt`, `authorization_code`,
-   * or a raw SDK `provider`).
-   *
-   * `clientSecret` / `privateKey` are config-caller-supplied strings — read
-   * them from your own env/secret-manager and pass the resolved value; no
-   * env-var interpolation syntax is supported here.
+   * OAuth config for a protected MCP server (`@reactive-agents/tools`'s
+   * `MCPAuthConfig`: `client_credentials`, `private_key_jwt`,
+   * `authorization_code`, or a raw SDK `provider`). Omitted on a URL-only
+   * HTTPS/loopback `streamable-http`/`sse` server, a stored `rax mcp login` /
+   * `mcpLogin` for that exact URL is used automatically; `false` opts out.
+   * `clientSecret` / `privateKey` are caller-resolved strings (no env-var
+   * interpolation). Only `false` survives AgentConfig JSON; secrets never do.
+   * Reuse rules: `resolveConnectAuthProvider` in `@reactive-agents/tools`.
    */
-  auth?: MCPAuthConfig;
+  auth?: MCPAuthConfig | false;
   /**
    * Where OAuth credentials for this server are persisted across
    * connections. Defaults to a persistent file store under

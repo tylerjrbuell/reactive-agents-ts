@@ -490,6 +490,8 @@ export const MCPServerConfigSchema = Schema.Struct({
   readOnly: Schema.optional(Schema.Union(Schema.Boolean, Schema.Array(Schema.String))),
   /** Honor this server's `readOnlyHint` annotations. */
   trustAnnotations: Schema.optional(Schema.Boolean),
+  /** `false` = never reuse a stored `rax mcp login` for this URL. OAuth objects stay code-only (secrets). */
+  auth: Schema.optional(Schema.Literal(false)),
 });
 
 /**

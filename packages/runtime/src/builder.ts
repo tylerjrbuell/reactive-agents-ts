@@ -1608,13 +1608,13 @@ export class ReactiveAgentBuilder<TOut = unknown> {
      * registry. Implicitly enables the tools layer.
      *
      * HTTP-transport servers (`streamable-http`/`sse`) that require OAuth 2.1 accept an
-     * `auth` config. Unattended/production agents should use `client_credentials` or
-     * `private_key_jwt` (no user interaction, no browser). Delegated user access uses
-     * `authorization_code` — run `rax mcp login <name>` once beforehand; `interactive`
-     * defaults to `false` so a scheduled/production run never unexpectedly tries to open
-     * a browser. `tokenStore` defaults to a file store under `~/.reactive-agents/mcp-auth`
-     * (permissions 0700/0600); pass `createMemoryTokenStore()` for tests/CI. `auth` on a
-     * `stdio` server is a startup error — stdio servers take credentials via `env`.
+     * `auth` config: `client_credentials`/`private_key_jwt` for unattended agents (no
+     * browser), `authorization_code` for delegated access (`interactive` defaults to `false`).
+     * After `rax mcp login` (or `mcpLogin()` from `@reactive-agents/tools`), a URL-only server
+     * (`endpoint`, no `auth`, no `Authorization` header) uses that stored login automatically,
+     * only for that exact URL; `auth: false` opts out. `tokenStore` defaults to a file store
+     * under `~/.reactive-agents/mcp-auth` (0700/0600); pass `createMemoryTokenStore()` for
+     * tests/CI. `auth` on a `stdio` server is a startup error — use `env` for stdio credentials.
      *
      * @param config - MCP server configuration(s) — can be a single config or array
      * @returns `this` for chaining
