@@ -114,6 +114,11 @@ describe("regressions", () => {
     for (const c of ["bun run repo test x", "ls | wc -l", "git log | head", "bun test --help | head", "bun test --version | head"])
       expect(allowed(c)).toBe(true)
   })
+  test("piped `test:<name>` scripts are not `bun test` (v0.19.0 gate: `bun run test:install | tail` was denied)", () => {
+    for (const c of ["bun run test:install | tail", "bun run test:install 2>&1 | tail -40", "npm run test:install | tail"])
+      expect(allowed(c)).toBe(true)
+    for (const c of ["bun test x | tail", "bun run test | tail", "bun test packages/x 2>&1 | tail -5"]) expect(allowed(c)).toBe(false)
+  })
   test("shell appends to repo files are denied; logs, ignored and outside paths are not", () => {
     const ctx = { root: REPO }
     const deny = (c: string): string | undefined => {

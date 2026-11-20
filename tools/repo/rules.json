@@ -4,7 +4,7 @@
     {
       "id": "no-piped-test",
       "match": {
-        "command": "\\b(?:bun|npm|pnpm|yarn)\\s+(?:run\\s+)?test(?![\\w-])(?!\\s+(?:--help|--version|-h|-v)(?![\\w-]))(?:\\s+(?!-|\\d*>)(?<paths>[^\\s|;&]+(?:\\s+(?!-|\\d*>)[^\\s|;&]+){0,2}))?(?:(?!&&)[^|\\n;])*\\|(?!\\|)",
+        "command": "\\b(?:bun|npm|pnpm|yarn)\\s+(?:run\\s+)?test(?![\\w:-])(?!\\s+(?:--help|--version|-h|-v)(?![\\w-]))(?:\\s+(?!-|\\d*>)(?<paths>[^\\s|;&]+(?:\\s+(?!-|\\d*>)[^\\s|;&]+){0,2}))?(?:(?!&&)[^|\\n;])*\\|(?!\\|)",
         "notInside": ["quotes", "heredoc-to-file"]
       },
       "reason": "Piping `bun test` blocks on buffer overflow and hides the exit code.",
@@ -16,7 +16,8 @@
           "timeout 590 bun test packages/x 2>&1 | tail -5",
           "bun test packages/core | grep fail",
           "bun run test | tail",
-          "npm test | tail"
+          "npm test | tail",
+          "bun test x | tail"
         ],
         "allow": [
           "bun test --help | head",
@@ -26,7 +27,9 @@
           "echo \"bun test | grep\"",
           "bun test packages/x --timeout 15000",
           "git diff | head",
-          "bun test a && git diff | head"
+          "bun test a && git diff | head",
+          "bun run test:install 2>&1 | tail -40",
+          "npm run test:install | tail"
         ]
       }
     },

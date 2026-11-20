@@ -877,6 +877,13 @@
       "invoke": "bun run prices:update | bun run prices:check"
     },
     {
+      "id": "scripts/release-notes.ts",
+      "path": "scripts/release-notes.ts",
+      "kind": "build",
+      "summary": "Build a GitHub release body under the 125000-char limit; prints create, edit or keep (hand-written bodies are kept)",
+      "invoke": "bun scripts/release-notes.ts <version> <out> [<existing-body-file>]"
+    },
+    {
       "id": "scripts/validate-cli-externals.ts",
       "path": "scripts/validate-cli-externals.ts",
       "kind": "check",
