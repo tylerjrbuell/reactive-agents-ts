@@ -880,7 +880,7 @@
       "id": "scripts/release-notes.ts",
       "path": "scripts/release-notes.ts",
       "kind": "build",
-      "summary": "Build a GitHub release body under the 125000-char limit; prints create, edit or keep (hand-written bodies are kept)",
+      "summary": "GitHub release body under the 125000-char cap; prints create, edit or keep",
       "invoke": "bun scripts/release-notes.ts <version> <out> [<existing-body-file>]"
     },
     {
