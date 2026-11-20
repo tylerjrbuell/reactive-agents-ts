@@ -33,11 +33,30 @@ export interface TtsSettings {
   readonly voice: string;
 }
 
-/** The opt-in for `speech-supervisor.ts`; changed only through `POST /api/voice/local/keep-running`, never by the settings PUT. */
+/** Which Speaches image Cortex runs: `auto` = the GPU image when `docker info` lists an nvidia runtime, else CPU. */
+export type LocalSpeechDevice = "auto" | "cpu" | "cuda";
+
+/**
+ * The local speech server settings for `speech-supervisor.ts`. Changed only through the
+ * `/api/voice/local/*` routes (`keep-running`, `config`, `stop`), never by the settings PUT.
+ */
 export interface LocalSpeechSettings {
   /** Cortex keeps a local Speaches container running for the loopback endpoint (runs `docker` on this machine). Default off. */
   readonly keepRunning: boolean;
+  /** Host port the Cortex container publishes on (`127.0.0.1:<port>`). Default 8000. A change rewrites the supervised endpoints to follow it. */
+  readonly port: number;
+  /** CPU or GPU image. Default `auto`. */
+  readonly device: LocalSpeechDevice;
 }
+
+/** Default host port of the local speech server (the Speaches presets use it). */
+export const DEFAULT_LOCAL_SPEECH_PORT = 8000;
+
+/** A host port the supervisor may publish on: an integer from 1024 to 65535. */
+export const isLocalSpeechPort = (v: unknown): v is number => typeof v === "number" && Number.isInteger(v) && v >= 1024 && v <= 65535;
+
+/** `auto`, `cpu` or `cuda`. */
+export const isLocalSpeechDevice = (v: unknown): v is LocalSpeechDevice => v === "auto" || v === "cpu" || v === "cuda";
 
 /** All voice settings. */
 export interface VoiceSettings {
@@ -50,7 +69,7 @@ export interface VoiceSettings {
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   stt: { engine: "browser", baseUrl: "", model: "whisper-1" },
   tts: { engine: "browser", baseUrl: "", model: "tts-1", voice: "alloy" },
-  localSpeech: { keepRunning: false },
+  localSpeech: { keepRunning: false, port: DEFAULT_LOCAL_SPEECH_PORT, device: "auto" },
 };
 
 const str = (v: unknown, fallback: string, max = 200): string => (typeof v === "string" ? v.trim().slice(0, max) : fallback);
@@ -114,11 +133,20 @@ export class VoiceSettingsStore {
     try {
       const v: unknown = JSON.parse(readFileSync(this.file, "utf8"));
       if (typeof v !== "object" || v === null) return DEFAULT_VOICE_SETTINGS;
-      const o = v as { stt?: Partial<SttSettings>; tts?: Partial<TtsSettings>; localSpeech?: { keepRunning?: unknown } };
+      const o = v as { stt?: Partial<SttSettings>; tts?: Partial<TtsSettings>; localSpeech?: { keepRunning?: unknown; port?: unknown; device?: unknown } };
       const merged = mergeVoiceSettings(DEFAULT_VOICE_SETTINGS, { ...(o.stt ? { stt: o.stt } : {}), ...(o.tts ? { tts: o.tts } : {}) });
       if (!merged.ok) return DEFAULT_VOICE_SETTINGS;
-      // Only a literal `true` opts in; anything else stays off.
-      return { ...merged.settings, localSpeech: { keepRunning: o.localSpeech?.keepRunning === true } };
+      const ls = o.localSpeech;
+      const d = DEFAULT_VOICE_SETTINGS.localSpeech;
+      return {
+        ...merged.settings,
+        localSpeech: {
+          // Only a literal `true` opts in; anything else stays off.
+          keepRunning: ls?.keepRunning === true,
+          port: isLocalSpeechPort(ls?.port) ? ls.port : d.port,
+          device: isLocalSpeechDevice(ls?.device) ? ls.device : d.device,
+        },
+      };
     } catch {
       return DEFAULT_VOICE_SETTINGS;
     }
@@ -126,7 +154,8 @@ export class VoiceSettingsStore {
 
   /** Turn `localSpeech.keepRunning` on or off, leaving the rest. `false` on an I/O failure. */
   setKeepRunning(keepRunning: boolean): boolean {
-    return this.set({ ...this.get(), localSpeech: { keepRunning } });
+    const s = this.get();
+    return this.set({ ...s, localSpeech: { ...s.localSpeech, keepRunning } });
   }
 
   /** Save `settings`; atomic write. `false` on an I/O failure. */

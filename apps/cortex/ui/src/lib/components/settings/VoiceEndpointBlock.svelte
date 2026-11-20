@@ -10,6 +10,7 @@
   import Button from "$lib/components/kit/Button.svelte";
   import Input from "$lib/components/kit/Input.svelte";
   import Select from "$lib/components/kit/Select.svelte";
+  import SpeechModelField from "$lib/components/settings/SpeechModelField.svelte";
   import { modelInstallHelp, presetFor, leavesThisMachine, STT_PRESETS, TTS_PRESETS, type SttPreset, type TtsPreset } from "$lib/voice/voice-presets.js";
   import { diagnosisLine, htmlAudio, runAudioDiagnostic } from "$lib/voice/audio-diagnostic.js";
   import { VOICE_TEST_TEXT } from "$lib/voice/voice-text.js";
@@ -38,6 +39,7 @@
   let result = $state<{ tone: "ok" | "bad"; text: string; help?: { hint: string; curl: string } } | null>(null);
   let voices = $state<readonly ServerVoiceOption[]>([]);
   let voicesListed = $state(false);
+  let pendingDownload = $state(false);
 
   // Drafts follow the saved settings (after a save, a preset-free reload, or an engine switch).
   $effect(() => {
@@ -77,6 +79,12 @@
     }
     result = null;
     toast.success("Voice endpoint saved");
+    // A model the local server lacks: the supervisor brings the server up and downloads it.
+    if (pendingDownload) {
+      const d = await v.api.localStart();
+      if (d.ok) toast.success("Downloading the model", "Progress shows under Local speech server.");
+      else toast.error("Model not downloaded", d.error);
+    }
     if (direction === "tts") void loadVoices(true);
   }
 
@@ -181,7 +189,7 @@
     <Input id="vb-url-{direction}" mono autocomplete="off" spellcheck={false} placeholder="http://localhost:8000/v1" bind:value={url} />
 
     <label class="vb-l" for="vb-model-{direction}">Model</label>
-    <Input id="vb-model-{direction}" mono autocomplete="off" spellcheck={false} bind:value={model} />
+    <SpeechModelField {direction} bind:value={model} bind:pendingDownload />
 
     {#if direction === "tts"}
       <label class="vb-l" for="vb-voice">Voice</label>
@@ -207,6 +215,7 @@
   {#if direction === "tts" && voicesListed}
     <p class="vb-help">{voices.length} voices for {cfg.model}. Search by name or language in the Voice field.</p>
   {/if}
+  {#if pendingDownload}<p class="vb-help" data-testid="voice-model-download">Saving downloads this model to the local speech server (it starts the server if it is stopped).</p>{/if}
   {#if preset}<p class="vb-help">{preset.hint}</p>{/if}
   {#if cloud}<p class="vb-help vb-warn">{direction === "stt" ? "Your recordings are sent to this server." : "The text to be read is sent to this server."}</p>{/if}
 

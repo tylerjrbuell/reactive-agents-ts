@@ -24,24 +24,26 @@ import {
   type DockerRunner,
   type SpeechSupervisor,
 } from "../services/voice/speech-supervisor.js";
-import { DEFAULT_VOICE_SETTINGS, VoiceSettingsStore, type VoiceSettings } from "../services/voice/voice-settings.js";
+import { DEFAULT_VOICE_SETTINGS, VoiceSettingsStore, type LocalSpeechDevice, type VoiceSettings } from "../services/voice/voice-settings.js";
+import { applyLocalSpeechConfig } from "../services/voice/local-speech-config.js";
+import { listSpeechModels } from "../services/voice/speech-models.js";
 
 const STT_MODEL = "Systran/faster-whisper-small";
 const TTS_MODEL = "speaches-ai/Kokoro-82M-v1.0-ONNX";
 const URL_8000 = "http://localhost:8000/v1";
 
-const local = (over: { keep?: boolean; sttUrl?: string; ttsUrl?: string; sttModel?: string; ttsModel?: string } = {}): VoiceSettings => ({
+const local = (over: { keep?: boolean; sttUrl?: string; ttsUrl?: string; sttModel?: string; ttsModel?: string; device?: LocalSpeechDevice } = {}): VoiceSettings => ({
   stt: { engine: "server", baseUrl: over.sttUrl ?? URL_8000, model: over.sttModel ?? STT_MODEL },
   tts: { engine: "server", baseUrl: over.ttsUrl ?? URL_8000, model: over.ttsModel ?? TTS_MODEL, voice: "af_heart" },
-  localSpeech: { keepRunning: over.keep ?? true },
+  localSpeech: { keepRunning: over.keep ?? true, port: 8000, device: over.device ?? "auto" },
 });
 
 /** In-memory stand-in for `VoiceSettingsStore`. */
 class MemSettings {
   constructor(public value: VoiceSettings) {}
   get = (): VoiceSettings => this.value;
-  setKeepRunning = (on: boolean): boolean => {
-    this.value = { ...this.value, localSpeech: { keepRunning: on } };
+  set = (next: VoiceSettings): boolean => {
+    this.value = next;
     return true;
   };
 }
@@ -65,6 +67,9 @@ class World {
   calls: string[][] = [];
   clock = 1_000_000;
   fetches = 0;
+  /** Host port the speech server answers on (IPv4 loopback only, like `--publish 127.0.0.1:<port>:8000`). */
+  port = 8000;
+  hosts: string[] = [];
 
   readonly docker: DockerRunner = {
     run: async (args) => {
@@ -89,10 +94,20 @@ class World {
         case "run": {
           if (this.failRun) return this.failRun;
           const publish = args[args.indexOf("--publish") + 1] ?? "";
+          if (this.container !== null) return { code: 125, stdout: "", stderr: `docker: Error response from daemon: Conflict. The container name "/${SPEECH_CONTAINER}" is already in use.` };
           this.container = { running: true, policy: "unless-stopped", image: args[args.length - 1] ?? "", port: Number(publish.split(":")[1]) };
+          this.port = this.container.port;
           this.up = true;
           return { code: 0, stdout: "abc123", stderr: "" };
         }
+        case "rm":
+          this.container = null;
+          this.up = false;
+          return { code: 0, stdout: SPEECH_CONTAINER, stderr: "" };
+        case "stop":
+          if (this.container) this.container.running = false;
+          this.up = false;
+          return { code: 0, stdout: SPEECH_CONTAINER, stderr: "" };
         default:
           return { code: 2, stdout: "", stderr: "unsupported" };
       }
@@ -102,7 +117,9 @@ class World {
   readonly fetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit): Promise<Response> => {
     this.fetches += 1;
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-    if (!this.up) throw new TypeError("Unable to connect. Is the computer able to access the url?");
+    this.hosts.push(url.hostname);
+    // Published on 127.0.0.1 only: [::1] (and an IPv6-first localhost) is refused, as on the owner's machine.
+    if (!this.up || url.hostname !== "127.0.0.1" || url.port !== String(this.port)) throw new TypeError("Unable to connect. Is the computer able to access the url?");
     if (url.pathname === "/health") return new Response("OK");
     if (url.pathname === "/v1/models" && (init?.method ?? "GET") === "GET") return Response.json({ object: "list", data: [...this.installed].map((id) => ({ id })) });
     if (url.pathname.startsWith("/v1/models/") && init?.method === "POST") {
@@ -210,15 +227,30 @@ describe("bring it back", () => {
     expect(w.posted).toEqual([TTS_MODEL]);
   });
 
-  it("leaves a container with the same name but another image or port alone", async () => {
+  it("leaves a hand-made container with the same name but another image alone (no start, stop, rm or run)", async () => {
     w.container = { running: false, policy: "no", image: "evil/image:latest", port: 8000 };
     const st = await sup.ensure("startup");
     expect(st.phase).toBe("failed");
     expect(st.lastError).toContain(`docker rm -f ${SPEECH_CONTAINER}`);
     expect(w.dockerVerbs()).toEqual(["inspect"]);
-    w.container = { running: false, policy: "no", image: SPEECH_IMAGES.cpu, port: 9999 };
+    w.container.running = true;
+    await sup.stopServer();
+    expect(await sup.configure({ port: 8123 })).toMatchObject({ ok: true });
+    await sup.settled();
     await sup.retry();
-    expect(w.dockerVerbs().filter((v) => v === "start" || v === "run")).toEqual([]);
+    expect(w.dockerVerbs().filter((v) => v !== "inspect" && v !== "info")).toEqual([]);
+    expect(w.container).toMatchObject({ image: "evil/image:latest", running: true });
+  });
+
+  it("re-creates its own container (allowlisted image) that is published on another port", async () => {
+    w.container = { running: true, policy: "unless-stopped", image: SPEECH_IMAGES.cpu, port: 9999 };
+    w.port = 9999;
+    w.up = true;
+    const st = await sup.ensure("startup");
+    expect(st.phase).toBe("ready");
+    expect(w.calls.find((c) => c[0] === "rm")).toEqual(["rm", "--force", SPEECH_CONTAINER]);
+    expect(w.calls.find((c) => c[0] === "run")).toContain("127.0.0.1:8000:8000");
+    expect(w.container?.port).toBe(8000);
   });
 
   it("single-flight: concurrent ensures share one run", async () => {
@@ -330,7 +362,8 @@ describe("what gets supervised", () => {
     expect(st.phase).toBe("unavailable");
     expect(st.eligible).toBe(false);
     expect(w.calls).toEqual([]);
-    expect(sup.setKeepRunning(true).ok).toBe(false);
+    expect((await sup.setKeepRunning(true)).ok).toBe(false);
+    expect(sup.startServer().ok).toBe(false);
   });
 
   it("refuses listening and reading on different ports", () => {
@@ -381,9 +414,62 @@ describe("the HTTP surface", () => {
     const done = await supervisor.ensure("manual");
     expect(done.phase).toBe("ready");
     expect(w.calls.some((c) => c[0] === "run")).toBe(true);
+    w.calls = [];
     const off = await app.handle(post("/api/voice/local/keep-running", { enabled: false }));
-    expect(((await off.json()) as { phase: string }).phase).toBe("disabled");
+    expect(((await off.json()) as { phase: string; running: boolean }).phase).toBe("stopped");
     expect(store.get().localSpeech.keepRunning).toBe(false);
+    // Switching it off stops the container (kept for a fast restart, not removed).
+    expect(w.calls.find((c) => c[0] === "stop")).toEqual(["stop", SPEECH_CONTAINER]);
+    expect(w.dockerVerbs()).not.toContain("rm");
+    expect(w.container?.running).toBe(false);
+  });
+
+  it("Start and Stop work by hand with keep-running off; Stop also switches keep-running off", async () => {
+    const { app, supervisor } = build();
+    const started = await app.handle(post("/api/voice/local/start", {}));
+    expect(started.status).toBe(200);
+    expect((await supervisor.settled()).phase).toBe("ready");
+    expect(store.get().localSpeech.keepRunning).toBe(false);
+    const st = (await (await app.handle(req("/api/voice/local/status"))).json()) as { phase: string; running: boolean; port: number; endpoint: string };
+    expect(st).toMatchObject({ phase: "ready", running: true, port: 8000, endpoint: "127.0.0.1:8000" });
+
+    await supervisor.setKeepRunning(true);
+    await supervisor.settled();
+    const stopped = await app.handle(post("/api/voice/local/stop", {}));
+    expect(((await stopped.json()) as { phase: string; running: boolean })).toMatchObject({ phase: "stopped", running: false });
+    expect(store.get().localSpeech.keepRunning).toBe(false);
+    expect(w.container?.running).toBe(false);
+    // The timer does not bring it back.
+    await supervisor.ensure("timer");
+    expect(w.container?.running).toBe(false);
+  });
+
+  it("config: a port change saves the port, moves the endpoints and re-creates the running container there", async () => {
+    const { app, supervisor } = build();
+    await app.handle(post("/api/voice/local/start", {}));
+    await supervisor.settled();
+    w.calls = [];
+    const res = await app.handle(post("/api/voice/local/config", { port: 8123 }));
+    expect(res.status).toBe(200);
+    expect(store.get().localSpeech.port).toBe(8123);
+    expect(store.get().stt.baseUrl).toBe("http://127.0.0.1:8123/v1");
+    expect(store.get().tts.baseUrl).toBe("http://127.0.0.1:8123/v1");
+    expect((await supervisor.settled()).phase).toBe("ready");
+    expect(w.calls.find((c) => c[0] === "rm")).toEqual(["rm", "--force", SPEECH_CONTAINER]);
+    expect(w.calls.find((c) => c[0] === "run")).toContain("127.0.0.1:8123:8000");
+    expect(supervisor.status().port).toBe(8123);
+  });
+
+  it("config refuses a bad port or device; start, stop and config answer 403 without docker permission", async () => {
+    const { app } = build();
+    expect((await app.handle(post("/api/voice/local/config", { port: 80 }))).status).toBe(422);
+    expect((await app.handle(post("/api/voice/local/config", { device: "rocm" }))).status).toBe(422);
+    const denied = build({ allowDocker: false }).app;
+    for (const path of ["/api/voice/local/start", "/api/voice/local/stop", "/api/voice/local/config"]) {
+      expect((await denied.handle(post(path, { port: 8123 }))).status).toBe(403);
+    }
+    expect(store.get().localSpeech.port).toBe(8000);
+    expect(w.calls).toEqual([]);
   });
 
   it("refuses to turn on without a local Speaches endpoint, and a bad body", async () => {
@@ -441,5 +527,97 @@ describe("the HTTP surface", () => {
     const res = await app.handle(post("/api/voice/speak", { text: "Hello." }));
     expect(res.status).toBe(502);
     expect(w.calls).toEqual([]);
+  });
+
+  it("a saved [::1] or localhost endpoint is called as 127.0.0.1 (the container publishes on IPv4 loopback only)", async () => {
+    const { app, supervisor } = build();
+    store.set(local({ keep: false, sttUrl: "http://[::1]:8000/v1", ttsUrl: "http://[::1]:8000/v1" }));
+    await app.handle(post("/api/voice/local/start", {}));
+    expect((await supervisor.settled()).phase).toBe("ready");
+    const res = await app.handle(post("/api/voice/speak", { text: "Hello." }));
+    expect(res.status).toBe(200);
+    expect(new Set(w.hosts)).toEqual(new Set(["127.0.0.1"]));
+  });
+
+  it("GET /models/:direction lists installed and downloadable models from the speech server", async () => {
+    const { app } = build();
+    const seen: string[] = [];
+    const speaches = (async (input: Parameters<typeof fetch>[0]) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+      seen.push(`${url.hostname}${url.pathname}${url.search}`);
+      if (url.pathname === "/v1/models") return Response.json({ data: [{ id: STT_MODEL, language: ["en", "de"] }] });
+      if (url.pathname === "/v1/registry") return Response.json({ data: [{ id: STT_MODEL }, { id: "Systran/faster-whisper-large-v3", language: ["en"] }, { id: 7 }] });
+      return new Response("no", { status: 404 });
+    }) as typeof fetch;
+    const app2 = new Elysia().use(voiceRouter({ settings: store, keys: new ProviderKeyStore({ dir, env: {} }), fetch: speaches, supervisor: createSpeechSupervisor({ settings: store, docker: w.docker }), allowDocker: true }));
+    const body = (await (await app2.handle(req("/api/voice/models/stt"))).json()) as { installed: { id: string; languages: string[] }[]; available: { id: string }[]; listed: boolean };
+    expect(body.listed).toBe(true);
+    expect(body.installed).toEqual([{ id: STT_MODEL, languages: ["en", "de"] }]);
+    expect(body.available.map((m) => m.id)).toEqual(["Systran/faster-whisper-large-v3"]);
+    expect(seen).toEqual(["127.0.0.1/v1/models?task=automatic-speech-recognition", "127.0.0.1/v1/registry?task=automatic-speech-recognition"]);
+    expect((await app.handle(req("/api/voice/models/xx"))).status).toBe(400);
+  });
+});
+
+describe("hardware and port", () => {
+  it("cpu never asks docker info or passes --gpus; cuda refuses plainly without an nvidia runtime", async () => {
+    sup = make(local({ device: "cpu" }));
+    w.nvidia = true;
+    await sup.ensure("startup");
+    expect(w.dockerVerbs()).not.toContain("info");
+    expect(w.calls.find((c) => c[0] === "run")?.at(-1)).toBe(SPEECH_IMAGES.cpu);
+
+    w = new World();
+    sup = make(local({ device: "cuda" }));
+    const st = await sup.ensure("startup");
+    expect(st.phase).toBe("failed");
+    expect(st.lastError).toContain("no NVIDIA runtime");
+    expect(w.dockerVerbs()).not.toContain("run");
+  });
+
+  it("switching hardware re-creates the running container with the other image", async () => {
+    w.nvidia = true;
+    await sup.ensure("startup");
+    expect(w.container?.image).toBe(SPEECH_IMAGES.cuda);
+    expect(await sup.configure({ device: "cpu" })).toMatchObject({ ok: true });
+    expect((await sup.settled()).phase).toBe("ready");
+    expect(w.container?.image).toBe(SPEECH_IMAGES.cpu);
+    expect(w.dockerVerbs()).toContain("rm");
+  });
+
+  it("a port change with nothing running and keep-running off only saves", async () => {
+    sup = make(local({ keep: false }));
+    expect(await sup.configure({ port: 8200 })).toMatchObject({ ok: true });
+    await sup.settled();
+    expect(mem.value.localSpeech.port).toBe(8200);
+    expect(mem.value.stt.baseUrl).toBe("http://127.0.0.1:8200/v1");
+    expect(w.dockerVerbs()).toEqual(["inspect"]);
+  });
+
+  it("applyLocalSpeechConfig moves only the supervised endpoints and refuses a privileged port", () => {
+    const s = local({ ttsUrl: "https://api.openai.com/v1", ttsModel: "tts-1" });
+    const r = applyLocalSpeechConfig(s, { port: 9000 });
+    expect(r.ok && r.settings.stt.baseUrl).toBe("http://127.0.0.1:9000/v1");
+    expect(r.ok && r.settings.tts.baseUrl).toBe("https://api.openai.com/v1");
+    expect(applyLocalSpeechConfig(s, { port: 80 }).ok).toBe(false);
+    expect(applyLocalSpeechConfig(s, {})).toMatchObject({ ok: true, changed: false });
+  });
+
+  it("the settings file keeps port and device, and ignores bad values", () => {
+    const d = mkdtempSync(join(tmpdir(), "cortex-speech-cfg-"));
+    try {
+      const store = new VoiceSettingsStore(d);
+      store.set(local({ device: "cuda" }));
+      expect(store.get().localSpeech).toEqual({ keepRunning: true, port: 8000, device: "cuda" });
+      store.set({ ...local(), localSpeech: { keepRunning: true, port: 80, device: "auto" } });
+      expect(store.get().localSpeech.port).toBe(8000);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+
+  it("listSpeechModels never fails: a server without the routes gives empty, unlisted lists", async () => {
+    const none = (async () => new Response("no", { status: 404 })) as unknown as typeof fetch;
+    expect(await listSpeechModels({ baseUrl: "http://127.0.0.1:8000/v1", fetch: none }, "text-to-speech")).toEqual({ installed: [], available: [], listed: false });
   });
 });

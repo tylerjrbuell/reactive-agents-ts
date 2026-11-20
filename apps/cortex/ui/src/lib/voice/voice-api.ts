@@ -5,7 +5,8 @@
  */
 import { causeMessage, type VoiceFetch } from "@reactive-agents/ui-core";
 import { parseKeyStatus, type ProviderKeyStatus } from "../provider-keys.js";
-import { parseLocalSpeechStatus } from "./local-speech.js";
+import { parseLocalSpeechStatus, type LocalSpeechDevice } from "./local-speech.js";
+import { parseSpeechModels } from "./speech-models.js";
 
 /** `browser` = the browser's engine; `server` = the OpenAI-compatible endpoint. */
 export type EngineChoice = "browser" | "server";
@@ -131,6 +132,11 @@ export function voiceApi(base: string, doFetch: VoiceFetch = (input, init) => fe
     localStatus: () => call(doFetch, v("/local/status"), { method: "GET" }, parseLocalSpeechStatus),
     localEnsure: () => call(doFetch, v("/local/ensure"), jsonInit("POST"), parseLocalSpeechStatus),
     setKeepRunning: (enabled: boolean) => call(doFetch, v("/local/keep-running"), jsonInit("POST", { enabled }), parseLocalSpeechStatus),
+    localStart: () => call(doFetch, v("/local/start"), jsonInit("POST"), parseLocalSpeechStatus),
+    localStop: () => call(doFetch, v("/local/stop"), jsonInit("POST"), parseLocalSpeechStatus),
+    localConfig: (patch: { readonly port?: number; readonly device?: LocalSpeechDevice }) => call(doFetch, v("/local/config"), jsonInit("POST", patch), parseLocalSpeechStatus),
+    /** The speech server's installed and downloadable models for the saved endpoint. */
+    models: (direction: "stt" | "tts") => call(doFetch, v(`/models/${direction}`), { method: "GET" }, parseSpeechModels),
     saveKey: (id: string, apiKey: string) => call(doFetch, key(id), jsonInit("PUT", { apiKey }), parseKeyStatus),
     removeKey: (id: string) => call(doFetch, key(id), jsonInit("DELETE"), parseKeyStatus),
   };

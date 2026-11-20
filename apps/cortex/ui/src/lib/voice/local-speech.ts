@@ -5,7 +5,10 @@
  */
 
 /** Where the supervisor is. */
-export type LocalSpeechPhase = "disabled" | "unavailable" | "checking" | "starting" | "downloading" | "ready" | "failed";
+export type LocalSpeechPhase = "disabled" | "unavailable" | "checking" | "starting" | "downloading" | "ready" | "stopping" | "stopped" | "failed";
+
+/** Which Speaches image the server runs: `auto` picks the GPU image when Docker has an NVIDIA runtime. */
+export type LocalSpeechDevice = "auto" | "cpu" | "cuda";
 
 /** The server's status body. */
 export interface LocalSpeechStatus {
@@ -21,9 +24,22 @@ export interface LocalSpeechStatus {
   readonly locked: boolean;
   readonly container: string;
   readonly endpoint: string | null;
+  /** Host port the server is (or will be) published on. */
+  readonly port: number;
+  readonly device: LocalSpeechDevice;
+  /** The server answered at the last look; `null` = not looked yet. */
+  readonly running: boolean | null;
 }
 
-const PHASES: readonly LocalSpeechPhase[] = ["disabled", "unavailable", "checking", "starting", "downloading", "ready", "failed"];
+const PHASES: readonly LocalSpeechPhase[] = ["disabled", "unavailable", "checking", "starting", "downloading", "ready", "stopping", "stopped", "failed"];
+const isDevice = (v: unknown): v is LocalSpeechDevice => v === "auto" || v === "cpu" || v === "cuda";
+
+/** Hardware choices for kit `Select`. */
+export const DEVICE_OPTIONS: readonly { readonly value: LocalSpeechDevice; readonly label: string; readonly description: string }[] = [
+  { value: "auto", label: "Auto", description: "GPU image when Docker has an NVIDIA runtime, else CPU." },
+  { value: "cpu", label: "CPU", description: "Runs anywhere; slower for large Whisper models." },
+  { value: "cuda", label: "GPU (NVIDIA)", description: "Needs the NVIDIA Container Toolkit." },
+];
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const isPhase = (v: unknown): v is LocalSpeechPhase => typeof v === "string" && PHASES.some((p) => p === v);
 
@@ -40,8 +56,33 @@ export function parseLocalSpeechStatus(v: unknown): LocalSpeechStatus | null {
     locked: v.locked === true,
     container: typeof v.container === "string" ? v.container : "",
     endpoint: typeof v.endpoint === "string" ? v.endpoint : null,
+    port: typeof v.port === "number" && Number.isInteger(v.port) ? v.port : 8000,
+    device: isDevice(v.device) ? v.device : "auto",
+    running: typeof v.running === "boolean" ? v.running : null,
   };
 }
+
+/** Why `text` is not a port the server may use, or `null` when it is (1024 to 65535). */
+export function portProblem(text: string): string | null {
+  const t = text.trim();
+  if (!/^\d+$/.test(t)) return "Use a port number, such as 8000.";
+  const n = Number(t);
+  return n >= 1024 && n <= 65535 ? null : "Use a port from 1024 to 65535.";
+}
+
+/** The server line under the switch: running on which address, stopped, or not looked yet. */
+export function serverLine(s: LocalSpeechStatus): string {
+  const at = s.endpoint ?? `127.0.0.1:${s.port}`;
+  if (s.running === true) return `Running on ${at}.`;
+  if (s.running === false) return `Not running on ${at}.`;
+  return `Port ${s.port}.`;
+}
+
+/** Start is offered when the server is not answering and nothing is in progress. */
+export const canStart = (s: LocalSpeechStatus): boolean => s.eligible && !isWorking(s.phase) && s.phase !== "stopping" && s.running !== true;
+
+/** Stop is offered while the server answers or work runs (it stops the Cortex container only). */
+export const canStop = (s: LocalSpeechStatus): boolean => s.eligible && s.phase !== "stopping" && (s.running === true || isWorking(s.phase) || s.keepRunning);
 
 /** The pill text. */
 export function phaseLabel(phase: LocalSpeechPhase): string {
@@ -58,6 +99,10 @@ export function phaseLabel(phase: LocalSpeechPhase): string {
       return "Downloading models";
     case "ready":
       return "Ready";
+    case "stopping":
+      return "Stopping";
+    case "stopped":
+      return "Stopped";
     case "failed":
       return "Failed";
   }
@@ -67,7 +112,7 @@ export function phaseLabel(phase: LocalSpeechPhase): string {
 export function phaseTone(phase: LocalSpeechPhase): "ok" | "warn" | "bad" | "muted" {
   if (phase === "ready") return "ok";
   if (phase === "failed") return "bad";
-  if (phase === "checking" || phase === "starting" || phase === "downloading") return "warn";
+  if (phase === "checking" || phase === "starting" || phase === "downloading" || phase === "stopping") return "warn";
   return "muted";
 }
 
@@ -76,9 +121,10 @@ export const isWorking = (phase: LocalSpeechPhase): boolean => phase === "checki
 
 /** Milliseconds until the next status request, or `null` to stop asking (nothing changes by itself). */
 export function nextPollMs(s: LocalSpeechStatus | null): number | null {
-  if (s === null || !s.keepRunning) return null;
-  return isWorking(s.phase) ? 2500 : 30_000;
+  if (s === null) return null;
+  if (isWorking(s.phase) || s.phase === "stopping") return 2500;
+  return s.keepRunning ? 30_000 : null;
 }
 
-/** Retry is offered after a failure, and when the server stopped on its own after three of them. */
-export const canRetry = (s: LocalSpeechStatus): boolean => s.keepRunning && s.phase === "failed";
+/** Retry is offered after a failure (with keep-running off it starts the server again). */
+export const canRetry = (s: LocalSpeechStatus): boolean => s.eligible && s.phase === "failed";

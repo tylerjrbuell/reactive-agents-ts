@@ -1,24 +1,35 @@
 /**
  * Keeps a local Speaches (OpenAI-compatible speech) container running for Settings · Voice.
  *
- * Opt-in only (`localSpeech.keepRunning`, default off, set through `POST /api/voice/local/keep-running`).
+ * Keep-running is opt-in (`localSpeech.keepRunning`, default off, set through `POST /api/voice/local/keep-running`).
  * When on, Cortex checks the endpoint at startup, when voice is used, and on a timer; if it is
  * down it starts the existing container, else creates it, then downloads the configured models
  * through the server's own model API. Docker itself restarts it after a crash or reboot
- * (`--restart unless-stopped`).
+ * (`--restart unless-stopped`). Switching it off stops the container (`docker stop`; it is kept for
+ * a fast restart). Start and Stop also work by hand with keep-running off (`startServer`, `stopServer`).
+ * Port and hardware (`localSpeech.port`, `localSpeech.device`) change through `configure`, which
+ * re-creates the Cortex container when it runs on another port or image.
  *
  * This runs `docker` on the owner's machine, so the surface is fixed in code, not in settings:
  * - only a loopback endpoint (`localhost`, `127.0.0.1`, `::1`) with an explicit port and a `/v1` path;
+ *   Cortex calls it as `127.0.0.1` whatever loopback form was typed, because the container is
+ *   published on IPv4 loopback only (`[::1]` and an IPv6-first `localhost` would be refused);
  * - one container name (`cortex-speaches`) and two allowlisted image tags, never from input;
  * - argv arrays through the injected `DockerRunner` (real = `execFile`, no shell);
  * - the port is published as `127.0.0.1:<port>:8000`; no privileged flags; the only mount is the
- *   named Hugging Face cache volume; `--gpus all` only when `docker info` lists an nvidia runtime;
- * - a container that already carries the name but a different image or port is left alone;
+ *   named Hugging Face cache volume; `--gpus all` only with the GPU image and an nvidia runtime in `docker info`;
+ * - a container that carries the name but not an allowlisted image is never touched (not started,
+ *   stopped or removed); one with an allowlisted image is Cortex's own, so on another port or image
+ *   it is removed (`docker rm -f cortex-speaches`) and created again (models stay in the cache volume);
  * - single-flight, 3 attempts with exponential backoff, then `failed` until Retry;
  * - docker's stderr never leaves here beyond a scrubbed 300-character tail.
  */
 import { execFile } from "node:child_process";
-import type { VoiceSettings } from "./voice-settings.js";
+import { applyLocalSpeechConfig, type LocalSpeechConfigPatch } from "./local-speech-config.js";
+import { NO_LOCAL_ENDPOINT, resolveSpeechTarget, type SpeechTarget } from "./speech-target.js";
+import type { LocalSpeechDevice, VoiceSettings } from "./voice-settings.js";
+
+export { resolveSpeechTarget, supervisedBaseUrl, type SpeechTarget } from "./speech-target.js";
 
 /** The one container Cortex creates and manages. (A hand-made `speaches` container is never touched.) */
 export const SPEECH_CONTAINER = "cortex-speaches";
@@ -63,8 +74,11 @@ export const execDockerRunner: DockerRunner = {
     }),
 };
 
-/** Where the supervisor is. `disabled`: opt-in off. `unavailable`: no local Speaches endpoint to supervise. */
-export type SpeechPhase = "disabled" | "unavailable" | "checking" | "starting" | "downloading" | "ready" | "failed";
+/**
+ * Where the supervisor is. `disabled`: keep-running off and nothing done by hand. `unavailable`: no
+ * local Speaches endpoint to supervise. `stopping` / `stopped`: Stop, or keep-running switched off.
+ */
+export type SpeechPhase = "disabled" | "unavailable" | "checking" | "starting" | "downloading" | "ready" | "stopping" | "stopped" | "failed";
 
 /** Body of `GET /api/voice/local/status`. */
 export interface SpeechStatus {
@@ -81,68 +95,19 @@ export interface SpeechStatus {
   /** Three failures in a row: nothing runs again until Retry. */
   readonly locked: boolean;
   readonly container: string;
-  /** `host:port` being supervised, or null. */
+  /** `127.0.0.1:<port>` being supervised, or null. */
   readonly endpoint: string | null;
   readonly models: readonly string[];
+  /** The port the server is (or will be) published on: the supervised endpoint's, else the saved `localSpeech.port`. */
+  readonly port: number;
+  /** Saved hardware choice. */
+  readonly device: LocalSpeechDevice;
+  /** The server answered its health check at the last look; `null` = not looked yet. */
+  readonly running: boolean | null;
 }
 
-/** What the supervisor will keep running, read from the voice settings. */
-export type SpeechTarget =
-  | {
-      readonly ok: true;
-      readonly port: number;
-      /** `http://<host>:<port>` as the person typed the host. */
-      readonly origin: string;
-      /** `<origin>/v1`. */
-      readonly apiBase: string;
-      readonly models: readonly string[];
-      readonly directions: readonly ("stt" | "tts")[];
-    }
-  | { readonly ok: false; readonly reason: string };
-
-const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
-/** A Hugging Face model id as Speaches names them: `org/name`. */
-const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
-
-/**
- * The local Speaches endpoint(s) in `settings`, or why there is none. Only server-engine endpoints
- * on a loopback `http://host:port/v1` with a Hugging Face model id qualify (so `tts-1` on an
- * openedai-speech server, or any cloud URL, is never supervised). Listening and reading must share one port.
- */
-export function resolveSpeechTarget(settings: VoiceSettings): SpeechTarget {
-  const found: { dir: "stt" | "tts"; origin: string; port: number; model: string }[] = [];
-  for (const dir of ["stt", "tts"] as const) {
-    const s = settings[dir];
-    if (s.engine !== "server" || s.baseUrl === "") continue;
-    let u: URL;
-    try {
-      u = new URL(s.baseUrl);
-    } catch {
-      continue;
-    }
-    if (u.protocol !== "http:" || !LOOPBACK.has(u.hostname) || u.username !== "" || u.password !== "") continue;
-    if (u.pathname.replace(/\/+$/, "") !== "/v1" || u.search !== "" || u.hash !== "") continue;
-    const port = Number(u.port);
-    if (!Number.isInteger(port) || port < 1024 || port > 65535) continue;
-    if (!MODEL_ID.test(s.model)) continue;
-    found.push({ dir, origin: `http://${u.host}`, port, model: s.model });
-  }
-  const first = found[0];
-  if (first === undefined) {
-    return { ok: false, reason: "Set the listening or reading engine to a local Speaches endpoint first (a localhost URL with a port, ending in /v1)." };
-  }
-  if (found.some((f) => f.port !== first.port)) {
-    return { ok: false, reason: "Listening and reading point at different local ports; Cortex keeps one speech server running, so use the same port for both." };
-  }
-  return {
-    ok: true,
-    port: first.port,
-    origin: first.origin,
-    apiBase: `${first.origin}/v1`,
-    models: [...new Set(found.map((f) => f.model))],
-    directions: found.map((f) => f.dir),
-  };
-}
+/** A refusal sentence, or the status after the action started. */
+export type SpeechAction = { readonly ok: true; readonly status: SpeechStatus } | { readonly ok: false; readonly error: string };
 
 /** Control characters out, whitespace collapsed, last 300 characters. */
 export function scrubDockerText(text: string): string {
@@ -165,7 +130,7 @@ function dockerProblem(r: DockerResult): string {
 
 /** Everything the supervisor reads or calls; every field but `settings` and `docker` has a default. */
 export interface SpeechSupervisorDeps {
-  readonly settings: { get(): VoiceSettings; setKeepRunning(on: boolean): boolean };
+  readonly settings: { get(): VoiceSettings; set(settings: VoiceSettings): boolean };
   readonly docker: DockerRunner;
   readonly fetch?: typeof fetch;
   readonly now?: () => number;
@@ -184,12 +149,22 @@ export type EnsureReason = "startup" | "timer" | "use" | "manual";
 /** The supervisor. One per Cortex server. */
 export interface SpeechSupervisor {
   status(): SpeechStatus;
+  /** Look whether the server answers (no docker; throttled, skipped while work runs), then the status. */
+  probe(): Promise<SpeechStatus>;
   /** Bring the server up if it is down. Single-flight; resolves with the final status. A no-op while the opt-in is off. */
   ensure(reason: EnsureReason): Promise<SpeechStatus>;
-  /** Save the opt-in, forget past failures, and (when on) start an `ensure`. `refusal` when it cannot be turned on. */
-  setKeepRunning(enabled: boolean): { readonly ok: true; readonly status: SpeechStatus } | { readonly ok: false; readonly error: string };
-  /** `ensure("manual")`. */
+  /** Save the opt-in and forget past failures. On: start an `ensure`. Off: stop the Cortex container (resolves after the stop). */
+  setKeepRunning(enabled: boolean): Promise<SpeechAction>;
+  /** Start the server now, keep-running or not (work continues in the background; `settled` waits for it). */
+  startServer(): SpeechAction;
+  /** Stop the Cortex container (`docker stop`) and switch keep-running off, so the timer does not start it again. */
+  stopServer(): Promise<SpeechAction>;
+  /** Save port / hardware; when the server runs (or keep-running is on) bring it up again on the new settings. */
+  configure(patch: LocalSpeechConfigPatch): Promise<SpeechAction>;
+  /** Run again after a failure: `ensure("manual")` with keep-running on, else `startServer`. */
   retry(): Promise<SpeechStatus>;
+  /** The work in flight, or the status now. */
+  settled(): Promise<SpeechStatus>;
   /** True when the opt-in is on and `direction`'s endpoint is the supervised one. */
   supervises(direction: "stt" | "tts"): boolean;
   /** Start a background check if enabled and the last one is old (cheap, for read-only calls). */
@@ -202,6 +177,10 @@ export interface SpeechSupervisor {
 
 const sleepReal = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
+type Target = Extract<SpeechTarget, { ok: true }>;
+/** `idle`: nothing done since start or the last settings change. */
+type InnerPhase = Exclude<SpeechPhase, "disabled" | "unavailable"> | "idle";
+
 /** Build the supervisor. */
 export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSupervisor {
   const doFetch = deps.fetch ?? fetch;
@@ -211,13 +190,16 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
   const backoffBaseMs = deps.backoffBaseMs ?? 10_000;
   const intervalMs = deps.intervalMs ?? 60_000;
   const TOUCH_GAP_MS = 15_000;
+  const PROBE_GAP_MS = 2_000;
 
-  let phase: SpeechPhase = "checking";
+  let phase: InnerPhase = "idle";
   let message = "";
   let lastError: string | null = null;
   let attempts = 0;
   let nextAttemptAt = 0;
   let lastCheckAt = 0;
+  let lastProbeAt = Number.NEGATIVE_INFINITY;
+  let serverUp: boolean | null = null;
   let policyChecked = false;
   let inflight: Promise<SpeechStatus> | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
@@ -228,22 +210,26 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
     const settings = deps.settings.get();
     const target = resolveSpeechTarget(settings);
     const on = settings.localSpeech.keepRunning;
-    const shown: SpeechPhase = !on ? "disabled" : !target.ok ? "unavailable" : phase;
+    const shown: SpeechPhase = !target.ok ? "unavailable" : phase === "idle" ? (on ? "checking" : "disabled") : phase;
+    const idleMessage = on ? "Checking the local speech server." : "Cortex is not managing the local speech server.";
     return {
       phase: shown,
       keepRunning: on,
       eligible: target.ok,
-      message: !on ? "Cortex is not managing the local speech server." : !target.ok ? target.reason : message,
+      message: !target.ok ? target.reason : phase === "idle" ? idleMessage : message,
       lastError: shown === "failed" ? lastError : null,
       attempts,
       locked: attempts >= MAX_ATTEMPTS,
       container: SPEECH_CONTAINER,
       endpoint: target.ok ? new URL(target.origin).host : null,
       models: target.ok ? target.models : [],
+      port: target.ok ? target.port : settings.localSpeech.port,
+      device: settings.localSpeech.device,
+      running: serverUp,
     };
   }
 
-  const set = (p: SpeechPhase, m: string): void => {
+  const set = (p: InnerPhase, m: string): void => {
     phase = p;
     message = m;
   };
@@ -261,7 +247,7 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
     }
   }
 
-  async function healthy(target: Extract<SpeechTarget, { ok: true }>): Promise<boolean> {
+  async function healthy(target: Target): Promise<boolean> {
     const a = await get2xx(`${target.origin}/health`);
     if (a !== null) {
       await a.body?.cancel().catch(() => undefined);
@@ -275,7 +261,7 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
     return false;
   }
 
-  async function waitHealthy(target: Extract<SpeechTarget, { ok: true }>): Promise<boolean> {
+  async function waitHealthy(target: Target): Promise<boolean> {
     const stepMs = 1000;
     for (let waited = 0; waited <= healthWaitMs; waited += stepMs) {
       if (await healthy(target)) return true;
@@ -305,8 +291,11 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
     return { running: running === "true", policy, image, bindings: rest.join("|") };
   }
 
+  const isInspected = (x: Awaited<ReturnType<typeof inspect>>): x is Inspected => typeof x === "object" && !("problem" in x);
+  /** An allowlisted image: the container is Cortex's own (a name alone is not enough). */
   const ownImage = (image: string): boolean => image === SPEECH_IMAGES.cpu || image === SPEECH_IMAGES.cuda;
   const ownBinding = (bindings: string, port: number): boolean => bindings.includes(`${INNER_PORT}/tcp=127.0.0.1:${port},;`);
+  const fitsDevice = (image: string, device: LocalSpeechDevice): boolean => (device === "auto" ? ownImage(image) : image === SPEECH_IMAGES[device]);
 
   async function ensurePolicy(i: Inspected): Promise<void> {
     if (i.policy === "unless-stopped" || i.policy === "always") return;
@@ -314,24 +303,17 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
     await deps.docker.run(["update", "--restart", "unless-stopped", SPEECH_CONTAINER], 15_000);
   }
 
-  /** Start or create the container. Returns a problem sentence, or undefined when docker accepted the start. */
-  async function bringUp(target: Extract<SpeechTarget, { ok: true }>): Promise<string | undefined> {
-    const found = await inspect();
-    if (typeof found === "object" && "problem" in found) return found.problem;
-    if (found !== "missing") {
-      if (!ownImage(found.image) || !ownBinding(found.bindings, target.port)) {
-        return `A container named ${SPEECH_CONTAINER} already exists but is not the Cortex speech server (different image or port). Remove it with: docker rm -f ${SPEECH_CONTAINER}`;
+  /** Create the container for `target`. Returns a problem sentence, or undefined when docker accepted it. */
+  async function create(target: Target, device: LocalSpeechDevice): Promise<string | undefined> {
+    let gpu = false;
+    if (device !== "cpu") {
+      const info = await deps.docker.run(["info", "--format", "{{json .Runtimes}}"], 15_000);
+      if (info.code !== 0 && info.spawnError !== undefined) return dockerProblem(info);
+      gpu = info.code === 0 && /"nvidia"/.test(info.stdout);
+      if (device === "cuda" && !gpu) {
+        return "Docker lists no NVIDIA runtime, so the GPU image cannot reach the GPU. Choose CPU or Auto, or install the NVIDIA Container Toolkit, then press Retry.";
       }
-      if (!found.running) {
-        const s = await deps.docker.run(["start", SPEECH_CONTAINER], 60_000);
-        if (s.code !== 0) return dockerProblem(s);
-      }
-      await ensurePolicy(found);
-      return undefined;
     }
-    const info = await deps.docker.run(["info", "--format", "{{json .Runtimes}}"], 15_000);
-    if (info.code !== 0 && info.spawnError !== undefined) return dockerProblem(info);
-    const gpu = info.code === 0 && /"nvidia"/.test(info.stdout);
     const image = gpu ? SPEECH_IMAGES.cuda : SPEECH_IMAGES.cpu;
     const args = [
       "run",
@@ -352,7 +334,53 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
     return run.code === 0 ? undefined : dockerProblem(run);
   }
 
-  async function installedModels(target: Extract<SpeechTarget, { ok: true }>): Promise<ReadonlySet<string> | null> {
+  /** Remove Cortex's own container and create it again (port or image changed). Callers check `ownImage` first. */
+  async function recreate(target: Target, device: LocalSpeechDevice): Promise<string | undefined> {
+    const rm = await deps.docker.run(["rm", "--force", SPEECH_CONTAINER], 60_000);
+    if (rm.code !== 0) return dockerProblem(rm);
+    return create(target, device);
+  }
+
+  /** Start, re-create or create the container. Returns a problem sentence, or undefined when docker accepted the start. */
+  async function bringUp(target: Target): Promise<string | undefined> {
+    const device = deps.settings.get().localSpeech.device;
+    const found = await inspect();
+    if (found === "missing") return create(target, device);
+    if (!isInspected(found)) return found.problem;
+    if (!ownImage(found.image)) {
+      return `A container named ${SPEECH_CONTAINER} already exists but is not the Cortex speech server (its image is not one Cortex runs), so Cortex leaves it alone. Remove or rename it: docker rm -f ${SPEECH_CONTAINER}`;
+    }
+    if (!ownBinding(found.bindings, target.port) || !fitsDevice(found.image, device)) return recreate(target, device);
+    if (!found.running) {
+      const s = await deps.docker.run(["start", SPEECH_CONTAINER], 60_000);
+      if (s.code !== 0) return dockerProblem(s);
+    }
+    await ensurePolicy(found);
+    return undefined;
+  }
+
+  /**
+   * The server answers: check once (after start or a settings change) that Cortex's own container
+   * has a restart policy and runs the chosen image; re-create it when the hardware changed.
+   * Returns a problem sentence, or undefined.
+   */
+  async function checkRunning(target: Target): Promise<string | undefined> {
+    if (policyChecked) return undefined;
+    policyChecked = true;
+    const found = await inspect();
+    if (!isInspected(found) || !ownImage(found.image)) return undefined;
+    const device = deps.settings.get().localSpeech.device;
+    if (found.running && ownBinding(found.bindings, target.port) && !fitsDevice(found.image, device)) {
+      set("starting", "Switching the local speech server to the chosen hardware.");
+      const problem = await recreate(target, device);
+      if (problem !== undefined) return problem;
+      return (await waitHealthy(target)) ? undefined : "The speech server did not answer after its container was re-created. First start can take a while (image download); press Retry to keep waiting.";
+    }
+    await ensurePolicy(found);
+    return undefined;
+  }
+
+  async function installedModels(target: Target): Promise<ReadonlySet<string> | null> {
     const res = await get2xx(`${target.apiBase}/models`, 15_000);
     if (res === null) return null;
     try {
@@ -366,7 +394,7 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
   }
 
   /** Download what the server lacks. Returns a problem sentence, or undefined. */
-  async function ensureModels(target: Extract<SpeechTarget, { ok: true }>): Promise<string | undefined> {
+  async function ensureModels(target: Target): Promise<string | undefined> {
     const have = await installedModels(target);
     if (have === null) return "The speech server is up but did not list its models.";
     const missing = target.models.filter((m) => !have.has(m));
@@ -384,43 +412,81 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
     return undefined;
   }
 
-  function fail(problem: string): void {
+  function fail(problem: string): SpeechStatus {
     attempts += 1;
     lastError = scrubDockerText(problem);
     nextAttemptAt = now() + backoffBaseMs * 2 ** (attempts - 1);
     set("failed", attempts >= MAX_ATTEMPTS ? "The local speech server could not be started. Fix the problem, then press Retry." : "The local speech server is not ready yet; Cortex will try again shortly.");
+    return status();
   }
 
-  async function run(target: Extract<SpeechTarget, { ok: true }>): Promise<SpeechStatus> {
+  async function run(target: Target): Promise<SpeechStatus> {
     lastCheckAt = now();
-    if (!(phase === "ready")) set("checking", "Checking the local speech server.");
+    if (phase !== "ready") set("checking", "Checking the local speech server.");
     let up = await healthy(target);
+    serverUp = up;
     if (!up) {
       set("starting", "Starting the local speech server.");
       const problem = await bringUp(target);
-      if (problem !== undefined) {
-        fail(problem);
-        return status();
-      }
+      if (problem !== undefined) return fail(problem);
       up = await waitHealthy(target);
-      if (!up) {
-        fail("The speech server did not answer after its container started. First start can take a while (image download); press Retry to keep waiting.");
-        return status();
-      }
-    } else if (!policyChecked) {
+      serverUp = up;
+      if (!up) return fail("The speech server did not answer after its container started. First start can take a while (image download); press Retry to keep waiting.");
       policyChecked = true;
-      const found = await inspect();
-      if (typeof found === "object" && !("problem" in found) && ownImage(found.image)) await ensurePolicy(found);
+    } else {
+      const problem = await checkRunning(target);
+      if (problem !== undefined) return fail(problem);
     }
     const problem = await ensureModels(target);
-    if (problem !== undefined) {
-      fail(problem);
-      return status();
-    }
+    if (problem !== undefined) return fail(problem);
     attempts = 0;
     lastError = null;
     nextAttemptAt = 0;
+    serverUp = true;
     set("ready", "The local speech server is running.");
+    return status();
+  }
+
+  /** Run `task` after the work in flight (if any); it becomes the work in flight. */
+  function exclusive(task: () => Promise<SpeechStatus>): Promise<SpeechStatus> {
+    const prior = inflight;
+    const p: Promise<SpeechStatus> = (prior === null ? Promise.resolve() : prior.then(() => undefined, () => undefined)).then(task).finally(() => {
+      if (inflight === p) inflight = null;
+    });
+    inflight = p;
+    return p;
+  }
+
+  /** Bring `target` up, joining the work in flight. */
+  function launch(target: Target): Promise<SpeechStatus> {
+    return inflight ?? exclusive(() => run(target));
+  }
+
+  async function stopContainer(): Promise<SpeechStatus> {
+    set("stopping", "Stopping the local speech server.");
+    const target = resolveSpeechTarget(deps.settings.get());
+    const found = await inspect();
+    if (!isInspected(found) && found !== "missing") {
+      lastError = scrubDockerText(found.problem);
+      set("failed", "The local speech server could not be stopped.");
+      return status();
+    }
+    let note = "The local speech server is stopped.";
+    if (found === "missing") note = "Cortex has no speech server container to stop.";
+    else if (!ownImage(found.image)) note = `The container named ${SPEECH_CONTAINER} is not one Cortex runs, so Cortex left it alone.`;
+    else if (found.running) {
+      const r = await deps.docker.run(["stop", SPEECH_CONTAINER], 60_000);
+      if (r.code !== 0) {
+        lastError = scrubDockerText(dockerProblem(r));
+        set("failed", "The local speech server could not be stopped.");
+        return status();
+      }
+    }
+    serverUp = target.ok ? await healthy(target) : null;
+    lastProbeAt = now();
+    if (serverUp === true) note = `${note} A server Cortex did not start still answers on this port.`;
+    lastError = null;
+    set("stopped", note);
     return status();
   }
 
@@ -433,15 +499,11 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
       if (attempts >= MAX_ATTEMPTS) return Promise.resolve(status());
       if (phase === "failed" && now() < nextAttemptAt) return Promise.resolve(status());
     }
-    const p = run(target).finally(() => {
-      inflight = null;
-    });
-    inflight = p;
-    return p;
+    return launch(target);
   }
 
   function reset(): void {
-    phase = "checking";
+    phase = "idle";
     message = "";
     lastError = null;
     attempts = 0;
@@ -449,23 +511,72 @@ export function createSpeechSupervisor(deps: SpeechSupervisorDeps): SpeechSuperv
     policyChecked = false;
   }
 
+  const saveKeepRunning = (on: boolean): boolean => {
+    const s = deps.settings.get();
+    return deps.settings.set({ ...s, localSpeech: { ...s.localSpeech, keepRunning: on } });
+  };
+
+  function startServer(): SpeechAction {
+    const target = resolveSpeechTarget(deps.settings.get());
+    if (!target.ok) return { ok: false, error: target.reason };
+    attempts = 0;
+    nextAttemptAt = 0;
+    void launch(target);
+    return { ok: true, status: status() };
+  }
+
+  async function stopServer(): Promise<SpeechAction> {
+    if (keepRunning() && !saveKeepRunning(false)) return { ok: false, error: "Could not save the setting." };
+    attempts = 0;
+    nextAttemptAt = 0;
+    return { ok: true, status: await exclusive(stopContainer) };
+  }
+
   return {
     status,
+    async probe() {
+      const target = resolveSpeechTarget(deps.settings.get());
+      if (!target.ok || inflight !== null || now() - lastProbeAt < PROBE_GAP_MS) return status();
+      lastProbeAt = now();
+      serverUp = await healthy(target);
+      return status();
+    },
     ensure,
-    setKeepRunning(enabled) {
-      if (enabled && !resolveSpeechTarget(deps.settings.get()).ok) {
-        return { ok: false, error: "Set the listening or reading engine to a local Speaches endpoint first (a localhost URL with a port, ending in /v1)." };
-      }
-      if (!deps.settings.setKeepRunning(enabled)) return { ok: false, error: "Could not save the setting." };
+    async setKeepRunning(enabled) {
+      if (enabled && !resolveSpeechTarget(deps.settings.get()).ok) return { ok: false, error: NO_LOCAL_ENDPOINT };
+      if (!saveKeepRunning(enabled)) return { ok: false, error: "Could not save the setting." };
       reset();
-      if (enabled) void ensure("manual");
+      if (enabled) {
+        void ensure("manual");
+        return { ok: true, status: status() };
+      }
+      return { ok: true, status: await exclusive(stopContainer) };
+    },
+    startServer,
+    stopServer,
+    async configure(patch) {
+      const next = applyLocalSpeechConfig(deps.settings.get(), patch);
+      if (!next.ok) return { ok: false, error: next.error };
+      if (!next.changed) return { ok: true, status: status() };
+      if (!deps.settings.set(next.settings)) return { ok: false, error: "Could not save the setting." };
+      reset();
+      serverUp = null;
+      const found = await inspect();
+      const ownRunning = isInspected(found) && ownImage(found.image) && found.running;
+      const target = resolveSpeechTarget(next.settings);
+      // Bring it back on the new port / image when it ran, or when Cortex keeps it running.
+      // Queued after any work in flight, which ran on the old settings.
+      if (target.ok && (ownRunning || next.settings.localSpeech.keepRunning)) void exclusive(() => run(target));
       return { ok: true, status: status() };
     },
-    retry: () => {
+    retry() {
       attempts = 0;
       nextAttemptAt = 0;
-      return ensure("manual");
+      if (keepRunning()) return ensure("manual");
+      const target = resolveSpeechTarget(deps.settings.get());
+      return target.ok ? launch(target) : Promise.resolve(status());
     },
+    settled: () => inflight ?? Promise.resolve(status()),
     supervises(direction) {
       if (!keepRunning()) return false;
       const t = resolveSpeechTarget(deps.settings.get());

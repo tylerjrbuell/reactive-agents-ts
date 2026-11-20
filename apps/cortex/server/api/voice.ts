@@ -7,10 +7,10 @@
  * - POST /speak               { text, voice?, speed? } -> audio bytes (mp3)
  * - GET  /voices              { voices: [{ id, label }], listed }  (the speech server's list, else OpenAI's names)
  * - POST /test/:direction     stt | tts -> { ok, ... } using the saved settings (a short silent clip / a short phrase)
- * - GET  /local/status        the local speech server supervisor's state (`speech-supervisor.ts`)
- * - POST /local/ensure        retry now (Retry button); answers at once with the state, the work continues
- * - POST /local/keep-running  { enabled } the opt-in to let Cortex run docker for the local Speaches server
+ * - GET  /models/:direction   { installed, available, listed } the speech server's models (`speech-models.ts`)
+ * - /local/*                  the local speech server supervisor (`api/voice-local.ts`, `speech-supervisor.ts`)
  *   When the server is unreachable and the opt-in covers it, /transcribe, /speak and /test bring it back and retry once.
+ *   The supervised endpoint is called as 127.0.0.1 whatever loopback form was saved (`supervisedBaseUrl`).
  *
  * The browser never sees an endpoint key: keys are saved through `/api/settings/keys/voice-stt|voice-tts`
  * (the encrypted provider-key store) and read here, on the server. Audio is relayed and never stored.
@@ -29,7 +29,9 @@ import {
   type AudioEndpoint,
 } from "../services/voice/openai-compatible.js";
 import { readCappedBytes } from "../services/voice/capped-body.js";
-import type { SpeechSupervisor } from "../services/voice/speech-supervisor.js";
+import { supervisedBaseUrl, type SpeechSupervisor } from "../services/voice/speech-supervisor.js";
+import { listSpeechModels } from "../services/voice/speech-models.js";
+import { voiceLocalRouter } from "./voice-local.js";
 import { mergeVoiceSettings, type VoiceSettings, type VoiceSettingsStore } from "../services/voice/voice-settings.js";
 import { VOICE_STT_KEY_ID, VOICE_TTS_KEY_ID, type ProviderKeyStatus, type ProviderKeyStore } from "../services/provider-key-store.js";
 
@@ -82,10 +84,11 @@ const NOT_SET_UP = {
 /** Build the router. */
 export function voiceRouter(deps: VoiceRouterDeps) {
   const endpoint = (dir: "stt" | "tts", signal?: AbortSignal): AudioEndpoint | null => {
-    const s = deps.settings.get()[dir];
+    const settings = deps.settings.get();
+    const s = settings[dir];
     if (s.baseUrl === "") return null;
     const apiKey = voiceKey(deps.keys, dir === "stt" ? VOICE_STT_KEY_ID : VOICE_TTS_KEY_ID);
-    return { baseUrl: s.baseUrl, apiKey, model: s.model, fetch: deps.fetch, signal };
+    return { baseUrl: supervisedBaseUrl(settings, dir) ?? s.baseUrl, apiKey, model: s.model, fetch: deps.fetch, signal };
   };
   const keyView = (id: typeof VOICE_STT_KEY_ID | typeof VOICE_TTS_KEY_ID): ProviderKeyStatus | null => {
     const r = deps.keys.status(id);
@@ -104,39 +107,23 @@ export function voiceRouter(deps: VoiceRouterDeps) {
     const st = await deps.supervisor.ensure("use");
     return st.phase === "ready" ? attempt() : first;
   };
-  const dockerRefusal = { error: "Cortex is reachable from other machines without an access token, so it will not run docker. Set CORTEX_TOKEN." } as const;
-
-  return new Elysia({ prefix: "/api/voice" })
+  const main = new Elysia({ prefix: "/api/voice" })
     .get("/settings", () => {
       deps.supervisor.touch();
       return view();
     })
-    .get("/local/status", () => deps.supervisor.status())
-    .post("/local/ensure", ({ set }) => {
-      if (!deps.allowDocker) {
-        set.status = 403;
-        return dockerRefusal;
+    .get("/models/:direction", async ({ params, request, set }) => {
+      if (params.direction !== "stt" && params.direction !== "tts") {
+        set.status = 400;
+        return { error: "direction must be stt or tts" };
       }
-      const pending = deps.supervisor.retry();
-      void pending.catch(() => undefined);
-      return deps.supervisor.status();
+      const ep = endpoint(params.direction, request.signal);
+      if (ep === null) {
+        set.status = 400;
+        return { error: NOT_SET_UP[params.direction] };
+      }
+      return listSpeechModels(ep, params.direction === "stt" ? "automatic-speech-recognition" : "text-to-speech");
     })
-    .post(
-      "/local/keep-running",
-      ({ body, set }) => {
-        if (!deps.allowDocker) {
-          set.status = 403;
-          return dockerRefusal;
-        }
-        const r = deps.supervisor.setKeepRunning(body.enabled);
-        if (!r.ok) {
-          set.status = 400;
-          return { error: r.error };
-        }
-        return r.status;
-      },
-      { body: t.Object({ enabled: t.Boolean() }) },
-    )
     .put(
       "/settings",
       async ({ body, set }) => {
@@ -268,4 +255,5 @@ export function voiceRouter(deps: VoiceRouterDeps) {
           : { ok: false, message: "The speech server answered with no audio." };
       },
     );
+  return new Elysia().use(voiceLocalRouter({ supervisor: deps.supervisor, allowDocker: deps.allowDocker })).use(main);
 }
