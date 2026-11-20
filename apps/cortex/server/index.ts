@@ -7,6 +7,7 @@ import { messagesRouter } from "./api/messages.js";
 import { agentsRouter } from "./api/agents.js";
 import { toolsRouter } from "./api/tools.js";
 import { mcpServersRouter } from "./api/mcp-servers.js";
+import { mcpOAuthRouter } from "./api/mcp-oauth.js";
 import { skillsRouter } from "./api/skills.js";
 import { modelsRouter } from "./api/models.js";
 import { modelThroughputRouter } from "./api/model-throughput.js";
@@ -187,6 +188,8 @@ export async function startCortexServer(
   const guard = { ...guardConfigFromEnv(env.raw), ...(token ? { token } : {}) };
   // Opt-in supervisor for a local Speaches container (services/voice/speech-supervisor.ts); inert until the user turns it on.
   const voiceSettings = new VoiceSettingsStore(dirname(resolvedConfig.dbPath));
+  // Loopback bind or an access token: this Cortex may run docker and bind local ports for OAuth sign-in.
+  const localActionsAllowed = isLoopbackHost(resolveCortexHostname(config.hostname, env.raw)) || token !== undefined;
   const speechSupervisor = createSpeechSupervisor({ settings: voiceSettings, docker: execDockerRunner });
   const app = new Elysia()
     .onRequest(({ request }) => guardRequest(request, guard))
@@ -194,7 +197,7 @@ export async function startCortexServer(
     .use(providerKeysRouter(providerKeys))
     .use(judgmentRouter(providerKeys))
     .use(ollamaSettingsRouter(ollamaEndpoint))
-    .use(voiceRouter({ settings: voiceSettings, keys: providerKeys, supervisor: speechSupervisor, allowDocker: isLoopbackHost(resolveCortexHostname(config.hostname, env.raw)) || token !== undefined }))
+    .use(voiceRouter({ settings: voiceSettings, keys: providerKeys, supervisor: speechSupervisor, allowDocker: localActionsAllowed }))
     // One `.use` for two routers: this chain is at the compiler's type-depth limit.
     .use(new Elysia().use(capabilitiesRouter).use(strategyConflictRouter))
     .use(runsRouter(runtime.storeLayer, runtime.runnerLayer))
@@ -205,7 +208,8 @@ export async function startCortexServer(
     .use(channelHubRouter(runtime.rawDb, runtime.hub, new ChannelCredentials(providerKeys)))
     .use(webhookChannelRouter(runtime.rawDb, new ChannelCredentials(providerKeys), { hub: runtime.hub }))
     .use(toolsRouter(runtime.storeLayer, runtime.rawDb))
-    .use(mcpServersRouter(runtime.rawDb))
+    // One `.use` for two routers (type-depth limit); OAuth sign-in binds a local port, so the same rule as docker.
+    .use(new Elysia().use(mcpServersRouter(runtime.rawDb)).use(mcpOAuthRouter(runtime.rawDb, { allowLocalAuth: localActionsAllowed })))
     .use(skillsRouter(runtime.storeLayer, runtime.rawDb))
     .use(modelsRouter)
     .use(modelThroughputRouter(runtime.rawDb))

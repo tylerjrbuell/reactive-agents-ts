@@ -233,7 +233,8 @@ export const mcpServersRouter = (
           set.status = 404;
           return { error: "MCP server not found" };
         }
-        if (!out.ok) return { ok: false as const, error: out.error, checkedAt: out.checkedAt };
+        // `authRequired`: the server refused for lack of a login; the UI offers Sign in (api/mcp-oauth.ts).
+        if (!out.ok) return { ok: false as const, error: out.error, checkedAt: out.checkedAt, ...(out.authRequired ? { authRequired: true as const } : {}) };
         return {
           ok: true as const,
           checkedAt: out.checkedAt,
@@ -263,7 +264,7 @@ export const mcpServersRouter = (
           recordMcpCheck(db, params.serverId, { status: "error", error: result.error });
           cortexLog("error", "mcp", `refresh-tools "${cfg.name}" FAILED`);
           set.status = 502;
-          return { error: result.error };
+          return { error: result.error, ...(result.authRequired ? { authRequired: true as const } : {}) };
         }
         replaceMcpCachedTools(db, params.serverId, result.tools);
         recordMcpCheck(db, params.serverId, { status: "ok" });

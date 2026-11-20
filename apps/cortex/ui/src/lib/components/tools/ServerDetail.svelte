@@ -13,6 +13,8 @@
   import ServerToolsPane from "$lib/components/tools/ServerToolsPane.svelte";
   import ServerOptionsPane from "$lib/components/tools/ServerOptionsPane.svelte";
   import ServerCredentialsPane from "$lib/components/tools/ServerCredentialsPane.svelte";
+  import ServerSignIn from "$lib/components/tools/ServerSignIn.svelte";
+  import type { McpServerAuth } from "$lib/mcp-oauth-view.js";
   import { DETAIL_TABS, failureOf, serverListRow, testOutcomeText, type DetailTab, type TestReply } from "$lib/mcp-servers-view.js";
   import { tabPanelId, tabId } from "$lib/tablist.js";
   import type { McpDraft, McpListRow, McpToolDetail, secretsPayload } from "$lib/tool-workshop.js";
@@ -40,8 +42,18 @@
     onRemove: () => void;
     onSaveOptions: (draft: McpDraft) => void | Promise<void>;
     onSaveCredentials: (payload: NonNullable<ReturnType<typeof secretsPayload>>) => void | Promise<void>;
+    /** OAuth sign-in state; absent for servers sign-in does not apply to (stdio, machine grants). */
+    auth?: McpServerAuth;
+    /** A sign-in, cancel or sign-out call is running. */
+    authBusy?: boolean;
+    onSignIn?: () => void;
+    onCancelSignIn?: () => void;
+    onSignOut?: () => void;
   }
-  const { row, tools, toolsError = null, testResult, testing, refreshing, saving, now = Date.now(), checking = false, credentialsVersion = 0, onTest, onRefresh, onToggleEnabled, onEdit, onRemove, onSaveOptions, onSaveCredentials }: Props = $props();
+  const { row, tools, toolsError = null, testResult, testing, refreshing, saving, now = Date.now(), checking = false, credentialsVersion = 0, onTest, onRefresh, onToggleEnabled, onEdit, onRemove, onSaveOptions, onSaveCredentials, auth, authBusy = false, onSignIn = () => undefined, onCancelSignIn = () => undefined, onSignOut = () => undefined }: Props = $props();
+
+  /** The last check or Test said "sign in first", and no login is stored yet. */
+  const wantsSignIn = $derived(auth !== undefined && auth.state === "absent" && (auth.authRequired || (testResult !== null && !testResult.ok && testResult.authRequired === true)));
 
   let tab = $state<DetailTab>("tools");
   const view = $derived(serverListRow(row, now, checking));
@@ -72,6 +84,10 @@
     <p class="sd-test" class:bad={!testResult.ok} role="status" data-testid="server-test-result">{testOutcomeText(testResult)}</p>
   {/if}
 
+  {#if auth && enabled}
+    <ServerSignIn {auth} {now} busy={authBusy} onSignIn={onSignIn} onCancel={onCancelSignIn} onSignOut={onSignOut} />
+  {/if}
+
   {#if !enabled}
     <div class="sd-card" data-testid="server-disabled-card">
       <p>This server is switched off. An agent never starts it, so its tools are not offered anywhere.</p>
@@ -79,8 +95,9 @@
     </div>
   {:else if failure}
     <div class="sd-card bad" role="alert" data-testid="server-failed-card">
-      <p class="sd-why">{failure}</p>
+      <p class="sd-why">{wantsSignIn ? "This server asks you to sign in before it answers. Sign in, then Retry." : failure}</p>
       <div class="sd-card-actions">
+        {#if wantsSignIn}<Button size="sm" variant="primary" disabled={authBusy} onclick={onSignIn}>Sign in</Button>{/if}
         <Button size="sm" icon="retry" disabled={testing} onclick={onTest}>Retry</Button>
         <Button size="sm" icon="edit" onclick={onEdit}>Edit config</Button>
       </div>

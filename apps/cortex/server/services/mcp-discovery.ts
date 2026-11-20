@@ -29,6 +29,9 @@ export function discoverMcpTools(config: MCPServerConfig): Promise<DiscoveredMcp
         ...(config.cwd !== undefined ? { cwd: config.cwd } : {}),
         ...(config.env !== undefined ? { env: config.env } : {}),
         ...(config.headers !== undefined ? { headers: config.headers } : {}),
+        // The saved OAuth config (e.g. a static authorization_code client) is what an agent connects
+        // with, so Test / Refresh use it too; without it a URL-only server uses a stored login.
+        ...(config.auth !== undefined ? { auth: config.auth } : {}),
       } as Parameters<typeof client.connect>[0]);
       const schemas = server.toolSchemas ?? [];
       const out: DiscoveredMcpTool[] = [];

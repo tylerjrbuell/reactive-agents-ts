@@ -6,6 +6,7 @@
  */
 import type { CatalogEntry, CatalogParam, McpListRow, McpToolDetail } from "./tool-workshop.js";
 import type { TestReply } from "./mcp-servers-view.js";
+import { loginsReplyOf, serverAuthOf, type McpLoginsReply, type McpServerAuth } from "./mcp-oauth-view.js";
 
 /** A call's outcome. */
 export type ApiResult<T> = { readonly ok: true; readonly value: T } | { readonly ok: false; readonly error: string };
@@ -58,8 +59,35 @@ export const testServer = (ctx: ApiCtx, serverId: string, opts: { readonly timeo
     (j): TestReply =>
     j.ok === true
       ? { ok: true, toolCount: typeof j.toolCount === "number" ? j.toolCount : 0, checkedAt: typeof j.checkedAt === "number" ? j.checkedAt : Date.now() }
-      : { ok: false, error: typeof j.error === "string" ? j.error : "The test failed." },
+      : { ok: false, error: typeof j.error === "string" ? j.error : "The test failed.", ...(j.authRequired === true ? { authRequired: true } : {}) },
   );
+
+/** GET /api/mcp-logins: each sign-in capable server's state, and stored logins no saved server uses. */
+export const fetchMcpLogins = (ctx: ApiCtx): Promise<ApiResult<McpLoginsReply>> => call(ctx, "/api/mcp-logins", undefined, loginsReplyOf);
+
+/** GET /api/mcp-servers/:id/oauth: one server's sign-in state (polled while a sign-in waits). */
+export const fetchServerAuth = (ctx: ApiCtx, serverId: string): Promise<ApiResult<McpServerAuth | null>> =>
+  call(ctx, `/api/mcp-servers/${encodeURIComponent(serverId)}/oauth`, undefined, (j) => serverAuthOf(j) ?? null);
+
+/** What starting a sign-in answers: the link to open, or already signed in. */
+export type SignInStart = { readonly status: "pending"; readonly authorizationUrl: string } | { readonly status: "signed-in" };
+
+/** POST /api/mcp-servers/:id/oauth/login: start (or join) a sign-in. */
+export const startServerSignIn = (ctx: ApiCtx, serverId: string): Promise<ApiResult<SignInStart>> =>
+  call(ctx, `/api/mcp-servers/${encodeURIComponent(serverId)}/oauth/login`, send("POST"), (j): SignInStart =>
+    j.status === "pending" && typeof j.authorizationUrl === "string" ? { status: "pending", authorizationUrl: j.authorizationUrl } : { status: "signed-in" },
+  );
+
+/** POST /api/mcp-servers/:id/oauth/cancel: stop a pending sign-in. */
+export const cancelServerSignIn = (ctx: ApiCtx, serverId: string): Promise<ApiResult<boolean>> =>
+  call(ctx, `/api/mcp-servers/${encodeURIComponent(serverId)}/oauth/cancel`, send("POST"), (j) => j.cancelled === true);
+
+/** POST /api/mcp-servers/:id/oauth/logout: sign out (revoked where the server supports it, always deleted here). */
+export const signOutServer = (ctx: ApiCtx, serverId: string): Promise<ApiResult<{ removed: boolean; revocation: string }>> =>
+  call(ctx, `/api/mcp-servers/${encodeURIComponent(serverId)}/oauth/logout`, send("POST"), (j) => ({
+    removed: j.removed === true,
+    revocation: typeof j.revocation === "string" ? j.revocation : "none",
+  }));
 
 /** POST /:id/refresh-tools: list the tools again and store them. Answers the tool count. */
 export const refreshServerTools = (ctx: ApiCtx, serverId: string): Promise<ApiResult<number>> =>

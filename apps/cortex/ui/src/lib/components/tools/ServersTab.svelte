@@ -29,8 +29,14 @@
     saveServerSecrets,
     setServerEnabled,
     testServer,
+    fetchMcpLogins,
+    fetchServerAuth,
+    startServerSignIn,
+    cancelServerSignIn,
+    signOutServer,
     type ApiCtx,
   } from "$lib/tools-page-data.js";
+  import { draftFromLogin, signInPending, SIGN_IN_POLL_MS, type McpLoginsReply, type McpServerAuth, type McpUnusedLogin } from "$lib/mcp-oauth-view.js";
   import { EMPTY_MCP_DRAFT, buildMcpPayload, mcpDraftFromRow, mcpDraftJsonError, type McpDraft, type McpListRow, type McpToolDetail, type secretsPayload } from "$lib/tool-workshop.js";
 
   interface Props {
@@ -230,6 +236,83 @@
     await onChanged();
   }
 
+  // OAuth sign-in (framework flow, loopback redirect): state per server and the unused rax logins.
+  let oauth = $state<McpLoginsReply>({ servers: {}, unused: [] });
+  let authBusy = $state(false);
+
+  async function loadAuth() {
+    const r = await fetchMcpLogins(ctx);
+    if (r.ok) oauth = r.value;
+  }
+
+  $effect(() => {
+    void servers;
+    untrack(() => void loadAuth());
+  });
+
+  function setAuth(serverId: string, auth: McpServerAuth) {
+    oauth = { ...oauth, servers: { ...oauth.servers, [serverId]: auth } };
+  }
+
+  /** After a sign-in lands: list the tools with the new login. */
+  function signedIn(row: McpListRow) {
+    toast.success(`Signed in to ${row.name}`, "Listing its tools.");
+    void loadAuth();
+    void discover(row.serverId, row.name);
+  }
+
+  // While the selected server's sign-in waits for the browser, poll its state until it settles.
+  $effect(() => {
+    const row = selected;
+    if (row === null || !signInPending(oauth.servers[row.serverId])) return;
+    const timer = setInterval(async () => {
+      const r = await fetchServerAuth(ctx, row.serverId);
+      if (!r.ok || r.value === null) return;
+      const auth = r.value;
+      setAuth(row.serverId, auth);
+      if (signInPending(auth)) return;
+      if (auth.state === "signed-in") signedIn(row);
+      else if (auth.signIn?.phase === "failed") toast.error("Sign-in failed", auth.signIn.error);
+    }, SIGN_IN_POLL_MS);
+    return () => clearInterval(timer);
+  });
+
+  async function signIn(row: McpListRow) {
+    authBusy = true;
+    const r = await startServerSignIn(ctx, row.serverId);
+    authBusy = false;
+    if (!r.ok) return void toast.error("Sign-in failed", r.error);
+    if (r.value.status === "signed-in") return signedIn(row);
+    // The link also stays on the page, so a blocked pop-up is not a dead end.
+    window.open(r.value.authorizationUrl, "_blank", "noopener,noreferrer");
+    const s = await fetchServerAuth(ctx, row.serverId);
+    if (s.ok && s.value) setAuth(row.serverId, s.value);
+  }
+
+  async function cancelSignIn(row: McpListRow) {
+    authBusy = true;
+    const r = await cancelServerSignIn(ctx, row.serverId);
+    authBusy = false;
+    if (!r.ok) toast.error("Could not cancel", r.error);
+    await loadAuth();
+  }
+
+  async function signOut(row: McpListRow) {
+    authBusy = true;
+    const r = await signOutServer(ctx, row.serverId);
+    authBusy = false;
+    if (!r.ok) return void toast.error("Sign-out failed", r.error);
+    toast.success(`Signed out of ${row.name}`, r.value.revocation === "revoked" ? "The server revoked the login." : "The login was removed from this computer.");
+    await loadAuth();
+  }
+
+  /** "Signed in with rax" > Add: the form prefilled with the login's name, URL and transport. */
+  function addFromLogin(login: McpUnusedLogin) {
+    addMode = "form";
+    editing = null;
+    draft = draftFromLogin(login);
+  }
+
   async function saveCredentials(row: McpListRow, payload: NonNullable<ReturnType<typeof secretsPayload>>) {
     busy = "pane";
     const r = await saveServerSecrets(ctx, row.serverId, payload);
@@ -257,7 +340,7 @@
     {/if}
   {/snippet}
   {#snippet list()}
-    <ServerList {servers} {loading} selectedId={selected?.serverId ?? null} {search} {checking} now={clock} onSelect={select} />
+    <ServerList {servers} {loading} selectedId={selected?.serverId ?? null} {search} {checking} now={clock} onSelect={select} auth={oauth.servers} logins={oauth.unused} onAddLogin={addFromLogin} />
   {/snippet}
   {#snippet detail()}
     {#if addMode}
@@ -292,6 +375,11 @@
           onRemove={() => remove(selected)}
           onSaveOptions={(d) => saveOptions(selected, d)}
           onSaveCredentials={(p) => saveCredentials(selected, p)}
+          auth={oauth.servers[selected.serverId]}
+          {authBusy}
+          onSignIn={() => signIn(selected)}
+          onCancelSignIn={() => cancelSignIn(selected)}
+          onSignOut={() => signOut(selected)}
         />
       {/key}
     {:else if !loading}

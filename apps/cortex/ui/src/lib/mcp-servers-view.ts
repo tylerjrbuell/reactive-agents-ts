@@ -156,10 +156,14 @@ export function failureOf(row: Pick<McpListRow, "enabled" | "lastStatus" | "last
 }
 
 /** Result of Test as the page shows it. */
-export type TestReply = { readonly ok: true; readonly toolCount: number; readonly checkedAt: number } | { readonly ok: false; readonly error: string };
+export type TestReply =
+  | { readonly ok: true; readonly toolCount: number; readonly checkedAt: number }
+  /** `authRequired`: the server refused for lack of a login; the page offers Sign in. */
+  | { readonly ok: false; readonly error: string; readonly authRequired?: boolean };
 
 /** One inline line for a test result: the tool count, or the scrubbed error. */
 export function testOutcomeText(r: TestReply): string {
+  if (!r.ok && r.authRequired === true) return "Sign-in required: the server refused without a login. Sign in, then test again.";
   return r.ok ? `Connected: ${toolCountText(r.toolCount)}` : `Failed: ${r.error}`;
 }
 

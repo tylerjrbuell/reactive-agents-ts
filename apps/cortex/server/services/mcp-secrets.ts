@@ -13,7 +13,12 @@ import type { MCPServerConfig } from "@reactive-agents/runtime";
 /** What a stored secret looks like in a response. Never a real credential. */
 export const MCP_SECRET_MASK = "••••••••";
 
-type McpAuth = NonNullable<MCPServerConfig["auth"]>;
+/** An OAuth config object. `auth: false` (never reuse a stored login) holds no secret. */
+type McpAuth = Exclude<NonNullable<MCPServerConfig["auth"]>, false>;
+
+/** The auth config object of a saved server, or undefined for none / `false`. */
+export const mcpAuthObjectOf = (auth: unknown): McpAuth | undefined =>
+  auth !== null && typeof auth === "object" && !Array.isArray(auth) && "type" in auth && typeof auth.type === "string" ? (auth as McpAuth) : undefined;
 
 const maskValues = (rec: Readonly<Record<string, string>>): Record<string, string> =>
   Object.fromEntries(Object.keys(rec).map((k) => [k, MCP_SECRET_MASK]));
@@ -36,7 +41,8 @@ export function maskMcpConfig(cfg: MCPServerConfig): MCPServerConfig {
   const out: MCPServerConfig = { ...cfg };
   if (cfg.env !== undefined) out.env = maskValues(cfg.env);
   if (cfg.headers !== undefined) out.headers = maskValues(cfg.headers);
-  if (cfg.auth !== undefined) out.auth = maskAuth(cfg.auth);
+  const auth = mcpAuthObjectOf(cfg.auth);
+  if (auth !== undefined) out.auth = maskAuth(auth);
   return out;
 }
 
@@ -136,6 +142,7 @@ export function restoreMaskedMcpConfig(incoming: MCPServerConfig, stored: MCPSer
     if (Object.keys(headers).length > 0) out.headers = headers;
     else delete out.headers;
   }
-  if (incoming.auth !== undefined) out.auth = restoreAuth(incoming.auth, stored?.auth);
+  const auth = mcpAuthObjectOf(incoming.auth);
+  if (auth !== undefined) out.auth = restoreAuth(auth, mcpAuthObjectOf(stored?.auth));
   return out;
 }

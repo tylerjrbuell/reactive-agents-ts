@@ -8,7 +8,8 @@ import { cleanupMcpTransport } from "@reactive-agents/tools";
 import type { MCPServerConfig } from "@reactive-agents/runtime";
 import { discoverMcpTools, type DiscoveredMcpTool } from "./mcp-discovery.js";
 import { sanitizedCause } from "./channel-hub-failure.js";
-import { MCP_SECRET_MASK } from "./mcp-secrets.js";
+import { MCP_SECRET_MASK, mcpAuthObjectOf } from "./mcp-secrets.js";
+import { authRequiredLine, isMcpAuthRequired } from "./mcp-auth-required.js";
 
 /** 10-minute hard cap: covers the worst-case first `docker pull` of a large image. */
 export const MCP_DISCOVERY_TIMEOUT_MS = 600_000;
@@ -26,14 +27,18 @@ export const defaultMcpProbeDeps: McpProbeDeps = {
   timeoutMs: MCP_DISCOVERY_TIMEOUT_MS,
 };
 
+/**
+ * A probe's answer. `authRequired` = the server refused for lack of a login (`mcp-auth-required.ts`);
+ * the error line then starts with `AUTH_REQUIRED_PREFIX` so the stored status keeps that fact.
+ */
 export type McpProbeResult =
   | { readonly ok: true; readonly tools: DiscoveredMcpTool[] }
-  | { readonly ok: false; readonly error: string };
+  | { readonly ok: false; readonly error: string; readonly authRequired?: true };
 
 /** Every credential value the config holds (env, headers, OAuth secrets). */
 const secretValuesOf = (cfg: MCPServerConfig): string[] => {
   const out = [...Object.values(cfg.env ?? {}), ...Object.values(cfg.headers ?? {})];
-  const auth = cfg.auth;
+  const auth = mcpAuthObjectOf(cfg.auth);
   if (auth !== undefined) {
     if ("clientSecret" in auth && typeof auth.clientSecret === "string") out.push(auth.clientSecret);
     if ("privateKey" in auth && typeof auth.privateKey === "string") out.push(auth.privateKey);
@@ -82,7 +87,8 @@ export async function probeMcpServer(
     }
     return { ok: true, tools: settled };
   } catch (e) {
-    return { ok: false, error: scrubMcpError(e, cfg) };
+    const error = scrubMcpError(e, cfg);
+    return isMcpAuthRequired(e) ? { ok: false, error: authRequiredLine(error), authRequired: true } : { ok: false, error };
   } finally {
     clearTimeout(timeoutId);
     if (opts.alwaysCleanup === true) deps.cleanup(cfg.name);

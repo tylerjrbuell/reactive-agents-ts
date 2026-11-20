@@ -10,6 +10,8 @@
   import Status from "$lib/components/kit/Status.svelte";
   import CheckingChip from "$lib/components/tools/CheckingChip.svelte";
   import { filterServers, QUICK_ADD_EXAMPLE, serverListRow } from "$lib/mcp-servers-view.js";
+  import RaxLogins from "$lib/components/tools/RaxLogins.svelte";
+  import { authChip, type McpServerAuth, type McpUnusedLogin } from "$lib/mcp-oauth-view.js";
   import type { McpListRow } from "$lib/tool-workshop.js";
 
   interface Props {
@@ -23,9 +25,19 @@
     onSelect: (serverId: string) => void;
     /** Clock for "checked 2 minutes ago" (tests pass a fixed one). */
     now?: number;
+    /** OAuth sign-in state by server id (sign-in capable servers only). */
+    auth?: Readonly<Record<string, McpServerAuth>>;
+    /** Stored logins no saved server uses ("Signed in with rax"). */
+    logins?: readonly McpUnusedLogin[];
+    onAddLogin?: (login: McpUnusedLogin) => void;
   }
-  let { servers, loading, selectedId, search = "", checking = new Set<string>(), onSelect, now = Date.now() }: Props = $props();
+  let { servers, loading, selectedId, search = "", checking = new Set<string>(), onSelect, now = Date.now(), auth = {}, logins = [], onAddLogin = () => undefined }: Props = $props();
 
+  /** " · Signed in" (or another sign-in state) after the meta line, else nothing. */
+  const signInText = (serverId: string): string => {
+    const label = authChip(auth[serverId])?.label;
+    return label ? ` · ${label}` : "";
+  };
   const rows = $derived(filterServers(servers, search).map((r) => serverListRow(r, now, checking.has(r.serverId))));
 </script>
 
@@ -51,12 +63,13 @@
               <span class="sl-name">{r.name}</span>
               {#if r.checking}<CheckingChip />{:else}<Status tone={r.tone} label={r.label} />{/if}
             </span>
-            <span class="sl-meta">{r.toolText}{r.checkedText ? ` · ${r.checkedText}` : ""}</span>
+            <span class="sl-meta">{r.toolText}{r.checkedText ? ` · ${r.checkedText}` : ""}{signInText(r.serverId)}</span>
           </button>
         </li>
       {/each}
     </ul>
   {/if}
+  {#if !loading}<RaxLogins {logins} onAdd={onAddLogin} />{/if}
 </div>
 
 <style>

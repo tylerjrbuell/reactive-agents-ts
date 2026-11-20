@@ -19,7 +19,7 @@ export const MIN_PROBE_TIMEOUT_MS = 1_000;
 /** What a test answers. A failed probe is an answer, not an error. */
 export type McpTestOutcome =
   | { readonly ok: true; readonly checkedAt: number; readonly tools: readonly DiscoveredMcpTool[] }
-  | { readonly ok: false; readonly checkedAt: number; readonly error: string };
+  | { readonly ok: false; readonly checkedAt: number; readonly error: string; readonly authRequired?: true };
 
 /** A requested time cap kept inside [1 s, the 10-minute manual cap]; absent = the manual cap. */
 export const clampProbeTimeoutMs = (requested: number | undefined, manualCapMs: number = MCP_DISCOVERY_TIMEOUT_MS): number =>
@@ -44,7 +44,7 @@ export function makeMcpServerTester(db: Db, deps: McpProbeDeps): McpServerTester
     if (!result.ok) {
       recordMcpCheck(db, serverId, { status: "error", error: result.error }, checkedAt);
       cortexLog("warn", "mcp", `test "${name}" failed`);
-      return { ok: false, checkedAt, error: result.error };
+      return { ok: false, checkedAt, error: result.error, ...(result.authRequired ? { authRequired: true as const } : {}) };
     }
     recordMcpCheck(db, serverId, { status: "ok" }, checkedAt);
     return { ok: true, checkedAt, tools: result.tools };
