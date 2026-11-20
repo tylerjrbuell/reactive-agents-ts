@@ -664,3 +664,24 @@ No code-ready singleton remains above score ~3 without a design pass.
 - **Sprint 3 — reach:** MCP server package (expose `agent.run` as an MCP tool, streaming progress as notifications).
 
 No GH issues filed this pass (pending owner confirmation).
+
+## 2026-11-20 sweep — one concept, three homes (CLI · Cortex · builder)
+
+Focus (owner): gaps shaped like MCP OAuth, where the CLI, Cortex and builder code each hold their own copy of a concept and nothing links them. Sources: code grep of apps/cli, apps/cortex/server, packages/runtime and packages/tools (targeted, not exhaustive); open GH issues (titles only); this session's findings. DISCOVER (health sweep / architecture audit) was not run this pass. Score = blast × frequency × inverse cost (1–3 each).
+
+| # | Gap | Evidence | Score | State |
+|---|---|---|---|---|
+| A | MCP servers + OAuth live in three places: `rax run` reads `.rax/mcp.json` from cwd (`apps/cli/src/commands/run.ts:161`), Cortex keeps `cortex_mcp_servers` in its DB, code uses `.withMCP`; a login is used only when `config.auth` is set (`packages/tools/src/mcp/mcp-client.ts:549`) | VERIFIED | 27 | in progress (tools-warden: `mcpLogin`, auto-use stored login, `listMcpLogins`) |
+| B | Portable agent file. The framework has `ReactiveAgents.fromConfig/fromJSON`, `agentConfigToJSON` (`packages/runtime/src/index.ts:229-238`), but `rax run` takes no agent file (only `--mcp-config`), and Cortex's JSON export is "the Lab's import envelope" (`AgentExportModal.svelte:5`), not the framework `AgentConfig`. A Cortex-designed agent cannot run from the CLI/CI/a server without exporting TypeScript | VERIFIED | 27 | open |
+| C | Provider keys: Cortex seals keys in `provider-keys.json` beside its DB (`apps/cortex/server/services/provider-key-store.ts`); the CLI and code read env/.env only. A key saved in Cortex is invisible to `rax run` and to code | VERIFIED | 18 | open |
+| D | Cortex state is per-cwd: default `dbPath: ".cortex/cortex.db"` (`apps/cortex/server/types.ts:33`), and `rax cortex` passes none (`apps/cli/src/commands/cortex.ts:122`), so starting it from another folder shows a different desk, keys, MCP servers and agents | VERIFIED | 12 | open, needs go/no-go (per-project vs per-user is a product call) |
+| E | Run history from code: runs without `.withCortex()` never reach Cortex; durable records sit at `~/.reactive-agents/<agentId>/runs.db` and traces are read by `rax-diagnose`, but Cortex cannot open either | UNVERIFIED (sampled out) | — | — |
+
+Needs go/no-go: D (one user-level home `~/.reactive-agents/` for Cortex state, keys and MCP, vs per-project `.cortex/`).
+
+Sprints:
+- **Sprint 1 — one user home:** A (finish), C (user-level key store shared by CLI, Cortex and an opt-in builder hook, OS keychain where available), D decision.
+- **Sprint 2 — agents travel:** B: Cortex exports/imports framework `AgentConfig` JSON; `rax run --agent agent.json` and `rax serve --agent`; round-trip test Cortex ⇄ JSON ⇄ builder.
+- **Sprint 3 — see every run:** E grounded first, then Cortex opens local durable runs and trace files.
+
+No GH issues filed this pass (pending owner go-ahead).
