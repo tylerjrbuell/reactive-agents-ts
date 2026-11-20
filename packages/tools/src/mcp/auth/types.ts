@@ -110,6 +110,23 @@ export interface StoredMcpCredentials {
   readonly discoveryState?: OAuthDiscoveryState;
   readonly resourceUrl: string;
   readonly savedAt: number;
+  /**
+   * Non-secret facts about the login that produced this record, written by
+   * `mcpLogin`. Optional and additive: records saved before it existed (or by
+   * a plain `connect()`) have none and still load.
+   */
+  readonly login?: McpLoginMetadata;
+}
+
+/** Non-secret server facts `mcpLogin` records beside the token, for listing logins. */
+export interface McpLoginMetadata {
+  /** Display name the caller gave the server, if any. */
+  readonly name?: string;
+  readonly transport: "streamable-http" | "sse";
+  /** Statically configured client ID, if one was used (never the client secret). */
+  readonly clientId?: string;
+  /** When the login completed (epoch ms). */
+  readonly savedAt: number;
 }
 
 /**

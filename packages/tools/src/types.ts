@@ -736,8 +736,12 @@ export type MCPServer = typeof MCPServerSchema.Type & {
    * {@link MCPServerSchema} — this is caller-supplied connection config
    * (may hold callbacks or an `OAuthClientProvider` instance), not data
    * decoded from an external source, so it is not schema-validated.
+   *
+   * Omitted on a `streamable-http`/`sse` server: a login stored for this
+   * exact endpoint (`mcpLogin`, `rax mcp login`) is used automatically, and
+   * only for this endpoint. `false` opts out of that.
    */
-  readonly auth?: MCPAuthConfig;
+  readonly auth?: MCPAuthConfig | false;
   /**
    * Where OAuth credentials for this server are persisted. Defaults to an
    * in-memory store (per-process only) when `auth` is set without one.

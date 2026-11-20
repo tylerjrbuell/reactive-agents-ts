@@ -36,6 +36,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { MCPServer } from "../types.js";
 import { MCPConnectionError, ToolExecutionError } from "../errors.js";
 import { createAuthProvider } from "./auth/create-provider.js";
+import { resolveConnectAuthProvider } from "./auth/stored-login.js";
 import { mapMcpToolResult } from "./mcp-result.js";
 import { toMCPToolSchemaEntry } from "./read-only-classification.js";
 import { hasRedactor, redactBearerTokens, LOOPBACK_HOSTS } from "./auth/hardened-provider.js";
@@ -597,7 +598,7 @@ function hasAuthorizationCodeHandle(
 }
 
 function isInteractiveAuthorizationCode(config: ConnectConfig): boolean {
-  return config.auth?.type === "authorization_code" && config.auth.interactive === true;
+  return config.auth !== false && config.auth?.type === "authorization_code" && config.auth.interactive === true;
 }
 
 // ─── HTTP Reconnect ────────────────────────────────────────────────────────────
@@ -923,9 +924,8 @@ async function connectHttpLike(
   config: ConnectConfig,
   effectiveTransport: MCPServer["transport"],
 ): Promise<ActiveConnection> {
-  const authProvider = config.auth
-    ? createAuthProvider(toMCPServerLike(config), config.tokenStore ?? getDefaultTokenStore())
-    : undefined;
+  const authProvider = await resolveConnectAuthProvider(
+    toMCPServerLike(config), config.tokenStore ?? getDefaultTokenStore());
 
   let transport = createTransport(config, undefined, authProvider);
   let sdkClient = new Client({ name: "reactive-agents", version: "1.0.0" }, { capabilities: {} });

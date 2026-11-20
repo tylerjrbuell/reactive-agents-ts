@@ -174,6 +174,7 @@ export function createAuthorizationCodeProvider(
         tokens: existing?.tokens,
         clientInformation: info,
         discoveryState: existing?.discoveryState,
+        login: existing?.login,
         resourceUrl,
         savedAt: Date.now(),
       });
@@ -189,6 +190,7 @@ export function createAuthorizationCodeProvider(
         tokens: newTokens,
         clientInformation: existing?.clientInformation,
         discoveryState: existing?.discoveryState,
+        login: existing?.login,
         resourceUrl,
         savedAt: Date.now(),
       });

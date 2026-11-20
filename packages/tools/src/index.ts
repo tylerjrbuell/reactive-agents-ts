@@ -75,8 +75,26 @@ export type {
   MCPAuthConfig,
   MCPTokenStore,
   StoredMcpCredentials,
+  McpLoginMetadata,
   OAuthDiscoveryState,
 } from "./mcp/auth/types.js";
+// Interactive sign-in API (2026-11-20): one flow for `rax mcp login`, Cortex and builders.
+export {
+  mcpLogin,
+  mcpAuthStatus,
+  mcpLogout,
+  listMcpLogins,
+  McpLoginError,
+  McpAuthStoreError,
+  type McpAuthStoreOptions,
+  type McpLoginOptions,
+  type McpLoginResult,
+  type McpAuthStatus,
+  type McpLoginSummary,
+  type McpLogoutOptions,
+  type McpLogoutResult,
+  type McpRevocation,
+} from "./mcp/auth/login.js";
 export {
   canonicalResourceKey,
   createMemoryTokenStore,

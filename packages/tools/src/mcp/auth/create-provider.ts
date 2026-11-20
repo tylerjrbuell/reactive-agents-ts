@@ -86,6 +86,7 @@ function withPersistence(
         tokens,
         clientInformation: existing?.clientInformation,
         discoveryState: existing?.discoveryState,
+        login: existing?.login,
         resourceUrl,
         savedAt: Date.now(),
       });
