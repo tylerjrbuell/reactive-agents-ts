@@ -18,6 +18,9 @@
  *   6. Node: import v0.11 standalones — observe, replay, compose (catches missing deps post-publish)
  *   7. Node: require() reactive-agents throws helpful ESM-only error (not ERR_MODULE_NOT_FOUND)
  *   8. create-reactive-agent: scaffold minimal → install deps → verify import resolves under Node
+ *   9. Bun + Node: keyless code-action run executes a scripted program in the sandbox
+ *      worker (catches runtime-loaded files missing from dist; v0.19.0 shipped without
+ *      reasoning's sandbox-worker, so every npm user's Code Action failed with ModuleNotFound)
  *
  * Run via:
  *   bun run scripts/test-clean-install.ts
@@ -263,6 +266,39 @@ console.log("Node standalones import OK");
 `,
   );
   run("node smoke-cjs-require.cjs", projectDir, { stdio: "inherit" });
+
+  log("smoke test 9: keyless code-action run executes in the sandbox worker (Bun + Node)");
+  // Imports alone never load the sandbox worker: it is resolved at run time via
+  // `new Worker(new URL(..., import.meta.url))`. Run a real code-action pass with
+  // the scripted test provider. The program computes a marker the scenario text
+  // never contains, so the marker in the output proves the worker ran the code.
+  writeFileSync(
+    join(projectDir, "smoke-code-action.mjs"),
+    `import { ReactiveAgents } from "reactive-agents";
+const program = "\`\`\`javascript\\n(async () => { return 'sandbox-ok-' + (6 * 7); })()\\n\`\`\`";
+const agent = await ReactiveAgents.create()
+  .withName("clean-install-code-action")
+  .withTestScenario([{ text: program }])
+  .withReasoning({ defaultStrategy: "code-action" })
+  .withMaxIterations(3)
+  .build();
+let result;
+try {
+  result = await agent.run("Return the sandbox marker.");
+} finally {
+  await agent.dispose();
+}
+const output = String(result?.output ?? "");
+if (!result?.success || !output.includes("sandbox-ok-42")) {
+  console.error("code-action run did not execute in the sandbox:");
+  console.error(JSON.stringify({ success: result?.success, output, error: result?.error }, null, 2));
+  process.exit(1);
+}
+console.log("code-action sandbox run OK:", output);
+`,
+  );
+  run("bun smoke-code-action.mjs", projectDir, { stdio: "inherit" });
+  run("node smoke-code-action.mjs", projectDir, { stdio: "inherit" });
 
   log("smoke test 8: create-reactive-agent scaffold → install → Node ESM import");
   // Run the CLI from the installed tarball, non-interactively
