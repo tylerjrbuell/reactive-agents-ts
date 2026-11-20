@@ -620,6 +620,34 @@
       "reviewBy": "2027-02-20"
     },
     {
+      "id": "workflow-invariants",
+      "script": "builtin:workflow-invariants",
+      "scope": [
+        ".github/workflows/**",
+        "tools/repo/src/lib/workflow-invariants.ts"
+      ],
+      "stages": [
+        "pre-commit",
+        "ci"
+      ],
+      "owner": "tooling-warden",
+      "reviewBy": "2027-02-20"
+    },
+    {
+      "id": "check-actionlint",
+      "script": "scripts/check-actionlint.sh",
+      "scope": [
+        ".github/workflows/**",
+        ".github/actions/**",
+        "scripts/check-actionlint.sh"
+      ],
+      "stages": [
+        "ci"
+      ],
+      "owner": "tooling-warden",
+      "reviewBy": "2027-02-20"
+    },
+    {
       "id": "manifest-expiry",
       "script": "builtin:manifest-expiry",
       "scope": [

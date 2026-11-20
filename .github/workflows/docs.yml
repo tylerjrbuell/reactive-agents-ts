@@ -1,29 +1,41 @@
 name: Deploy Docs
 
 on:
+  # Deploys come from main only: the github-pages environment admits branch
+  # `main` and nothing else. No `tags:` trigger: the v0.19.1 tag run was
+  # rejected ("Tag "v0.19.1" is not allowed to deploy to github-pages due to
+  # environment protection rules") and, through a shared concurrency group,
+  # cancelled the main deploy. A release moves the docs version (header chip,
+  # What's New badge, New/Updated window) through publish.yml instead: after
+  # it syncs VERSION/CHANGELOG to main it runs
+  # `gh workflow run docs.yml --ref main -f version=<version>`.
+  # Pinned by tools/repo/tests/docs-workflow.test.ts and the
+  # `workflow-invariants` gate (bun run repo check --only workflow-invariants).
   push:
     branches: [main]
-    # The release tag moves the docs version (header chip, What's New badge,
-    # New/Updated window; deriveCurrentVersion reads the highest v* tag).
-    # Release order is push main, then tag, so the main deploy runs before the
-    # tag exists; this trigger redeploys once it does. GitHub does not evaluate
-    # `paths` for tag pushes, so the filter below only gates main pushes.
-    # Strict X.Y.Z: v0.19.0 matches, v0.19.0-rc.1 does not. Pinned by
-    # tools/repo/tests/docs-workflow.test.ts.
-    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
     paths:
       - "apps/docs/**"
       - ".github/workflows/docs.yml"
+  # On a branch other than main this builds without deploying: use it to
+  # exercise a docs build change before it lands on main.
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Docs version (RA_DOCS_VERSION), e.g. 0.19.1. Empty: the highest reachable v* tag."
+        required: false
+        type: string
 
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Keyed by ref so a run on another ref never shares the group with a main
+# deploy. No cancel-in-progress: a started deploy finishes; a newer main run
+# waits and replaces only a pending one (GitHub's Pages starter does the same).
 concurrency:
-  group: pages
-  cancel-in-progress: true
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
@@ -65,6 +77,10 @@ jobs:
 
       - name: Build Astro site
         working-directory: apps/docs
+        env:
+          # Set by publish.yml's release dispatch; empty on pushes, where
+          # deriveCurrentVersion falls back to the highest reachable v* tag.
+          RA_DOCS_VERSION: ${{ inputs.version }}
         run: bun run build
 
       - name: Upload Pages artifact
@@ -75,6 +91,8 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
+    # github-pages admits main only; a dispatch on any other ref builds and stops here.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

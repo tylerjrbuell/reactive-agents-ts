@@ -19,6 +19,10 @@ import type { UnshippedLoad } from "./shipped-assets.ts"
 const loadShippedAssets = (): typeof import("./shipped-assets.ts") =>
   createRequire(import.meta.url)("./shipped-assets.ts") as typeof import("./shipped-assets.ts")
 
+/** `workflow-invariants` parses YAML; same lazy load, so hook calls do not pay for the `yaml` package. */
+const loadWorkflowInvariants = (): typeof import("./workflow-invariants.ts") =>
+  createRequire(import.meta.url)("./workflow-invariants.ts") as typeof import("./workflow-invariants.ts")
+
 /**
  * Deterministic fixers, by builtin check id: `bun run repo check --only <id> --fix` runs the fixer, then the check.
  * Each returns the repo paths it changed.
@@ -191,6 +195,24 @@ export const builtins: Readonly<Record<string, Builtin>> = {
       }
     } catch (e) {
       return { ok: false, output: e instanceof Error ? e.message : String(e), next: "fix the named file (package.json build script or tsup config)" }
+    }
+  },
+
+  /** Fails when a workflow can start a deploy job from a ref its environment rejects, or a concurrency group can cancel or displace a deploy. */
+  "workflow-invariants": (root) => {
+    try {
+      const { loadWorkflows, workflowProblems } = loadWorkflowInvariants()
+      const workflows = loadWorkflows(root)
+      const problems = workflowProblems(workflows)
+      if (problems.length === 0)
+        return { ok: true, output: `deploy jobs in ${workflows.length} workflows reachable only from refs their environments admit` }
+      return {
+        ok: false,
+        output: problems.map((p) => `${p.file}: ${p.message}`).join("\n"),
+        next: "fix the named workflow as the message says; exercise the change with workflow_dispatch on a branch before relying on it",
+      }
+    } catch (e) {
+      return { ok: false, output: e instanceof Error ? e.message : String(e), next: "fix the YAML in the named workflow (bash scripts/check-actionlint.sh)" }
     }
   },
 
