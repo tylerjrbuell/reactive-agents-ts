@@ -251,7 +251,8 @@ const agent = await ReactiveAgents.create()
 `interactive` defaults to **`false`**. An unattended agent run must never unexpectedly try to open a
 browser or bind a local port — if credentials aren't already on disk (or in your `tokenStore`) when an
 `authorization_code` server connects, the connection fails closed with an error instead of popping a
-browser. Only `rax mcp login` (or explicitly passing `interactive: true`) triggers the interactive flow.
+browser. Only `rax mcp login`, [`mcpLogin`](#sign-in-from-your-own-app-mcplogin) or explicitly passing
+`interactive: true` triggers the interactive flow.
 
 ### Secrets are plain config — you source them
 
@@ -305,6 +306,66 @@ rax mcp status
   deletion always happens even if the revocation endpoint is unreachable).
 - `status` — lists every stored credential (resource, scope, expiry, whether a refresh token is present).
   **Never prints access or refresh tokens.**
+
+### Sign in from your own app (`mcpLogin`)
+
+To run the sign-in from your own server or UI instead of the CLI, use the public API in
+`@reactive-agents/tools` (also re-exported from `reactive-agents/tools`). `mcpLogin` runs the same flow as
+`rax mcp login`: discovery, dynamic client registration when you pass no `clientId`, then authorization
+code + PKCE with the redirect going to a loopback listener on `127.0.0.1`. Tokens go to the same store
+(`~/.reactive-agents/mcp-auth/` unless you pass `store`), so a login from either one works for the other.
+
+```typescript
+import { Effect } from "effect";
+import { mcpAuthStatus, mcpLogin, mcpLogout, listMcpLogins } from "@reactive-agents/tools";
+
+const endpoint = "https://mcp.example.com/mcp";
+const showLinkToUser = (link: string) => console.log(`Sign in: ${link}`); // replace with your UI
+
+const result = await Effect.runPromise(
+  mcpLogin(endpoint, {
+    onAuthorizationUrl: (url) => showLinkToUser(url.toString()),
+  }),
+);
+// result.expiresAt, result.scopes, result.hasRefreshToken: no token values
+
+const status = await Effect.runPromise(mcpAuthStatus(endpoint)); // status.state: "signed-in" | "expired" | "absent"
+const logins = await Effect.runPromise(listMcpLogins());
+await Effect.runPromise(mcpLogout(endpoint));
+```
+
+- `mcpLogin(endpoint, options)` takes `clientId`, `clientSecret`, `scopes`, `redirectPort`, `timeoutMs`
+  (default 5 minutes) and `name`. The endpoint must be HTTPS unless it is a loopback address. With
+  `onAuthorizationUrl` set, no browser opens unless you also pass `openBrowser: true`; without it, the
+  system browser opens.
+- `mcpAuthStatus(endpoint)` reads only the store (no network call). `expired` means the access token is
+  past its reported lifetime; if `hasRefreshToken` is true, the next connection may still refresh it.
+- `mcpLogout(endpoint)` tries to revoke the refresh token (best-effort; pass `revoke: false` to skip),
+  then deletes the stored credentials.
+- `listMcpLogins()` lists every stored login, signed-in or expired.
+
+None of them return token values. Each returns an `Effect`; failures are typed `McpLoginError` (login) or
+`McpAuthStoreError` (store read or delete).
+
+#### Stored logins are reused automatically
+
+A `streamable-http` or `sse` server configured with only its endpoint (no `auth`) uses a stored login for
+that exact URL. RA sends the stored token and refreshes it when it expires, and never opens a browser.
+The token is only looked up under that endpoint's own key, so it never goes to a different server. No
+stored login means the server connects without auth, as before.
+
+```typescript
+const agent = await ReactiveAgents.create()
+  .withMCP({
+    name: "my-calendar",
+    transport: "streamable-http",
+    endpoint: "https://mcp.example.com/mcp", // signed in earlier with mcpLogin or rax mcp login
+  })
+  .build();
+```
+
+The reuse is skipped when the endpoint is plain HTTP to a non-loopback host, or when you set your own
+`Authorization` header. To turn it off for a server, set `auth: false` on its `MCPServer` config.
 
 ### What RA does not do
 
