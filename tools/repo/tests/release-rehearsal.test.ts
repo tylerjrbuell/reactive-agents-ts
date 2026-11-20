@@ -73,6 +73,18 @@ describe("release preflight is one step list shared by publish.yml and release-r
     expect(JSON.stringify(rehearsal)).not.toMatch(/secrets\.|npm publish|git push|gh release|git tag/)
   })
 
+  test("the action's `bun test` runs with exactly the env ci.yml's `bun test` step sets", () => {
+    // Rehearsal run 44784760800 failed a friction latency budget because the
+    // action lacked ci.yml's REPO_BUDGET_FACTOR. Two definitions of "run the
+    // tests" must not drift.
+    const ciJobs = yaml(".github/workflows/ci.yml").jobs as Obj
+    const ciTests = Object.values(ciJobs).flatMap((j) => ((j as Obj).steps as Step[] | undefined) ?? []).filter((s) => s.run?.trim() === "bun test")
+    expect(ciTests).toHaveLength(1)
+    const actionTests = actionSteps.filter((s) => s.run?.trim() === "bun test")
+    expect(actionTests).toHaveLength(1)
+    expect(actionTests[0]?.env ?? {}).toEqual(ciTests[0]?.env ?? {})
+  })
+
   test("the rehearsal builds the docs at the version publish.yml dispatches them with", () => {
     const docs = rehearsal.find((s) => s.name === "Docs build at the release version")
     expect(docs?.env?.RA_DOCS_VERSION).toBe("${{ steps.ver.outputs.version }}")

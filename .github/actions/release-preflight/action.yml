@@ -52,8 +52,14 @@ runs:
       shell: bash
       run: bun run typecheck
 
+    # Same env as ci.yml's `bun test` step (pinned equal by
+    # release-rehearsal.test.ts): without REPO_BUDGET_FACTOR the tools/repo
+    # latency budgets fail on shared runners (rehearsal run 44784760800).
     - name: Test
       shell: bash
+      env:
+        # scales tools/repo latency-budget tests for slow shared runners
+        REPO_BUDGET_FACTOR: "3"
       run: bun test
 
     # Pre-publish gate: pack every workspace package as a tarball, install
