@@ -22,7 +22,8 @@ packages. The release mechanism is `scripts/release.ts`, run by
   (auto-created from the CHANGELOG section) is the announcement.
 - **`publish.yml` is the sole GitHub Release author.** release-drafter was
   removed — there is no parallel PR-label draft. The published release body =
-  the `## [<version>] — <date>` CHANGELOG section, verbatim.
+  a short header plus the `## [<version>] — <date>` CHANGELOG section, cut at
+  a line under GitHub's 125000-char limit (`scripts/release-notes.ts`).
 - **No changesets/action, no "Version Packages" PR.** That flow was removed.
   Pushing the tag is the entire trigger.
 - **Drift is impossible by construction** — there is nothing to reconcile and
@@ -120,11 +121,34 @@ git merge-base --is-ancestor origin/main HEAD && echo "OK: origin/main is caught
 git tag v<version>
 git push origin v<version>          # e.g. git push origin v0.11.0
 ```
-`publish.yml` then: install → build → test → clean-install smoke →
-`release:dry` gate → `release.ts <version>` (aggregate CHANGELOG, consume
-changesets, stamp all packages + root, build, publish in dependency order,
-fail-fast) → create GitHub Release from the `## [<version>] — <date>`
-CHANGELOG section.
+`publish.yml` then: the shared `./.github/actions/release-preflight` action
+(install → build → typecheck → test → clean-install smoke → `release:dry`
+gate) → `release.ts <version>` (aggregate CHANGELOG, consume changesets,
+stamp all packages + root, build, publish in dependency order, fail-fast) →
+sync VERSION/CHANGELOG to main → GitHub Release from the
+`## [<version>] — <date>` CHANGELOG section (`scripts/release-notes.ts` cuts
+it under GitHub's 125000-char limit) → `gh workflow run docs.yml --ref main
+-f version=<version>` (docs deploy from main only; the github-pages
+environment rejects tags).
+
+**Before tagging, the release path has already run on `dev`.**
+`release-rehearsal.yml` runs the same preflight action, then
+`release.ts <next patch> --no-publish`, the release notes with the size check
+and the docs build at that version: nightly, on dev pushes touching the
+release path, or by hand. Check the latest run is green:
+
+```bash
+gh run list --workflow release-rehearsal.yml --branch dev -L 1
+```
+
+**A new or changed workflow trigger or deploy path is exercised with
+`workflow_dispatch` on a branch before anything relies on it** (e.g.
+`gh workflow run docs.yml --ref <branch>` builds the docs without deploying).
+v0.19.1: a docs `tags:` trigger added the day before first ran at the tag,
+was rejected by the github-pages environment and cancelled the main deploy.
+`bun run repo check --all` lints workflows (`check-actionlint`) and pins
+deploy invariants (`workflow-invariants`), but GitHub-side rules (environment
+branch policies, token permissions) only show in a real run.
 
 Manual fallback / resume: GitHub → Actions → "Publish to npm" →
 `workflow_dispatch`, enter the version. Re-running is safe — already-published
@@ -152,6 +176,7 @@ Update `.agents/MEMORY.md` AND Claude project memory under
 - [ ] Docs audited, AGENTS.md & README counts current (Step 3)
 - [ ] Changeset authored with user-facing prose (Step 4)
 - [ ] `release:dry <version>` clean (Step 6)
+- [ ] Latest "Release Rehearsal" run on `dev` green; any changed workflow trigger exercised by `workflow_dispatch` on a branch (Step 7)
 - [ ] `main` pushed and `origin/main` confirmed caught up (Step 7, before tagging)
 - [ ] Tag pushed; "Publish to npm" workflow green (Step 7)
 - [ ] GitHub Release present with notes
@@ -169,3 +194,5 @@ Update `.agents/MEMORY.md` AND Claude project memory under
 | `git tag` without `git push origin <tag>` | The tag push is what fires CI. A local tag releases nothing. |
 | Looking for `check:versions` / drift scripts | Deleted — drift is structurally impossible in lockstep. |
 | Running `release.ts` with no version arg | It requires an explicit semver and exits otherwise. |
+| Adding a tag trigger to a deploy workflow | The github-pages environment admits branch `main` only; the tag run is rejected (v0.19.1). `publish.yml` redeploys the docs from main. `workflow-invariants` fails on it. |
+| Editing a preflight step in `publish.yml` | The steps live in `.github/actions/release-preflight/action.yml`, shared with `release-rehearsal.yml`; `tools/repo/tests/release-rehearsal.test.ts` fails on a copy. |
