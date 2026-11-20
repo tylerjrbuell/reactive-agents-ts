@@ -26,6 +26,7 @@ import { cortexAgentBuilder } from "../services/build-cortex-agent.js";
 import { buildModelsResponse, type ModelsDeps } from "../api/models.js";
 import { providerKeysRouter } from "../api/provider-keys.js";
 import { ollamaSettingsRouter } from "../api/ollama-settings.js";
+import type { HostResolver } from "../outbound-url.js";
 
 const KEY = "ollama-fake-key-0123456789abcdWXYZ";
 let dir: string;
@@ -206,7 +207,10 @@ describe("bearerFetch against a stub server", () => {
 });
 
 describe("Settings API", () => {
-  const settings = () => ollamaSettingsRouter(endpoints);
+  // Hermetic DNS for the outbound-URL check: the system resolver would look up the real
+  // Ollama Cloud host (network-dependent; stalls under load).
+  const publicDns: HostResolver = async () => ["93.184.216.34"];
+  const settings = () => ollamaSettingsRouter(endpoints, publicDns);
   const send = (a: ReturnType<typeof settings>, method: string, body?: unknown) =>
     a.handle(
       new Request("http://localhost/api/settings/ollama", {
