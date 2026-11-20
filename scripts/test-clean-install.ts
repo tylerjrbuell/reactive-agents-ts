@@ -22,6 +22,10 @@
  *      worker (catches runtime-loaded files missing from dist; v0.19.0 shipped without
  *      reasoning's sandbox-worker, so every npm user's Code Action failed with ModuleNotFound)
  *
+ * Install check: the same tarballs are also installed with `bun install` into a second fresh
+ * project, which fails on any `incorrect peer dependency` / `unmet peer` line (npm is silent
+ * about these; 0.19.0 printed ~14 OTel peer warnings on every `bun add reactive-agents`).
+ *
  * Run via:
  *   bun run scripts/test-clean-install.ts
  *
@@ -33,7 +37,7 @@
  * step so a broken release fails the workflow before it hits npm.
  */
 
-import { execSync } from "node:child_process";
+import { execSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
@@ -117,6 +121,42 @@ function rewriteWorkspaceDeps(pkgPath: string, versionMap: Map<string, string>):
   return original;
 }
 
+/** Lines of Bun install output that report a peer dependency the resolved tree violates. */
+function peerWarnings(output: string): string[] {
+  return output.split("\n").filter((l) => /incorrect peer dependency|unmet peer/i.test(l));
+}
+
+/**
+ * Install the tarballs with Bun into a fresh project and fail on any peer dependency warning.
+ * npm resolves the same tree silently, so the npm install above cannot see this class: 0.19.0
+ * printed `warn: incorrect peer dependency "@opentelemetry/api@1.10.0"` ~14 times on every
+ * `bun add reactive-agents` because a caret range floated past the OTel SDK 2.x peer cap (<1.10.0).
+ * `overrides` pins every @reactive-agents/* (including transitive) to its tarball, so registry copies
+ * of an older release cannot leak their own warnings in.
+ */
+function assertNoBunPeerWarnings(dir: string, tarballs: Record<string, string>): void {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, "package.json"),
+    JSON.stringify({ name: "rax-clean-install-bun", version: "1.0.0", type: "module", dependencies: tarballs, overrides: tarballs }, null, 2),
+  );
+  const r = spawnSync("bun", ["install"], { cwd: dir, encoding: "utf8" });
+  const output = `${r.stdout ?? ""}\n${r.stderr ?? ""}`;
+  if (r.status !== 0) {
+    console.error(output);
+    throw new Error(`bun install of the packed tarballs failed (exit ${r.status})`);
+  }
+  const hits = peerWarnings(output);
+  if (hits.length > 0) {
+    throw new Error(
+      `bun install of the packed tarballs printed ${hits.length} peer dependency warning(s); Bun users see these on every install:\n` +
+        [...new Set(hits)].map((l) => `  ${l.trim()}`).join("\n") +
+        "\nfix: narrow the dependency range in the package that pulls it (e.g. \"~1.9.0\") so it stays inside the peer range",
+    );
+  }
+  log("bun install: no peer dependency warnings");
+}
+
 async function main() {
   log("discovering workspace packages...");
   const allPackages = discoverPackages();
@@ -186,6 +226,9 @@ async function main() {
 
   log("installing tarballs into clean project (npm install)...");
   run("npm install --no-audit --no-fund --silent", projectDir, { stdio: "inherit" });
+
+  log("check: bun install of the same tarballs prints no peer dependency warnings");
+  assertNoBunPeerWarnings(join(testDir, "bun-project"), tarballEntries);
 
   // Smoke tests: run the published CLI binary + import the published SDK.
   log("smoke test 1: rax --version");
