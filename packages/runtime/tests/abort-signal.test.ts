@@ -20,42 +20,65 @@ import { ReactiveAgents } from "../src/builder.js";
 describe("runStream AbortSignal propagation", () => {
   /**
    * PRIMARY FAILING TEST (before fix):
-   * The Effect fiber inside Stream.toAsyncIterable() blocks for 200ms (delayMs).
-   * We abort() after 50ms. Without fiber interruption the stream waits the full
-   * 200ms and emits StreamCompleted. With the fix it emits StreamCancelled ~50ms
-   * in and the test finishes quickly.
+   * The Effect fiber blocks in the scripted LLM call (delayMs). We abort() 50ms
+   * into the think phase. Without fiber interruption the stream waits out the
+   * delay and emits StreamCompleted. With the fix it emits StreamCancelled
+   * within milliseconds of the abort.
    */
   it("mid-stream abort interrupts the Effect fiber and emits StreamCancelled", async () => {
+    // The scripted LLM call sleeps DELAY_MS. If cancellation awaited the
+    // in-flight call instead of interrupting it, abort-to-end latency would be
+    // about DELAY_MS - ABORT_AFTER_THINK_MS (~4,950 ms); a prompt interrupt
+    // measures ~1-5 ms idle and ~50 ms on one contended CPU core.
+    const DELAY_MS = 5_000;
+    const ABORT_AFTER_THINK_MS = 50;
+
     const agent = await ReactiveAgents.create()
       .withName("abort-fiber-test")
-      .withTestScenario([{ text: "slow response", delayMs: 500 }])
+      .withTestScenario([{ text: "slow response", delayMs: DELAY_MS }])
       .build();
 
     const ctrl = new AbortController();
     const tags: string[] = [];
-    const start = Date.now();
+    let abortedAt: number | undefined;
+    let abortTimer: ReturnType<typeof setTimeout> | undefined;
 
-    // Abort after 50ms — well before the 500ms delay completes
-    const abortTimer = setTimeout(() => ctrl.abort(), 50);
-
+    // Abort relative to the think phase, NOT to the start of runStream. A
+    // fixed timer from the start raced the cold first run: run startup holds
+    // the event loop synchronously (measured 75 ms idle, ~420 ms on one
+    // contended core), so the old 50 ms timer fired at ~420 ms and the old
+    // `elapsed < 300` bound failed (CI: 559 ms) while cancel latency itself
+    // stayed ~50 ms. Anchoring on PhaseStarted:think ensures the scripted
+    // call is in flight when abort lands.
     try {
-      for await (const ev of agent.runStream("test", { signal: ctrl.signal })) {
+      for await (const ev of agent.runStream("test", { signal: ctrl.signal, density: "full" })) {
         tags.push(ev._tag);
+        if (ev._tag === "PhaseStarted" && ev.phase === "think" && abortTimer === undefined) {
+          abortTimer = setTimeout(() => {
+            abortedAt = Date.now();
+            ctrl.abort();
+          }, ABORT_AFTER_THINK_MS);
+        }
       }
     } finally {
       clearTimeout(abortTimer);
     }
 
-    const elapsed = Date.now() - start;
+    const endedAt = Date.now();
     await agent.dispose();
 
-    // Must emit StreamCancelled, not StreamCompleted
+    // Must emit StreamCancelled, not StreamCompleted, and never surface the
+    // scripted response text (the delayed call was interrupted, not awaited).
+    expect(abortedAt).toBeDefined();
     expect(tags).toContain("StreamCancelled");
     expect(tags).not.toContain("StreamCompleted");
+    expect(tags).not.toContain("TextDelta");
 
-    // Must terminate well before the 500ms delay expires (< 300ms gives headroom)
-    expect(elapsed).toBeLessThan(300);
-  }, 10_000);
+    // Contract: cancellation does not wait for the in-flight call. The bound
+    // is half the remaining scripted delay, so it separates "interrupted"
+    // (tens of ms) from "awaited" (~4,950 ms) without racing startup CPU.
+    expect(endedAt - (abortedAt ?? 0)).toBeLessThan(DELAY_MS / 2);
+  }, 15_000);
 
   /**
    * SECONDARY FAILING TEST: abort fires after initial check but before the
