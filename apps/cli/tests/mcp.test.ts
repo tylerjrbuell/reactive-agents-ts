@@ -8,7 +8,7 @@
 // `--no-browser` plus a test hook that drives the redirect with `fetch`
 // (same technique as packages/tools/tests/mcp/oauth/authorization-code.test.ts).
 import { afterEach, describe, expect, it } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -540,11 +540,12 @@ describe("mcp logout", () => {
     }
   });
   // RED-ON-CUT proof (see final-review-fix-wave-report.md): removing the
-  // `isHttpsOrLoopback(revocationEndpoint)` check from `mcp.ts`'s
-  // `tryRevoke` makes this test fail — `attackerHit` becomes `true` because
-  // `tryRevoke` actually POSTs `secretRefreshToken`/`secretClientSecret` to
-  // the attacker-controlled endpoint before this test's own `fetch` override
-  // routes that request to `attackerServer`.
+  // `isHttpsOrLoopback(revocationEndpoint)` check from
+  // `packages/tools/src/mcp/auth/login.ts`'s `revokeRefreshToken` (which
+  // `rax mcp logout` calls through `mcpLogout`) makes this test fail —
+  // `attackerHit` becomes `true` because the refresh token/client secret get
+  // POSTed to the attacker-controlled endpoint before this test's own `fetch`
+  // override routes that request to `attackerServer`.
 });
 
 // ─── login — end-to-end against the Task 1 fixture ─────────────────────────
@@ -573,6 +574,42 @@ describe("mcp login", () => {
     const stored = await store.get(canonicalResourceKey(f.resourceUrl));
     expect(stored?.tokens?.access_token).toBeTruthy();
     expect(stored?.tokens?.refresh_token).toBeTruthy();
+  });
+
+  it("login by <name> records the server name, and status lists it", async () => {
+    const f = await fixture();
+    const store = createMemoryTokenStore();
+    const dir = await tempDir();
+    const configPath = join(dir, "mcp.json");
+    await writeFile(
+      configPath,
+      JSON.stringify({ servers: [{ name: "docs-server", transport: "streamable-http", endpoint: f.resourceUrl }] }),
+    );
+
+    const capture = captureConsole();
+    try {
+      await runLogin(
+        {
+          target: { kind: "name", value: "docs-server" },
+          mcpConfigPath: configPath,
+          clientId: "cli-login-name-client",
+          scope: "read  write",
+          noBrowser: true,
+          timeoutMs: 10_000,
+        },
+        { store, onAuthorizationUrl: driveRedirect },
+      );
+      await runStatus({}, { store });
+    } finally {
+      capture.restore();
+    }
+
+    const stored = await store.get(canonicalResourceKey(f.resourceUrl));
+    expect(stored?.login?.name).toBe("docs-server");
+    const out = capture.stdout.join("\n");
+    expect(out).toContain("docs-server");
+    expect(out).toContain(f.resourceUrl);
+    expect(out).not.toContain(stored?.tokens?.access_token ?? "<no-token>");
   });
 
   it("surfaces a redacted error message when authorization never completes (timeout)", async () => {
