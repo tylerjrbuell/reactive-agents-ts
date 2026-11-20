@@ -799,12 +799,6 @@ body {
     color: inherit !important;
 }
 
-/* Floating scroll-to-top sits in the corner, not over the content column. */
-.scroll-to-top-button {
-    left: auto !important;
-    right: 1.25rem !important;
-}
-
 [data-theme='light'] .ra-stat {
     border-left-color: rgba(109, 40, 217, 0.12);
 }

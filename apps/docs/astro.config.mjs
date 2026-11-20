@@ -112,8 +112,9 @@ export default defineConfig({
                         },
                     ],
                 }),
-                // Scroll-to-top button — zero-config, appears on long pages
-                starlightScrollToTop(),
+                // Scroll-to-top button, centered at the bottom so it never sits
+                // under the floating feedback/chat button in the corner.
+                starlightScrollToTop({ position: 'center' }),
             ],
             expressiveCode: {
                 themes: ['github-dark', 'github-light'],
