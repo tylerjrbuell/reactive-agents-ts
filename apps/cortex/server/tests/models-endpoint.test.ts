@@ -1,5 +1,6 @@
 import { describe, it, expect } from "bun:test";
 import { createModelsRouter, type ModelsDeps } from "../api/models.js";
+import type { HostResolver } from "../outbound-url.js";
 
 const noFetch: typeof fetch = Object.assign(
   async () => {
@@ -16,8 +17,18 @@ const live = (id: string, thinking: boolean | null = null) => ({
   capabilitySource: "static-table" as const,
 });
 
-function appWith(resolve: ModelsDeps["resolve"], fetchImpl: typeof fetch = noFetch) {
-  return createModelsRouter({ resolve, fetch: fetchImpl });
+/**
+ * Hermetic DNS for the outbound-URL guard: every name answers with a LAN address and the
+ * asked names are recorded. The system resolver must never run here: a made-up host such
+ * as `gpu-box` takes ~4 s to fail under systemd-resolved, which timed this file out in CI.
+ */
+const lanDns = (asked: string[] = []): HostResolver => async (host) => {
+  asked.push(host);
+  return ["192.168.1.50"];
+};
+
+function appWith(resolve: ModelsDeps["resolve"], fetchImpl: typeof fetch = noFetch, resolveHost: HostResolver = lanDns()) {
+  return createModelsRouter({ resolve, fetch: fetchImpl, resolveHost });
 }
 const get = (app: ReturnType<typeof appWith>, path: string) =>
   app.handle(new Request(`http://localhost${path}`));
@@ -68,12 +79,14 @@ describe("GET /api/models/:provider", () => {
       },
       { preconnect: () => undefined },
     );
+    const asked: string[] = [];
     const app = appWith(async (_p, opts) => {
       seenBaseUrl = opts.baseUrl;
       return { models: [live("qwen3:14b")], live: true };
-    }, fetchStub);
+    }, fetchStub, lanDns(asked));
     const res = await get(app, `/api/models/ollama?endpoint=${encodeURIComponent("http://gpu-box:11434")}`);
     const body = (await res.json()) as { models: { name: string; supportsThinking: boolean | null }[] };
+    expect(asked).toEqual(["gpu-box"]);
     expect(seenBaseUrl).toBe("http://gpu-box:11434");
     expect(showCalls).toEqual(["http://gpu-box:11434/api/show"]);
     expect(body.models[0]?.supportsThinking).toBe(true);
