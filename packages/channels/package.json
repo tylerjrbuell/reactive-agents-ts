@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/channels",
-  "version": "0.18.0",
+  "version": "0.19.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -27,9 +27,9 @@
     "test:watch": "bun test --watch"
   },
   "dependencies": {
-    "@reactive-agents/core": "0.18.0",
-    "@reactive-agents/gateway": "0.18.0",
-    "@reactive-agents/runtime-shim": "0.18.0",
+    "@reactive-agents/core": "0.19.0",
+    "@reactive-agents/gateway": "0.19.0",
+    "@reactive-agents/runtime-shim": "0.19.0",
     "effect": "^3.10.0"
   },
   "devDependencies": {

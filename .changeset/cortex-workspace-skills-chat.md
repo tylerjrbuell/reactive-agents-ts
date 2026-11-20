@@ -1,8 +1,0 @@
----
-"@reactive-agents/cortex": minor
-"@reactive-agents/ui-core": minor
----
-
-Cortex chat now uses the skills in the session's workspace. Every chat agent gets `.withSkills()`, so it finds `.agents/skills`, `.claude/skills` and `.<agentId>/skills` in its workspace the same way a run does and can load one with `activate-skill`; the chat lists exactly those skills (a quick-bar chip, `/skill` and `/` rows with the folder each came from). `/skill <name>` uses a skill for the next message only and leaves the session config alone; `/skills <name>` pins it for every turn. Pins are stored as skill names: older chat pins that saved a path relative to the server's folder are rewritten when the chat is built, so they keep working when the workspace differs. Each finished reply, and the run view, shows which skills the run had loaded and why (pinned, matched the task, loaded by the agent), read from the run's `SkillActivated` events and `AgentStarted.config.skills`. The Lab Skills tab lists the skills an agent built from the Builder would find (its workspace, extra folders, home-folder skills when turned on) next to the Cortex library, which it marks as not sent to agents. Desk runs now keep a skills config that only pins names or sets `global` (it used to be dropped without any `paths`), and the Builder can turn on home-folder skills (`withSkills({ global })`).
-
-`@reactive-agents/ui-core` adds `foldRunSkills`, `runSkillsOf`, `skillActivationVia` and `skillViaLabel`: fold a run's `SkillActivated` events and its `AgentStarted.config.skills` record into which skills were active and why, for any chat or run UI.

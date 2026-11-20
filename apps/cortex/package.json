@@ -1,6 +1,6 @@
 {
   "name": "@reactive-agents/cortex",
-  "version": "0.10.6",
+  "version": "0.19.0",
   "type": "module",
   "description": "Cortex companion studio — visual UI + API for inspecting and managing reactive-agents in real time",
   "keywords": [
@@ -62,21 +62,21 @@
   "dependencies": {
     "elysia": "^1.1.0",
     "effect": "^3.10.0",
-    "@reactive-agents/core": "workspace:*",
-    "@reactive-agents/memory": "workspace:*",
-    "@reactive-agents/runtime": "workspace:*",
-    "@reactive-agents/ui-core": "workspace:*",
-    "@reactive-agents/observability": "workspace:*",
-    "@reactive-agents/gateway": "workspace:*",
-    "@reactive-agents/channels": "workspace:*",
-    "@reactive-agents/llm-provider": "workspace:*",
-    "@reactive-agents/tools": "workspace:*",
-    "@reactive-agents/trace": "workspace:*",
-    "@reactive-agents/replay": "workspace:*",
-    "@reactive-agents/reactive-intelligence": "workspace:*"
+    "@reactive-agents/core": "0.19.0",
+    "@reactive-agents/memory": "0.19.0",
+    "@reactive-agents/runtime": "0.19.0",
+    "@reactive-agents/ui-core": "0.19.0",
+    "@reactive-agents/observability": "0.19.0",
+    "@reactive-agents/gateway": "0.19.0",
+    "@reactive-agents/channels": "0.19.0",
+    "@reactive-agents/llm-provider": "0.19.0",
+    "@reactive-agents/tools": "0.19.0",
+    "@reactive-agents/trace": "0.19.0",
+    "@reactive-agents/replay": "0.19.0",
+    "@reactive-agents/reactive-intelligence": "0.19.0"
   },
   "devDependencies": {
-    "@reactive-agents/reasoning": "workspace:*",
+    "@reactive-agents/reasoning": "0.19.0",
     "playwright-core": "1.61.1",
     "typescript": "^6.0.3",
     "tsup": "^8.5.1",

@@ -1,5 +1,0 @@
----
-"@reactive-agents/llm-provider": patch
----
-
-Audio and file content parts now reach the provider boundary honestly instead of being silently dropped. `Capability` gains an optional `supportsAudioIn` (Gemini rows, `gpt-4o-audio-preview` and `gpt-audio` rows, and the Ollama `/api/show` `audio` capability). OpenAI maps audio to `input_audio` (wav and mp3, base64, user turns) and Gemini maps it to `inlineData`, only on a model whose authoritative row says it accepts audio. Every other case (Anthropic, Ollama, LiteLLM, a guessed model row, a URL source, an unsupported format, a non-user role) replaces the part with a deterministic stub such as `[audio omitted: audio/wav, 120 KB; model has no audio input]`, keeps an audio `transcript` in the stub, and logs a `content-part-degraded` fact with `partType` `audio` or `file`. A text-like file whose bytes are an inline `data:` uri is inlined as text up to 32 KB with a truncation marker; any other file is stubbed. `DegradedPart.partType` widens to `"image" | "audio" | "file"`, and the exchange record gains `[audio:...]` and `[file:...]` placeholders. `ContentBlock` now includes core `AudioPart` and `FilePart`.

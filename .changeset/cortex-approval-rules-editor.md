@@ -1,5 +1,0 @@
----
-"@reactive-agents/cortex": minor
----
-
-Cortex: edit which tools and which shell commands need approval. The Lab builder's Reasoning section has an Approvals editor (tools, shell command rules such as `git push`, and the mode), and chat has `/approvals` (`/approvals add git commit`). Cortex stores and sends the framework's `approvalPolicy` (`mode`, `tools`, `commands`) on desk runs, chat sessions and saved agents; configs that kept the gate under `durableRuns` are read as the same policy. Tools the framework always gates once a policy is set (`file-write`, `file-edit`, `code-execute`, the full shell) show locked on. "Pause and ask me" turns durable execution on; "Refuse" says plainly that the call is refused, since Cortex has no in-place approver. The run view header shows Approve / Deny while a run waits on an approval. Abstained and partial runs read Abstained / Partial in Runs and on Beacon instead of Failed: runs now store their ending, and older runs are filled in from their last `AgentCompleted` event.

@@ -1,9 +1,0 @@
----
-"@reactive-agents/tools": minor
----
-
-The `git` toolset (and the `gh-cli` / `git-cli` names) is now read-only. That shell asks for no approval, and its git block-list missed `git config core.fsmonitor '<cmd>'` and `git config alias.x '!cmd'`. Both store a command in `.git/config` that a later `git status` or `git x` runs.
-
-- New `ShellExecuteConfig.gitReadOnly`, set by `scopedShellConfig` whenever `git` or `gh` is in the list. A base config cannot turn it off. git and gh then run only read-only subcommands (`GIT_READ_ONLY_SUBCOMMANDS`, `GH_READ_ONLY_COMMANDS`), such as `git status`, `log`, `diff`, `show`, `fetch`, `branch` / `tag` in list mode, `remote -v`, `gh pr list` and GET `gh api`. Everything else is refused with a reason that names the full terminal (`.withTools({ terminal: true, builtins: ["git"] })`, which asks for approval). This includes `commit`, `push`, `config`, aliases, `rebase -x`, `submodule foreach`, `bisect run`, `difftool`, `--output`, `grep -O`, output redirects (`>`), `gh alias`, `gh extension` and `gh api` writes. The git block-list still applies first.
-- The read-only shell also turns off the system git config, hooks (`core.hooksPath` points at an empty directory) and `core.fsmonitor`. These are set at command-line level, so a hook or fsmonitor command in the repository's own config does not run.
-- `inheritGitConfig` no longer copies your global git config. git gets a per-call config with only `user.name` and `user.email`. Aliases, credential helpers and `insteadOf` URLs (which can hold tokens) are not passed. The file lives in its own temporary directory and is removed after each call, so no `.gitconfig` is left in the shell's home directory. This also applies to the terminal when `git` is allowed. Side effect: git credential helpers from your config no longer apply, so `git fetch` from a private HTTPS remote fails in the shell. `gh` commands keep their own credentials (`GH_TOKEN` or `gh auth login`).

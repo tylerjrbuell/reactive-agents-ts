@@ -1,5 +1,0 @@
----
-"@reactive-agents/channels": patch
----
-
-Channel correctness fixes. A failed turn no longer blocks later messages in the same conversation (`SessionBridge` serialises turns per key with a semaphore instead of a promise chain that stayed rejected). A defect in an inbound handler now marks the channel `failed`, reports an `ErrorSwallowed` event and calls `onChannelFailed`, instead of ending the inbound fiber while the hub still reported `connected`. Router shutdown now stops adapters before releasing account leases, so a second process cannot take the account while the first still polls it. A failed adapter start leaves no registration behind, and concurrent registrations share one scope. File-lease takeover renames the stale lock aside atomically instead of unlinking it, and an unusable lock directory is a typed `ChannelLeaseError` (surfaced by the router as `channel_start_failed`) instead of a defect. Telegram and webhook ingest wait at most `enqueueTimeoutMs` (default 5000) for room in a full inbound buffer, then fail as `rate_limited` (HTTP 429) so a stalled consumer cannot exhaust ingress slots.
