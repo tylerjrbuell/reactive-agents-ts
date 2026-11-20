@@ -603,6 +603,23 @@
       "reviewBy": "2027-02-19"
     },
     {
+      "id": "shipped-assets",
+      "script": "builtin:shipped-assets",
+      "scope": [
+        "packages/*/src/**",
+        "packages/*/package.json",
+        "packages/*/tsup.config.ts",
+        "tsup.config.base.ts",
+        "tools/repo/src/lib/shipped-assets.ts"
+      ],
+      "stages": [
+        "pre-commit",
+        "ci"
+      ],
+      "owner": "tooling-warden",
+      "reviewBy": "2027-02-20"
+    },
+    {
       "id": "manifest-expiry",
       "script": "builtin:manifest-expiry",
       "scope": [

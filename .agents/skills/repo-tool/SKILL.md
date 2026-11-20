@@ -37,7 +37,7 @@ Blocked new file: move it to the printed canonical location, or `bun run repo pl
 ## Extend the tool (one manifest each, each has a `*-valid`/coverage check)
 
 - Hook rule: `tools/repo/rules.json` (>=2 deny + >=2 allow examples). `check --only rules-valid`.
-- Check: `tools/repo/checks.json` (`builtin:<name>` in `src/lib/builtins.ts` or `scripts/check-*.sh`).
+- Check: `tools/repo/checks.json` (`builtin:<name>` in `src/lib/builtins.ts` or `scripts/check-*.sh`). A new gate that finds existing violations lists them in an expiring known list in its lib (e.g. `KNOWN_UNSHIPPED` in `shipped-assets.ts`): warned until `until`, failing after, and a fixed entry left in the list fails as stale.
 - Ownership row: `tools/repo/ownership.json`, one per `packages/*` / `apps/*` dir. `check --only ownership-coverage`.
 - Script catalog entry: `tools/repo/catalog.json`. `check --only catalog-coverage`.
 - Placement rule: `tools/repo/placement.json` (>=2 ok + >=2 bad examples). `check --only placement`.

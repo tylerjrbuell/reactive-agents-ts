@@ -9,6 +9,15 @@ import { loadOwnership, nameAll, ownershipProblems } from "./ownership.ts"
 import { evaluateRatchets, isViolation } from "./ratchet.ts"
 import { loadPlacement, placementAudit, placementProblems } from "./placement.ts"
 import { auditSkills, syncWardenParagraphs, type SkillProblem } from "./skills.ts"
+import { createRequire } from "node:module"
+import type { UnshippedLoad } from "./shipped-assets.ts"
+
+/**
+ * `shipped-assets` parses TypeScript; loading `typescript` costs ~130 ms, and every hook call goes
+ * through cli.ts -> check.ts -> this module. Load it only when the check runs.
+ */
+const loadShippedAssets = (): typeof import("./shipped-assets.ts") =>
+  createRequire(import.meta.url)("./shipped-assets.ts") as typeof import("./shipped-assets.ts")
 
 /**
  * Deterministic fixers, by builtin check id: `bun run repo check --only <id> --fix` runs the fixer, then the check.
@@ -150,6 +159,38 @@ export const builtins: Readonly<Record<string, Builtin>> = {
       }
     } catch (e) {
       return { ok: false, output: e instanceof Error ? e.message : String(e), next: "fix the named package.json" }
+    }
+  },
+
+  /** Fails when a published package's `src` loads a module-relative file (`new URL(.., import.meta.url)`, `join(<module dir>, ..)`) its build does not ship. */
+  "shipped-assets": (root, _entry, ctx) => {
+    try {
+      const { unshippedLoads, triage } = loadShippedAssets()
+      const { loads, scanned, packages } = unshippedLoads(root)
+      const t = triage(loads, ctx.today)
+      const fmt = (l: UnshippedLoad): string =>
+        `${l.file}:${l.line}: loads ${l.candidates.map((c) => `"${c}"`).join(" | ")} relative to the module; from the published package that is ${l.resolved.join(" | ")}, which the build does not ship`
+      const lines = [
+        ...t.fresh.map(fmt),
+        ...t.expired.map((x) => `${fmt(x.load)} (known, past ${x.known.until}; ${x.known.owner}: ${x.known.why})`),
+        ...t.stale.map((k) => `stale KNOWN_UNSHIPPED entry (no longer violates; delete it): ${k.file} -> ${k.target}`),
+        ...t.warned.map((x) => `warn: known until ${x.known.until} (${x.known.owner}): ${x.load.file}:${x.load.line} -> ${x.known.target}: ${x.known.why}`),
+      ]
+      if (t.fresh.length + t.expired.length + t.stale.length === 0)
+        return {
+          ok: true,
+          output: [`no new unshipped module-relative loads in ${packages} published packages (${scanned} src files; ${t.warned.length} known)`, ...lines].join("\n"),
+        }
+      return {
+        ok: false,
+        output: lines.join("\n"),
+        next:
+          t.fresh.length + t.expired.length > 0
+            ? "ship the file (tsup entry, or a `files` path the code also tries), or choose the path per layout as reasoning sandboxWorkerUrl does"
+            : "delete the stale entry from KNOWN_UNSHIPPED in tools/repo/src/lib/shipped-assets.ts",
+      }
+    } catch (e) {
+      return { ok: false, output: e instanceof Error ? e.message : String(e), next: "fix the named file (package.json build script or tsup config)" }
     }
   },
 

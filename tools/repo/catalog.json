@@ -859,7 +859,7 @@
       "id": "scripts/test-clean-install.ts",
       "path": "scripts/test-clean-install.ts",
       "kind": "release",
-      "summary": "Clean-install smoke test over packed tarballs",
+      "summary": "Clean-install smoke over packed tarballs (npm); Bun install fails on peer warns",
       "invoke": "bun run test:install"
     },
     {
