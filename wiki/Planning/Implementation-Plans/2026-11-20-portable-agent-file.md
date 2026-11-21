@@ -33,7 +33,9 @@ The root component is an Agent Spec `Agent`. Portable fields live in standard pl
 | API keys | never written. They are a sensitive-field reference that the loader resolves from the environment (later from the shared key store, sweep item C) |
 | `mcpServers` | `toolboxes`: `MCPToolBox` with `StdioTransport` / `StreamableHTTPTransport` / `SSETransport`; `env` and `headers` values become `sensitive_headers` / env references |
 | tools defined in code (`defineTool`, Cortex host tools) | `ServerTool` declaration (name, description, inputs), no code. The loader must be given an implementation or it fails with a clear error naming the missing tools |
-| approval policy | `human_in_the_loop` (coarse) plus the exact policy in metadata |
+| `userInteraction` (the agent may ask the user for input) | `human_in_the_loop` (spec meaning: the agent can ask the user, `agent.py`) |
+| approval policy | each `ServerTool`'s `requires_confirmation` from `approvalPolicy.tools`, plus the exact policy in metadata |
+| Ollama endpoint (not an AgentConfig field) | `llm_config.url`, passed as `{ llmUrl }` on export and returned as `llmUrl` on import; CLI and Cortex apply it |
 | everything else (reasoning strategy, memory, guardrails, cost, execution, RI, verification, gateway...) | `metadata["reactive-agents"] = { schemaVersion: 1, config: <AgentConfig minus the fields mapped above> }` |
 
 Rules:
