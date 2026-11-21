@@ -109,10 +109,16 @@ describe("installDnsGuard on fake targets", () => {
     const file = join(mkdtempSync(join(tmpdir(), "dns-trace-")), "trace.jsonl")
     installDnsGuard({ [DNS_TRACE_ENV]: file }, f.targets)
     await f.globals.fetch("http://gpu-box:11434/").catch(() => undefined)
+    await f.bunDns.lookup("gpu-box").catch(() => undefined)
+    await f.proto.resolve4("gpu-box").catch(() => undefined)
+    await f.bun.connect({ hostname: "gpu-box" }).catch(() => undefined)
     const rows = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l) as { host: string; api: string; at: string })
-    expect(rows).toHaveLength(1)
-    expect(rows[0]).toMatchObject({ host: "gpu-box", api: "fetch" })
-    expect(rows[0]?.at).toContain("dns-guard.test.ts")
+    expect(rows.map((r) => r.api)).toEqual(["fetch", "Bun.dns.lookup", "Resolver.resolve4", "Bun.connect"])
+    // Each wrapper captures its stack at entry; a stack taken deeper intermittently lost every caller frame.
+    for (const r of rows) {
+      expect(r.host).toBe("gpu-box")
+      expect(r.at).toContain("dns-guard.test.ts")
+    }
   })
   test("REPO_TEST_DNS_ALLOW lets a named host through", async () => {
     const f = fakes()

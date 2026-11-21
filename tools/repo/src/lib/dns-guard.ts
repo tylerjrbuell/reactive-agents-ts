@@ -69,14 +69,20 @@ export function blockedDnsError(host: string, syscall = "getaddrinfo"): Error {
 /**
  * Audit aid: with `REPO_TEST_DNS_TRACE=<file>`, every blocked call appends `{ host, api, at }` (the first
  * test-file stack frame) as one JSON line, so tests that pass while swallowing the error are found too.
+ *
+ * Each wrapper captures the stack inline at its own entry and passes it here. A stack taken two calls
+ * deeper (inside this function) intermittently came back with only the `traceBlocked` and `blocked`
+ * frames on Bun 1.3.10: about 1 in 3 full `tools/repo` runs, with `Error.stackTraceLimit` at 100. Every
+ * caller frame was missing, so `at` was "". Capturing at the wrapper's entry fixed it (see
+ * dns-guard.test.ts).
  */
 export const DNS_TRACE_ENV = "REPO_TEST_DNS_TRACE"
 
-function traceBlocked(env: Env, host: string, api: string): void {
+function traceBlocked(env: Env, host: string, api: string, stack: string | undefined): void {
   const file = env[DNS_TRACE_ENV]
   if (file === undefined || file.length === 0) return
   try {
-    const frames = (new Error().stack ?? "").split("\n").slice(1).map((l) => l.trim()).filter((l) => !l.includes("dns-guard.ts"))
+    const frames = (stack ?? "").split("\n").slice(1).map((l) => l.trim()).filter((l) => !l.includes("dns-guard.ts"))
     const at = frames.find((l) => /\.(test|spec)\.[cm]?[jt]sx?:/.test(l)) ?? frames.slice(0, 3).join(" < ")
     appendFileSync(file, `${JSON.stringify({ host, api, at })}\n`)
   } catch {
@@ -133,15 +139,18 @@ export function installDnsGuard(env: Env = process.env, targets: DnsGuardTargets
       o[key] = orig
     })
   }
-  /** The error for a blocked `host`, or undefined when `host` may resolve. */
-  const blocked = (host: unknown, api: string, syscall = "getaddrinfo"): Error | undefined => {
+  /** True when blocked calls are traced; each wrapper then captures its stack inline (see `traceBlocked`). */
+  const tracing = (env[DNS_TRACE_ENV] ?? "").length > 0
+  /** The error for a blocked `host`, or undefined when `host` may resolve. `stack` is the wrapper's entry stack. */
+  const blocked = (host: unknown, api: string, syscall: string, stack: string | undefined): Error | undefined => {
     if (typeof host !== "string" || isHermeticHost(host, allow)) return undefined
-    traceBlocked(env, host, api)
+    traceBlocked(env, host, api, stack)
     return blockedDnsError(host, syscall)
   }
   const byName = (key: string) => (orig: Fn): Fn =>
     function (this: unknown, ...args: unknown[]): unknown {
-      const err = blocked(args[0], `Bun.dns.${key}`, key === "lookup" ? "getaddrinfo" : "query")
+      const stack = tracing ? new Error().stack : undefined
+      const err = blocked(args[0], `Bun.dns.${key}`, key === "lookup" ? "getaddrinfo" : "query", stack)
       return err ? Promise.reject(err) : orig.apply(this, args)
     }
 
@@ -150,7 +159,8 @@ export function installDnsGuard(env: Env = process.env, targets: DnsGuardTargets
     for (const key of RESOLVER_NAME_METHODS) {
       patch(proto, key, (orig) =>
         function (this: unknown, ...args: unknown[]): unknown {
-          const err = blocked(args[0], `Resolver.${key}`, "query")
+          const stack = tracing ? new Error().stack : undefined
+          const err = blocked(args[0], `Resolver.${key}`, "query", stack)
           if (!err) return orig.apply(this, args)
           const cb = args[args.length - 1]
           if (typeof cb === "function") {
@@ -163,15 +173,17 @@ export function installDnsGuard(env: Env = process.env, targets: DnsGuardTargets
   }
   patch(targets.globals, "fetch", (orig) => {
     const guarded = function (this: unknown, ...args: unknown[]): unknown {
-      const err = blocked(fetchHost(args[0], args[1]), "fetch")
+      const stack = tracing ? new Error().stack : undefined
+      const err = blocked(fetchHost(args[0], args[1]), "fetch", "getaddrinfo", stack)
       return err ? Promise.reject(err) : orig.apply(this, args)
     }
     return Object.assign(guarded, orig)
   })
   patch(targets.bun, "connect", (orig) =>
     function (this: unknown, ...args: unknown[]): unknown {
+      const stack = tracing ? new Error().stack : undefined
       const opts = args[0]
-      const err = blocked(typeof opts === "object" && opts !== null ? (opts as Mutable).hostname : undefined, "Bun.connect")
+      const err = blocked(typeof opts === "object" && opts !== null ? (opts as Mutable).hostname : undefined, "Bun.connect", "getaddrinfo", stack)
       return err ? Promise.reject(err) : orig.apply(this, args)
     })
   marker[INSTALLED] = true
