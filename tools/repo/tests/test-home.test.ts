@@ -6,7 +6,7 @@ import { join, resolve } from "node:path"
 import { parseWorktreeList } from "../src/commands/janitor.ts"
 import { testRootEnv } from "../src/commands/test.ts"
 import { BUN_CACHE_REPORT_BYTES, cacheHogs, testMemoryLeftovers, TURBO_REPORT_BYTES } from "../src/lib/dev-hogs.ts"
-import { makeTestHome, REAL_HOME_ENV, realHome } from "../src/lib/test-home.ts"
+import { installMcpAuthIsolation, makeTestHome, MCP_AUTH_DIR_ENV, REAL_HOME_ENV, realHome } from "../src/lib/test-home.ts"
 import { staleWorktrees, TEST_ROOT_ENV } from "../src/lib/tmp-janitor.ts"
 
 const ROOT = resolve(import.meta.dir, "../../..")
@@ -28,6 +28,32 @@ describe("makeTestHome", () => {
   })
   test("realHome prefers the outer runner's record", () => {
     expect(realHome({ [REAL_HOME_ENV]: "/home/dev" })).toBe("/home/dev")
+  })
+})
+
+describe("installMcpAuthIsolation", () => {
+  test("sets REACTIVE_AGENTS_MCP_AUTH_DIR to a fresh temp dir and removes it on exit", () => {
+    const env: Record<string, string | undefined> = {}
+    const exits: Array<() => void> = []
+    const dir = installMcpAuthIsolation(env, (cleanup) => exits.push(cleanup))
+    expect(dir).toBeDefined()
+    expect(env[MCP_AUTH_DIR_ENV]).toBe(dir)
+    expect(existsSync(dir!)).toBe(true)
+    expect(exits).toHaveLength(1)
+    exits[0]!()
+    expect(existsSync(dir!)).toBe(false)
+  })
+  test("an outer value wins and nothing is created", () => {
+    const env: Record<string, string | undefined> = { [MCP_AUTH_DIR_ENV]: "/outer/mcp-auth" }
+    const exits: Array<() => void> = []
+    expect(installMcpAuthIsolation(env, (cleanup) => exits.push(cleanup))).toBeUndefined()
+    expect(env[MCP_AUTH_DIR_ENV]).toBe("/outer/mcp-auth")
+    expect(exits).toHaveLength(0)
+  })
+  test("the preload already set it for this process, outside the real ~/.reactive-agents", () => {
+    const dir = process.env[MCP_AUTH_DIR_ENV]
+    expect(dir === undefined || dir.length === 0).toBe(false)
+    expect(dir!.startsWith(join(realHome(), ".reactive-agents"))).toBe(false)
   })
 })
 

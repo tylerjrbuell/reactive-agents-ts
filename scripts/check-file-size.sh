@@ -189,6 +189,7 @@ GIANT_BAR=1000
 # 2026-11-12 sed/awk escape guard: shell-execution.ts 839->838 (awk/sed block rules moved to skills/shell-program-guard.ts; +1-line parsed-program denial step).
 # 2026-11-17 shell-execution.ts 833->571: input checks (sanitize, allow/block-list, expansion, script, git, path) moved verbatim to skills/shell-input-denial.ts (checkShellInput) so tool preflight and the handler share one policy.
 # 2026-11-12 shell-execution.ts 838->833: catch arm replaced by toToolError (same message/toolName/cause); mcp-client.ts 1117->1116: errorMessage replaces the message-or-String idiom (+1 import, -2 collapsed).
+# 2026-11-20 mcp-client.ts 1116->1111: connect's MCPConnectionError construction moved to mcp/connection-failure.ts (toMCPConnectionError adds typed status/reason).
 # 2026-11-11 stop mid-loop: reactive-agent.ts 2049->2029 (emitAgentTerminated moved verbatim to agent/run-contract.ts publishAgentTerminated; run() arms armAbortTerminal so AgentTerminated lands before terminate() resolves).
 # 2026-11-11 approval command rules: runtime.ts 1114->1106 (light-runtime approval policy literal replaced by configureApprovalPolicy in builder/build-effect/approval-autofeed.ts, shared with runtime-construction).
 # 2026-11-11 independent debrief + sub-agent parameters: builder.ts 2204->2200 (withDebrief delegate added; withoutMemory/withLearning JSDoc condensed), runtime.ts 1106->1105 (debrief store layer in runtime-memory-layer.ts; mergeAll comment condensed), runtime-types.ts 1073->1071, types.ts 1051->1049 (new `debrief` field; neighbouring JSDoc condensed); builder/types.ts unchanged at 1063 (agent.parameters JSDoc rewritten in place).
@@ -244,7 +245,7 @@ SIZE_BASELINE=(
   "llm-provider/src/types.ts:978"
   "reasoning/src/kernel/capabilities/act/act.ts:1005"
   "reasoning/src/strategies/reflexion.ts:849"
-  "tools/src/mcp/mcp-client.ts:1116"
+  "tools/src/mcp/mcp-client.ts:1111"
   "reasoning/src/strategies/tree-of-thought.ts:904"
   "runtime/src/runtime-types.ts:1065"
   "tools/src/skills/shell-execution.ts:571"

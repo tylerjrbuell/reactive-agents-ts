@@ -35,7 +35,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { installDnsGuard } from "../tools/repo/src/lib/dns-guard.ts";
-import { testHomeEnv } from "../tools/repo/src/lib/test-home.ts";
+import { installMcpAuthIsolation, testHomeEnv } from "../tools/repo/src/lib/test-home.ts";
 import { pidAlive } from "../tools/repo/src/lib/test-slots.ts";
 import { makeTestRoot, realFs, sweep, TEST_ROOT_ENV, testTmpBase } from "../tools/repo/src/lib/tmp-janitor.ts";
 
@@ -104,6 +104,17 @@ if (!process.env.REACTIVE_AGENTS_RUNS_DIR) {
       // best-effort cleanup
     }
   });
+}
+
+/**
+ * MCP credential isolation (2026-11-20): tests wrote 633 loopback logins into the real
+ * ~/.reactive-agents/mcp-auth. Bun caches os.homedir(), so the HOME swap above misses that store.
+ * installMcpAuthIsolation points REACTIVE_AGENTS_MCP_AUTH_DIR at a temp dir; an outer value wins.
+ */
+try {
+  installMcpAuthIsolation();
+} catch {
+  // preloads fail open
 }
 
 /**

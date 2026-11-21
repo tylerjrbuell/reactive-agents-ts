@@ -1,5 +1,5 @@
-import { mkdirSync, readdirSync, symlinkSync } from "node:fs"
-import { homedir } from "node:os"
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from "node:fs"
+import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
 /**
@@ -53,4 +53,32 @@ export function makeTestHome(root: string, real: string = realHome()): string {
 /** Env entries that point a test process at a mirror home under `root`. */
 export function testHomeEnv(root: string, real: string = realHome()): Record<string, string> {
   return { HOME: makeTestHome(root, real), [REAL_HOME_ENV]: real }
+}
+
+/** The tools package's MCP credential-dir override (`MCP_AUTH_DIR_ENV` in packages/tools token-store.ts). */
+export const MCP_AUTH_DIR_ENV = "REACTIVE_AGENTS_MCP_AUTH_DIR"
+
+/**
+ * MCP credential isolation (2026-11-20): test runs wrote 633 loopback logins into the developer's real
+ * `~/.reactive-agents/mcp-auth`, where they showed up as "Signed in with rax". The store default comes
+ * from `os.homedir()`, which Bun caches at start, so the HOME swap above cannot move it under raw
+ * `bun test`. Point `REACTIVE_AGENTS_MCP_AUTH_DIR` (read at call time) at a fresh temp dir and remove it
+ * on exit. An outer value wins. Returns the dir it created, or undefined when one was already set.
+ */
+export function installMcpAuthIsolation(
+  env: Record<string, string | undefined> = process.env,
+  onExit: (cleanup: () => void) => void = (cleanup) => process.on("exit", cleanup),
+): string | undefined {
+  const outer = env[MCP_AUTH_DIR_ENV]
+  if (outer !== undefined && outer.length > 0) return undefined
+  const dir = mkdtempSync(join(tmpdir(), "ra-test-mcp-auth-"))
+  env[MCP_AUTH_DIR_ENV] = dir
+  onExit(() => {
+    try {
+      rmSync(dir, { recursive: true, force: true })
+    } catch {
+      // best-effort; the per-process test root sweep reaps leftovers
+    }
+  })
+  return dir
 }
