@@ -31,6 +31,7 @@
 import { describe, it, expect, afterEach } from "bun:test";
 import { existsSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { ReactiveAgents } from "../src/builder.js";
+import { createMemoryTokenStore } from "@reactive-agents/tools";
 
 /**
  * The fixture lives under `packages/tools/tests/fixtures/...` — test-only
@@ -101,6 +102,9 @@ describe("MCP client OAuth hardening — trace-scan: no token leakage through a 
         transport: "streamable-http",
         endpoint: f.resourceUrl,
         auth: { type: "client_credentials", clientId: CLIENT_ID, clientSecret: CLIENT_SECRET },
+        // In-memory store: without it the connect persists a login into the
+        // owner's real ~/.reactive-agents/mcp-auth on every run.
+        tokenStore: createMemoryTokenStore(),
       })
       .withTestScenario([
         { toolCall: { name: "oauth-fixture/whoami", args: {} } },
