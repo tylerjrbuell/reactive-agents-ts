@@ -36,6 +36,7 @@ export {
   ToolOutputValidationError,
   ToolValidationError,
   MCPConnectionError,
+  type MCPConnectionFailureReason,
   ToolAuthorizationError,
   toToolError,
 } from "./errors.js";
@@ -100,6 +101,8 @@ export {
   createMemoryTokenStore,
   createFileTokenStore,
   DEFAULT_MCP_AUTH_DIR,
+  MCP_AUTH_DIR_ENV,
+  resolveMcpAuthDir,
 } from "./mcp/auth/token-store.js";
 // Provider construction (Task 3/4/5) + the CVE-2025-6514-hardened browser
 // opener (Task 4) — surfaced here so `apps/cli`'s `rax mcp login|logout`

@@ -35,6 +35,7 @@ import { UnauthorizedError, type OAuthClientProvider } from "@modelcontextprotoc
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { MCPServer } from "../types.js";
 import { MCPConnectionError, ToolExecutionError } from "../errors.js";
+import { toMCPConnectionError } from "./connection-failure.js";
 import { createAuthProvider } from "./auth/create-provider.js";
 import { resolveConnectAuthProvider } from "./auth/stored-login.js";
 import { mapMcpToolResult } from "./mcp-result.js";
@@ -745,7 +746,7 @@ async function reconnectViaHttp(
 
   if (dockerContainerName) dockerRmForce(dockerContainerName);
   throw new Error(
-    `MCP server "${config.name}": all HTTP transports failed. Last error: ${errorMessage(lastError)}`,
+    `MCP server "${config.name}": all HTTP transports failed. Last error: ${errorMessage(lastError)}`, { cause: lastError },
   );
 }
 
@@ -1022,13 +1023,7 @@ export const makeMCPClient = Effect.gen(function* () {
         activeConnections.set(config.name, conn);
         return conn.server;
       },
-      catch: (e) =>
-        new MCPConnectionError({
-          message: errorMessage(e),
-          serverName: config.name,
-          transport: config.transport ?? "stdio",
-          cause: e,
-        }),
+      catch: (e) => toMCPConnectionError(e, config.name, config.transport ?? "stdio"),
     }).pipe(
       Effect.tap((server) =>
         Ref.update(serversRef, (m) => { const n = new Map(m); n.set(server.name, server); return n; }),

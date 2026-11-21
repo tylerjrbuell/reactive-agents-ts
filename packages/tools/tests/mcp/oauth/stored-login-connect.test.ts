@@ -108,6 +108,9 @@ describe("URL-only MCP server + stored login", () => {
       connect({ name: "anon", endpoint: f.resourceUrl, tokenStore: createMemoryTokenStore() }).pipe(Effect.flip),
     );
     expect(err._tag).toBe("MCPConnectionError");
+    // The server's 401 surfaces as a typed sign-in signal on the error itself.
+    expect(err.status).toBe(401);
+    expect(err.reason).toBe("auth-required");
     expect(f.requests.some((r) => r.path === "/authorize" || r.path === "/register" || r.path === "/token")).toBe(false);
   });
 

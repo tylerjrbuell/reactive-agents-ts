@@ -38,6 +38,24 @@ const UNSAFE_MODE_MASK = 0o077;
 /** Default file-store directory — matches the `~/.reactive-agents/<...>` convention. */
 export const DEFAULT_MCP_AUTH_DIR = join(homedir(), ".reactive-agents", "mcp-auth");
 
+/** Env var that overrides {@link DEFAULT_MCP_AUTH_DIR} for every file store built without a `dir`. */
+export const MCP_AUTH_DIR_ENV = "REACTIVE_AGENTS_MCP_AUTH_DIR";
+
+/**
+ * The directory a file store built without a `dir` uses:
+ * `REACTIVE_AGENTS_MCP_AUTH_DIR` when set and non-empty, else
+ * {@link DEFAULT_MCP_AUTH_DIR}. Read at call time, not import time, so a test
+ * preload (or a host app) can redirect stored logins away from the real home
+ * directory. Bun caches `os.homedir()` at process start, so pointing `HOME`
+ * elsewhere after start does not move the default; this override does.
+ */
+export function resolveMcpAuthDir(
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string {
+  const override = env[MCP_AUTH_DIR_ENV];
+  return override !== undefined && override.length > 0 ? override : DEFAULT_MCP_AUTH_DIR;
+}
+
 /**
  * Normalize an MCP server URL into a stable, comparable resource key.
  *
@@ -98,11 +116,11 @@ const permissionError = (path: string, mode: number): Error =>
 
 /**
  * Persistent {@link MCPTokenStore} backed by one JSON file per key under
- * `dir` (default {@link DEFAULT_MCP_AUTH_DIR}). Multiple store instances
- * pointed at the same directory (including across process restarts) see
- * each other's writes.
+ * `dir` (default {@link resolveMcpAuthDir}: `REACTIVE_AGENTS_MCP_AUTH_DIR`,
+ * else {@link DEFAULT_MCP_AUTH_DIR}). Multiple store instances pointed at the
+ * same directory (including across process restarts) see each other's writes.
  */
-export function createFileTokenStore(dir: string = DEFAULT_MCP_AUTH_DIR): MCPTokenStore {
+export function createFileTokenStore(dir: string = resolveMcpAuthDir()): MCPTokenStore {
   const pathFor = (key: string): string => join(dir, `${hashKey(key)}.json`);
 
   const ensureDir = async (): Promise<void> => {

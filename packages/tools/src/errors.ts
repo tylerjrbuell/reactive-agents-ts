@@ -83,6 +83,22 @@ export class ToolValidationError extends Data.TaggedError(
   readonly received: string;
 }> {}
 
+/**
+ * Why an MCP connect failed, when the client can tell. `"auth-required"`: the
+ * server wants credentials the client does not have (a 401 challenge, or a
+ * non-interactive authorization-code login that needs `mcpLogin` /
+ * `rax mcp login`). Hosts show a "Sign in" action for it.
+ */
+export type MCPConnectionFailureReason = "auth-required";
+
+/**
+ * An MCP server could not be connected, listed or disconnected.
+ *
+ * `status` is the HTTP status the server answered with, when one was seen
+ * anywhere in the failure's cause chain. `reason` is set when the failure has
+ * a known meaning (see {@link MCPConnectionFailureReason}). Check `reason`
+ * instead of parsing `message`; `message` is redacted and may change.
+ */
 export class MCPConnectionError extends Data.TaggedError(
   "MCPConnectionError",
 )<{
@@ -90,6 +106,8 @@ export class MCPConnectionError extends Data.TaggedError(
   readonly serverName: string;
   readonly transport: string;
   readonly cause?: unknown;
+  readonly status?: number;
+  readonly reason?: MCPConnectionFailureReason;
 }> {}
 
 /**

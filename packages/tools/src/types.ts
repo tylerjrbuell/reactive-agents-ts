@@ -743,8 +743,11 @@ export type MCPServer = typeof MCPServerSchema.Type & {
    */
   readonly auth?: MCPAuthConfig | false;
   /**
-   * Where OAuth credentials for this server are persisted. Defaults to an
-   * in-memory store (per-process only) when `auth` is set without one.
+   * Where OAuth credentials for this server are persisted. Defaults to the
+   * shared file store (`createFileTokenStore()`: `~/.reactive-agents/mcp-auth`,
+   * or `REACTIVE_AGENTS_MCP_AUTH_DIR` when set), the same store `mcpLogin` and
+   * `rax mcp login` write. Pass `createMemoryTokenStore()` for per-process
+   * credentials that never touch disk (e.g. in tests).
    */
   readonly tokenStore?: MCPTokenStore;
   /**

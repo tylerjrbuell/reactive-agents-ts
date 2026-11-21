@@ -48,6 +48,7 @@ import type {
 } from "@modelcontextprotocol/sdk/shared/auth.js";
 import type { MCPServer } from "../../types.js";
 import { canonicalResourceKey } from "./token-store.js";
+import { markAuthRequired } from "../connection-failure.js";
 import type { MCPAuthConfig, MCPTokenStore } from "./types.js";
 import { openBrowser } from "./open-browser.js";
 import { startLoopbackRedirectListener, type LoopbackListener } from "./loopback-redirect.js";
@@ -198,9 +199,10 @@ export function createAuthorizationCodeProvider(
 
     redirectToAuthorization: async (url: URL): Promise<void> => {
       if (config.interactive !== true) {
-        throw new Error(
+        // Tagged so the connect failure carries `reason: "auth-required"`.
+        throw markAuthRequired(new Error(
           `MCP server "${server.name}": OAuth authorization is required but "interactive" is not enabled. Run \`${loginHint(server)}\` to log in.`,
-        );
+        ));
       }
       if (config.onAuthorizationUrl) {
         await config.onAuthorizationUrl(url);

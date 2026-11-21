@@ -266,6 +266,9 @@ describe("MCP client OAuth — authorization_code (interactive)", () => {
 
     expect(err._tag).toBe("MCPConnectionError");
     expect(err.message).toContain("rax mcp login non-interactive-no-token");
+    // Typed sign-in signal: hosts check `reason`, never the message text.
+    expect(err.reason).toBe("auth-required");
+    expect(err.status).toBe(401);
     expect(spawnCalls.length).toBe(spawnCallsBefore);
 
     // Nothing bound the reserved port — a fresh server can claim it.

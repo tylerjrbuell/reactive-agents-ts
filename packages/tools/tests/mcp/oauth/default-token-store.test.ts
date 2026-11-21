@@ -58,7 +58,9 @@ describe("MCP client OAuth — final-review C1: default token store is the file 
 
     const proc = Bun.spawn({
       cmd: ["bun", "run", CHILD_SCRIPT, f.resourceUrl, CLIENT_ID, CLIENT_SECRET, f.issuer],
-      env: { ...process.env, HOME: tmpHome },
+      // Empty override = unset, so the child takes the HOME-derived default even
+      // when the test preload points REACTIVE_AGENTS_MCP_AUTH_DIR at a temp dir.
+      env: { ...process.env, HOME: tmpHome, REACTIVE_AGENTS_MCP_AUTH_DIR: "" },
       stdout: "pipe",
       stderr: "pipe",
     });
