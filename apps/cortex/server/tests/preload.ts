@@ -10,10 +10,12 @@
  * Wired by `apps/cortex/bunfig.toml` (the `bun run --cwd apps/cortex test` path). A package
  * bunfig replaces the root one, so this preload also installs what the root preload
  * (`scripts/test-preload.ts`) installs and Cortex tests depend on: key stripping, the
- * status-mode pin and the DNS guard. A run from the repo root uses the root preload, which
- * strips the same keys (unless `REACTIVE_AGENTS_TEST_LIVE=1`) and installs the same guard.
+ * status-mode pin, the DNS guard and the MCP token store isolation. A run from the repo root
+ * uses the root preload, which strips the same keys (unless `REACTIVE_AGENTS_TEST_LIVE=1`) and
+ * installs the same guard and isolation.
  */
 import { installDnsGuard } from "../../../../tools/repo/src/lib/dns-guard.js";
+import { installMcpAuthIsolation } from "../../../../tools/repo/src/lib/test-home.js";
 import { stripSecretEnv } from "./hermetic-env.js";
 
 stripSecretEnv(process.env);
@@ -27,4 +29,12 @@ try {
   installDnsGuard();
 } catch {
   // preloads fail open: tests still run, with real DNS
+}
+// The root preload's MCP token store isolation: REACTIVE_AGENTS_MCP_AUTH_DIR points at a per-run
+// temp dir (removed on exit) unless already set, so no test (the MCP OAuth routes included) reads
+// or writes the real ~/.reactive-agents/mcp-auth.
+try {
+  installMcpAuthIsolation();
+} catch {
+  // preloads fail open: tests still run, against the default token store
 }
