@@ -50,6 +50,36 @@ Rules:
 3. **Cortex (cortex-warden).** Make Lab "Export → JSON" write the Agent Spec document from `cortexParamsToAgentConfig`, showing the same "not in file" list the code export shows. Lab import accepts an Agent Spec document or AgentConfig JSON, and the old Lab envelope keeps loading. Round-trip test: Cortex params to file to Cortex params.
 4. **Proof.** An end-to-end test runs one file through the builder, `rax run --agent` (test provider) and the Cortex import/export, with the same AgentConfig at each step.
 
+## Agent as an OS process (added 2026-11-20, owner idea)
+
+Once an agent is a file, `rax run --agent` makes it a process. The process should behave like a well-made Unix program and map onto the existing process model (`RunHandle`: `pause`, `resume`, `stop`, `terminate`, `inspect`; durable runs that `rax ps` and `rax attach` already list). Today `rax run` maps no signals, and every failure exits 1.
+
+**Process contract** (one module in the CLI, used by `rax run --agent` and by the compiled binary):
+
+| OS side | Agent side |
+|---|---|
+| `SIGTERM` | `handle.stop()`: graceful, synthesizes an answer, exits with the outcome code |
+| second `SIGTERM` / `SIGINT` | `handle.terminate()`: hard kill |
+| `SIGTSTP` / `SIGCONT` (or `SIGUSR1` toggle) | `handle.pause()` / `handle.resume()` at the next iteration boundary |
+| `SIGUSR2` (`SIGINFO` on macOS) | `handle.inspect()` snapshot to stderr |
+| exit code | from the outcome: 0 completed, 1 failed, 2 config/usage error, 3 abstained, 130/143 signal |
+| stdin / args | task from args, or stdin when piped |
+| stdout / stderr | answer on stdout; `--events jsonl` streams stream events on stdout for pipes; logs on stderr |
+| durable run row | with `--durable`, `rax ps` lists the process and `rax attach <run>` tails and controls it from another terminal |
+
+**Single executable:** `rax build --agent agent.json -o my-agent [--target bun-linux-x64|bun-darwin-arm64|bun-windows-x64]` embeds the file and the runtime with `bun build --compile`. The result is one binary that needs no Bun, Node or `node_modules`; `./my-agent "task"` runs it under the process contract above.
+
+Honest limits, to be confirmed by the spike:
+- **Size.** The Bun runtime makes the binary tens of MB.
+- **External dependencies stay external.** Ollama, Docker-based MCP servers and the code sandbox's Docker image are not bundled.
+- **Keys come from the environment.** Native extensions (sqlite-vec) and files loaded via `import.meta.url` (the `shipped-assets` class: sandbox worker, seccomp profile) must be embedded, or the binary fails exactly like the v0.19.1 Code Action bug did.
+- **Bun-only build step.** It uses Bun as a build tool, not a new Bun runtime API in package code. Node users still get the full process contract through `rax run --agent`.
+
+Tasks:
+
+5. **Process contract (dx-warden).** Signal mapping, exit codes, stdin task, `--events jsonl`, and `--durable` registration for `rax run --agent`. Tests send real signals to a child `rax` process running the test provider.
+6. **Spike, then `rax build` (dx-warden; tooling-warden for the asset gate).** Zero-token spike: compile one keyless test-provider agent, run it from a temp dir with no `node_modules`, and check Code Action, memory (sqlite) and an stdio MCP server. Record what breaks. Then build `rax build` and add the compiled binary to `test:install` so a missing embedded asset fails the gate, not a user.
+
 ## Out of scope
 
 - Agent Spec `Flow` import and export (multi-step workflows). Revisit once agents travel.
