@@ -2,12 +2,12 @@ import { afterAll, describe, expect, test } from "bun:test"
 import { spawnSync } from "node:child_process"
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { basename, dirname, join, resolve } from "node:path"
 import { parseWorktreeList } from "../src/commands/janitor.ts"
 import { testRootEnv } from "../src/commands/test.ts"
 import { BUN_CACHE_REPORT_BYTES, cacheHogs, testMemoryLeftovers, TURBO_REPORT_BYTES } from "../src/lib/dev-hogs.ts"
 import { installMcpAuthIsolation, makeTestHome, MCP_AUTH_DIR_ENV, REAL_HOME_ENV, realHome } from "../src/lib/test-home.ts"
-import { staleWorktrees, TEST_ROOT_ENV } from "../src/lib/tmp-janitor.ts"
+import { realFs, rootPid, staleWorktrees, sweep, TEST_ROOT_ENV } from "../src/lib/tmp-janitor.ts"
 
 const ROOT = resolve(import.meta.dir, "../../..")
 const scratch = mkdtempSync(join(tmpdir(), "repo-test-home-"))
@@ -42,6 +42,34 @@ describe("installMcpAuthIsolation", () => {
     expect(exits).toHaveLength(1)
     exits[0]!()
     expect(existsSync(dir!)).toBe(false)
+  })
+  test("lands in the runner's test root when one exists", () => {
+    const root = mkdtempSync(join(scratch, "runner-root-"))
+    const env: Record<string, string | undefined> = { [TEST_ROOT_ENV]: root }
+    const exits: Array<() => void> = []
+    const dir = installMcpAuthIsolation(env, (cleanup) => exits.push(cleanup))
+    expect(dirname(dir!)).toBe(root)
+    exits[0]!()
+    expect(existsSync(dir!)).toBe(false)
+    expect(existsSync(root)).toBe(true) // the runner owns its root
+  })
+  test("with no runner root it makes a per-PID root the dead-PID sweep reaps (cortex preload leak)", () => {
+    const base = mkdtempSync(join(scratch, "base-"))
+    const env: Record<string, string | undefined> = { REPO_TEST_TMPDIR: base }
+    const dir = installMcpAuthIsolation(env, () => undefined, 424242)
+    const root = dirname(dir!)
+    expect(dirname(root)).toBe(base)
+    expect(rootPid(basename(root))).toBe(424242)
+    // The exit hook never ran (as under plain `bun test` from apps/cortex); the sweep reaps it by dead PID.
+    sweep(realFs, base, { pidAlive: () => false, now: Date.now(), legacy: false, dryRun: false })
+    expect(existsSync(root)).toBe(false)
+  })
+  test("its exit hook removes the root it made", () => {
+    const base = mkdtempSync(join(scratch, "base-"))
+    const exits: Array<() => void> = []
+    const dir = installMcpAuthIsolation({ REPO_TEST_TMPDIR: base }, (cleanup) => exits.push(cleanup))
+    exits[0]!()
+    expect(existsSync(dirname(dir!))).toBe(false)
   })
   test("an outer value wins and nothing is created", () => {
     const env: Record<string, string | undefined> = { [MCP_AUTH_DIR_ENV]: "/outer/mcp-auth" }

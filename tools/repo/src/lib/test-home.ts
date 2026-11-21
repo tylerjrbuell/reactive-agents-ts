@@ -1,6 +1,8 @@
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from "node:fs"
-import { homedir, tmpdir } from "node:os"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from "node:fs"
+import { homedir } from "node:os"
 import { join } from "node:path"
+// `.js`, not `.ts`: apps/cortex's preload imports this file, and its tsconfig rejects `.ts` specifiers.
+import { makeTestRoot, TEST_ROOT_ENV, testTmpBase } from "./tmp-janitor.js"
 
 /**
  * Test HOME isolation (2026-11-19 dev-env audit). Test suites wrote ~9,000 agent memory dirs (1.9 GB,
@@ -62,22 +64,30 @@ export const MCP_AUTH_DIR_ENV = "REACTIVE_AGENTS_MCP_AUTH_DIR"
  * MCP credential isolation (2026-11-20): test runs wrote 633 loopback logins into the developer's real
  * `~/.reactive-agents/mcp-auth`, where they showed up as "Signed in with rax". The store default comes
  * from `os.homedir()`, which Bun caches at start, so the HOME swap above cannot move it under raw
- * `bun test`. Point `REACTIVE_AGENTS_MCP_AUTH_DIR` (read at call time) at a fresh temp dir and remove it
- * on exit. An outer value wins. Returns the dir it created, or undefined when one was already set.
+ * `bun test`. Point `REACTIVE_AGENTS_MCP_AUTH_DIR` (read at call time) at a fresh dir and remove it on
+ * exit. An outer value wins. Returns the dir it created, or undefined when one was already set.
+ *
+ * The dir always lives in a per-PID test root (`ra-tests-<pid>-*`, see tmp-janitor.ts): the runner's
+ * `RA_TEST_TMP_ROOT` when set, else a root made here. The exit hook does not always run: plain `bun test`
+ * from apps/cortex, whose preload makes no root, leaked one `/tmp/ra-test-mcp-auth-*` per process
+ * (2026-11-20). A root left behind is reaped by name once its PID is dead.
  */
 export function installMcpAuthIsolation(
   env: Record<string, string | undefined> = process.env,
   onExit: (cleanup: () => void) => void = (cleanup) => process.on("exit", cleanup),
+  pid: number = process.pid,
 ): string | undefined {
   const outer = env[MCP_AUTH_DIR_ENV]
   if (outer !== undefined && outer.length > 0) return undefined
-  const dir = mkdtempSync(join(tmpdir(), "ra-test-mcp-auth-"))
+  const runnerRoot = env[TEST_ROOT_ENV]
+  const ownRoot = runnerRoot !== undefined && runnerRoot.length > 0 && existsSync(runnerRoot) ? undefined : makeTestRoot(testTmpBase(env), pid)
+  const dir = mkdtempSync(join(ownRoot ?? runnerRoot ?? testTmpBase(env), "mcp-auth-"))
   env[MCP_AUTH_DIR_ENV] = dir
   onExit(() => {
     try {
-      rmSync(dir, { recursive: true, force: true })
+      rmSync(ownRoot ?? dir, { recursive: true, force: true })
     } catch {
-      // best-effort; the per-process test root sweep reaps leftovers
+      // best-effort; the dead-PID root sweep reaps leftovers
     }
   })
   return dir
