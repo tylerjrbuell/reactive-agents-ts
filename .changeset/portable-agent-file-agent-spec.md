@@ -1,0 +1,6 @@
+---
+"@reactive-agents/runtime": minor
+"reactive-agents": minor
+---
+
+Agents travel as Open Agent Spec files. `agentConfigToAgentSpec(config, { tools, llmUrl })` writes an `AgentConfig` as an Open Agent Spec 26.1.2 `Agent` document: name, id, system prompt, model (`OllamaConfig`, `OpenAiConfig`, `GeminiConfig` or a base `LlmConfig`), temperature and max tokens, MCP servers (`MCPToolBox` with stdio, SSE or streamable-HTTP transports), user interaction (`human_in_the_loop`) and code tools (`ServerTool` declarations, no code) sit in standard places, so other Agent Spec runtimes can read the core agent. Every other setting lives under `metadata["reactive-agents"]` (`schemaVersion: 1`). Secrets are never written: API keys and MCP headers become sensitive-field references, and secret values become environment references. `agentConfigFromAgentSpec(doc, { env })` reads it back (standard fields win over the metadata) and reports the tools the caller must provide, the secrets that did not resolve and the fields that had no effect. `loadAgentFile(path)` reads a JSON Agent Spec document or a plain `AgentConfig` JSON file. A `Flow` root, an unmapped component, a newer `agentspec_version` or an unknown `schemaVersion` fails with a typed `AgentSpecError`. YAML files are not read yet.

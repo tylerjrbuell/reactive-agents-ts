@@ -55,6 +55,14 @@ export {
   agentConfigToBuilderCalls,
   agentConfigToSource,
 
+  // Portable agent file (Open Agent Spec)
+  agentConfigToAgentSpec,
+  agentConfigFromAgentSpec,
+  loadAgentFile,
+  AgentSpecError,
+  AgentFileReadError,
+  AGENT_SPEC_VERSION,
+
   // Declarative front door (dual API) — createAgent(config)
   createAgent,
 
@@ -137,6 +145,12 @@ export type {
   BuilderCall,
   BuilderMethod,
   AgentConfigSourceOptions,
+  AgentSpecAgent,
+  AgentSpecImport,
+  AgentSpecExportOptions,
+  AgentSpecImportOptions,
+  AgentFileLoadOptions,
+  AgentSpecToolDeclaration,
   // External channels (webhooks, bots)
   ChannelsConfig,
   // Composition types

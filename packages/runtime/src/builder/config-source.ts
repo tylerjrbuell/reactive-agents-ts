@@ -60,31 +60,41 @@ const envKeyName = (key: string): string => (IDENTIFIER.test(key) ? key : envNam
 const redactRecordValues = (
   rec: Record<string, unknown>,
   nameOf: (key: string) => string,
+  toRef: (name: string) => unknown,
 ): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(rec)) out[k] = typeof v === "string" ? new EnvRef(nameOf(k)) : v;
+  for (const [k, v] of Object.entries(rec)) out[k] = typeof v === "string" ? toRef(nameOf(k)) : v;
   return out;
 };
 
 /**
  * Replace secret strings with env references. `hint` collects context for the
- * variable name (method, then the nearest `name` or `path` field).
+ * variable name (method, then the nearest `name` or `path` field). `toRef`
+ * builds the reference value from the variable name.
+ *
+ * MCP `env` values become a reference to the same key, MCP `headers` values to
+ * `<HINT>_<SERVER>_<HEADER>`, and `apiKey` / `secret` / `password` strings to
+ * an upper-snake name built from where they sit. Shared by the TypeScript
+ * printer and the Agent Spec export (`agent-spec.ts`), so both name a secret
+ * the same way.
  */
-const redact = (value: unknown, hint: readonly string[]): unknown => {
-  if (Array.isArray(value)) return value.map((v) => redact(v, hint));
+export const redactSecrets = (value: unknown, hint: readonly string[], toRef: (name: string) => unknown): unknown => {
+  if (Array.isArray(value)) return value.map((v) => redactSecrets(v, hint, toRef));
   if (!isRecord(value)) return value;
   const own = typeof value["name"] === "string" ? [value["name"]] : typeof value["path"] === "string" ? [value["path"]] : [];
   const h = [...hint, ...own];
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(value)) {
-    if (k === "env" && isRecord(v)) out[k] = redactRecordValues(v, envKeyName);
-    else if (k === "headers" && isRecord(v)) out[k] = redactRecordValues(v, (key) => envName([...h, key]));
-    else if (SECRET_KEYS.has(k) && typeof v === "string") out[k] = new EnvRef(envName([...h, k]));
+    if (k === "env" && isRecord(v)) out[k] = redactRecordValues(v, envKeyName, toRef);
+    else if (k === "headers" && isRecord(v)) out[k] = redactRecordValues(v, (key) => envName([...h, key]), toRef);
+    else if (SECRET_KEYS.has(k) && typeof v === "string") out[k] = toRef(envName([...h, k]));
     else if (NAME_KEYED_RECORDS.has(k)) out[k] = v;
-    else out[k] = redact(v, h);
+    else out[k] = redactSecrets(v, h, toRef);
   }
   return out;
 };
+
+const toEnvRef = (name: string): EnvRef => new EnvRef(name);
 
 const methodHint = (method: string): string => {
   if (method === "withMCP") return "MCP";
@@ -137,7 +147,7 @@ const printCall = (c: BuilderCall): { readonly line: string; readonly usesProfil
     if (expr) return { line: `.withProfile(${expr})`, usesProfile: true };
   }
   // A JSON Schema holds field names, never secrets: a property named `headers` must print as-is.
-  const args = c.args.map((a) => printValue(c.method === "withOutputSchema" ? a : redact(a, [methodHint(c.method)]), 1));
+  const args = c.args.map((a) => printValue(c.method === "withOutputSchema" ? a : redactSecrets(a, [methodHint(c.method)], toEnvRef), 1));
   return { line: `.${c.method}(${args.join(", ")})`, usesProfile: false };
 };
 

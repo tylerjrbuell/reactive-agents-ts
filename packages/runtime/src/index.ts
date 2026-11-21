@@ -240,6 +240,25 @@ export {
   type BuilderMethod,
 } from "./builder/config-calls.js";
 export { agentConfigToSource, type AgentConfigSourceOptions } from "./builder/config-source.js";
+// ─── Portable agent file (Open Agent Spec) ───
+export {
+  agentConfigToAgentSpec,
+  agentConfigFromAgentSpec,
+  loadAgentFile,
+  AgentSpecAgentSchema,
+  AgentSpecError,
+  AgentFileReadError,
+  AGENT_SPEC_VERSION,
+  AGENT_SPEC_MAX_READ_VERSION,
+  AGENT_SPEC_METADATA_KEY,
+  AGENT_SPEC_METADATA_VERSION,
+  type AgentSpecAgent,
+  type AgentSpecImport,
+  type AgentSpecExportOptions,
+  type AgentSpecImportOptions,
+  type AgentFileLoadOptions,
+  type AgentSpecToolDeclaration,
+} from "./agent-spec.js";
 
 // ─── Composition API ───
 export { agentFn, pipe, parallel, race } from "./compose.js";

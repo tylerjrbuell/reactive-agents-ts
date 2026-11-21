@@ -1,0 +1,7 @@
+{
+  "name": "legacy-agent",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "systemPrompt": "Plain AgentConfig JSON from agentConfigToJSON.",
+  "execution": { "maxIterations": 5 }
+}

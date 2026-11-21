@@ -1,0 +1,58 @@
+{
+  "component_type": "Agent",
+  "id": "local-helper",
+  "name": "local-helper",
+  "description": null,
+  "metadata": {
+    "reactive-agents": {
+      "schemaVersion": 1,
+      "config": {
+        "reasoning": { "defaultStrategy": "reactive" },
+        "execution": { "maxIterations": 8 }
+      }
+    }
+  },
+  "inputs": [],
+  "outputs": [],
+  "system_prompt": "You help with files.",
+  "llm_config": {
+    "component_type": "OllamaConfig",
+    "id": "local-helper-llm",
+    "name": "qwen3:4b",
+    "description": null,
+    "metadata": {},
+    "model_id": "qwen3:4b",
+    "default_generation_parameters": { "max_tokens": 2048, "temperature": 0.2 },
+    "url": "http://gpu-box:11434"
+  },
+  "tools": [],
+  "toolboxes": [
+    {
+      "component_type": "MCPToolBox",
+      "id": "mcp-filesystem",
+      "name": "filesystem",
+      "description": null,
+      "metadata": {
+        "reactive-agents": {
+          "schemaVersion": 1,
+          "server": { "env": { "FS_TOKEN": { "$env": "FS_TOKEN" } } }
+        }
+      },
+      "client_transport": {
+        "component_type": "StdioTransport",
+        "id": "mcp-filesystem-transport",
+        "name": "mcp-filesystem-transport",
+        "description": null,
+        "metadata": {},
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+        "env": null,
+        "cwd": null
+      },
+      "tool_filter": null,
+      "requires_confirmation": false
+    }
+  ],
+  "human_in_the_loop": false,
+  "agentspec_version": "26.1.2"
+}
